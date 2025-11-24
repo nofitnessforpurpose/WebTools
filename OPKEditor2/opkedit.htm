@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>OPK File Editor 2 - From Jaap's Psion II Page</title>
+  <link rel="stylesheet" type="text/css" href="psion.css">
+  <link rel="stylesheet" type="text/css" href="syntax.css">
+  <link rel="shortcut icon" href="pics/favicon.ico">
+  <style type="text/css">
+    body {
+      font-family: Arial, "Lucida Grande", "Trebuchet MS", Verdana, Helvetica, sans-serif;
+      font-size: 104%;
+      text-align: left;
+      background: #fff;
+    }
+
+    .selection {
+      font-weight: bold;
+    }
+
+    [draggable] {
+      -moz-user-select: none;
+      -khtml-user-select: none;
+      -webkit-user-select: none;
+      user-select: none;
+      /* Required to make elements draggable in old WebKit */
+      -khtml-user-drag: element;
+      -webkit-user-drag: element;
+    }
+
+    input[type="file"] {
+      position: fixed;
+      right: 100%;
+      bottom: 100%;
+    }
+
+    .custom-button {
+      display: inline-block;
+      padding: 1px 5px 1px 5px;
+      font-size: 80%;
+      text-decoration: none;
+    }
+
+    .active-button {
+      border: 1px solid #aaa;
+      cursor: pointer;
+      color: #000;
+      background: #ddd;
+    }
+
+    .active-button:hover {
+      border: 1px solid #08d;
+      background: #def;
+    }
+
+    .inactive-button {
+      border: 1px solid #ccc;
+      cursor: default;
+      color: #aaa;
+      background: #eee;
+    }
+
+    textarea {
+      width: 100%;
+      white-space: pre;
+    }
+
+    .controls {
+      border: 1px solid #444;
+    }
+
+    .controls td {
+      border: 1px solid #444;
+      padding: 4px;
+    }
+
+    #screen {
+      -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+      touch-action: manipulation;
+    }
+
+    .block {
+      float: left;
+      padding: 10px;
+    }
+
+    .nowrap {
+      white-space: nowrap
+    }
+
+    ul.packlist {
+      list-style: none outside none;
+    }
+
+    ul.packlist li {
+      list-style-type: none;
+      font-family: Courier, "Courier New", monospace;
+      white-space: pre;
+    }
+
+    ul.packlist li.dragElem {
+      opacity: 0.4;
+    }
+
+    ul.packlist li.over {
+      border-top: 2px solid blue;
+    }
+
+    ul.packlist li.selectedItem {
+      color: #00C;
+      background: #DDD;
+    }
+
+    .modalbackground {
+      position: fixed;
+      /* Stay in place */
+      z-index: 1;
+      /* Sit on top */
+      left: 0;
+      top: 0;
+      width: 100%;
+      /* Full width */
+      height: 100%;
+      /* Full height */
+      overflow: auto;
+      /* Enable scroll if needed */
+      background-color: rgb(0, 0, 0);
+      /* Fallback color */
+      background-color: rgba(0, 0, 0, 0.4);
+      /* Black w/ opacity */
+    }
+
+    .modaldialog {
+      display: table;
+      white-space: nowrap;
+      text-align: center;
+      background-color: #fff;
+      margin: 15% auto;
+      padding: 0px;
+      border: 1px solid black;
+    }
+
+    .modalmiddle {
+      margin: 20px;
+    }
+
+    .modaltop {
+      background-color: #eee;
+      text-align: right;
+      border-bottom: 1px solid black;
+    }
+
+    .modalbuttons {
+      background-color: #eee;
+      text-align: center;
+      padding: 5px 0;
+      border-top: 1px solid black;
+    }
+
+    .close {
+      color: #aaa;
+      font-size: 28px;
+      line-height: 80%;
+      font-weight: bold;
+    }
+
+    .close:hover,
+    .close:focus {
+      color: black;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .container {
+      border: 1px solid #08d;
+      background: #f8f8f8;
+      padding: 10px;
+    }
+
+    .noselect {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -khtml-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+  </style>
+
+  <script type="application/ld+json">
+{
+  "@context": "http://schema.org", "@type": "BreadcrumbList",
+  "itemListElement": [{
+    "@type": "ListItem", "position": 1,
+    "item": { "@id": "../index.htm", "name": "Home" }
+  },{
+    "@type": "ListItem", "position": 2,
+    "item": { "@id": "index.htm", "name": "Psion II" }
+  },{
+    "@type": "ListItem", "position": 3,
+    "item": { "@id": "opkedit.htm", "name": "OPK file editor" }
+  }]
+}
+</script>
+</head>
+
+<body>
+
+  <div class=header>
+    <h1>NFfP - OPK Editor 2</h1><a href="index.htm" class=jpp></a>
+  </div>
+  <table>
+    <tr>
+      <td width=10%>
+        <ol class="breadcrumb">
+          <li><a href="../index.htm">Home</a> /</li>
+          <li><a href="index.htm">Psion II</a> /</li>
+          <li>OPK File Editor 2</li>
+        </ol>
+      <td>
+      <td width=90% align=right>
+        <span id="darkmodebutton" class="custom-button active-button"
+          style="float:right; font-style:normal; font-size: 100%; margin-top: 5px; margin-right: 10px; cursor: pointer;"
+          onclick="toggleDarkMode()">Dark Mode</span>
+      </td>
+    </tr>
+  </Table>
+
+  <h1>NFfP - OPK Editor 2</h1>
+
+  <p align=right><a href="opkedithelp.htm" target="_blank">Help</a></p>
+  <form action="#">
+
+    <div class="container">
+      <table border=0 width="100%" style="table-layout: fixed;">
+        <tr>
+          <td width="50%" valign=top class=noselect>
+
+            <span id=newpackbutton class="custom-button active-button">New Pack</span>
+
+            <input type="file" id=loadpackbutton />
+            <label for="loadpackbutton" class="custom-button active-button" id=loadpacklabel>Load
+              Pack</label>
+
+            <a id=savepackbutton class="custom-button inactive-button">Save Pack As</a>
+            <a id=savehexbutton class="custom-button inactive-button">Export Intel HEX</a>
+
+            &nbsp;&nbsp;&nbsp;
+            <input type="file" id=loaditembutton multiple="multiple" />
+            <span id=newitembutton class="custom-button inactive-button">Add New Item</span>
+            <label for="loaditembutton" class="custom-button inactive-button" id=loaditemlabel>Import
+              Item</label>
+
+            <h5 style="margin-top: 10px;">Pack contents</h5>
+            <div id=fileinfo style="margin-bottom: 10px; font-family: monospace;"></div>
+            <ul id=opkcontents class=packlist></ul>
+            <div id=checksums style="margin-top: 10px; font-family: monospace;"></div>
+
+          </td>
+          <td width="50%" valign=top id=itemeditorpanel>
+            <span class=noselect>
+              <span id=discardbutton class="custom-button inactive-button">Discard</span>
+              <span id=applybutton class="custom-button inactive-button">Apply</span>
+              &nbsp;&nbsp;&nbsp;
+              <span id=eraseitembutton class="custom-button inactive-button">Erase Item</span>
+              <a id=saveitembutton class="custom-button inactive-button">Export Item</a>
+              <span id=highlightbutton class="custom-button inactive-button" style="display:none">Syntax
+                Highlight</span>
+            </span>
+            <h5 style="margin-top: 10px;">Item contents</h5>
+            <div id=itemeditor></div>
+
+          </td>
+        </tr>
+      </table>
+    </div>
+  </form>
+
+  <br clear=all>
+
+  <div class=nav>
+    <ul>
+      <li><a href="../index.htm">Home</a></li>
+    </ul>
+    <ul>
+      <li class="attribution">Attribution - Jaap's Psion II Page</li>
+    </ul>
+  </div>
+
+  <script src="javascript/opkedit/packimage.js?20181124" type="text/javascript"></script>
+  <script src="javascript/opkedit/binaryfile.js?20181124" type="text/javascript"></script>
+  <script src="javascript/opkedit/dragdroplist.js?20181124" type="text/javascript"></script>
+  <script src="javascript/opkedit/selectlist.js?20181124" type="text/javascript"></script>
+  <script src="javascript/opkedit/psionfileeditors.js?20181124" type="text/javascript"></script>
+  <script src="javascript/opkedit/modal.js?20181124" type="text/javascript"></script>
+  <script src="javascript/opkedit/intelhex.js" type="text/javascript"></script>
+  <script src="javascript/opkedit/checksums.js" type="text/javascript"></script>
+  <script src="javascript/opkedit/syntaxhighlighter.js" type="text/javascript"></script>
+  <script src="javascript/opkedit/opkedit.js?20190408" type="text/javascript"></script>
+
+</body>
+
+</html>

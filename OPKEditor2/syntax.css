@@ -1,0 +1,259 @@
+/* OPL Syntax Highlighting */
+.opl-code-view {
+    font-family: Courier, "Courier New", monospace;
+    white-space: pre;
+    background-color: #fff;
+    border: 1px solid #767676;
+    overflow: auto;
+    height: 320px;
+    /* Matches typical textarea rows=20 */
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Fix for fieldset overflow */
+#itemeditor fieldset {
+    min-width: 0;
+}
+
+.kw-commands {
+    color: #8B008B;
+    /* Dark Magenta */
+    font-weight: bold;
+}
+
+.kw-stringfuncs {
+    color: #A52A2A;
+    /* Brown */
+    font-weight: bold;
+}
+
+.opl-string {
+    color: #A31515;
+    /* Red */
+}
+
+.opl-comment {
+    color: #008000;
+    /* Green */
+}
+
+.opl-number {
+    color: #800080;
+    /* Purple */
+}
+
+.opl-label {
+    color: #008080;
+    /* Teal */
+    font-weight: bold;
+}
+
+.opl-operator {
+    color: #000000;
+    /* Black */
+}
+
+/* Dark Mode Syntax Highlighting */
+.dark-mode .opl-code-view {
+    background-color: #333;
+    color: #e0e0e0;
+    border-color: #555;
+}
+
+.dark-mode .kw-functions {
+    color: #569CD6;
+    /* Light Blue */
+}
+
+.dark-mode .kw-commands {
+    color: #C586C0;
+    /* Light Purple */
+}
+
+.dark-mode .kw-stringfuncs {
+    color: #D7BA7D;
+    /* Light Yellow/Beige */
+}
+
+.dark-mode .opl-string {
+    color: #CE9178;
+    /* Light Red/Orange */
+}
+
+.dark-mode .opl-comment {
+    color: #6A9955;
+    /* Light Green */
+}
+
+.dark-mode .opl-number {
+    color: #C586C0;
+    /* Light Purple */
+}
+
+/* OPL Syntax Highlighting */
+.opl-code-view {
+    font-family: Courier, "Courier New", monospace;
+    white-space: pre;
+    background-color: #fff;
+    border: 1px solid #767676;
+    overflow: auto;
+    height: 320px;
+    /* Matches typical textarea rows=20 */
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Fix for fieldset overflow */
+#itemeditor fieldset {
+    min-width: 0;
+}
+
+.kw-commands {
+    color: #8B008B;
+    /* Dark Magenta */
+    font-weight: bold;
+}
+
+.kw-stringfuncs {
+    color: #A52A2A;
+    /* Brown */
+    font-weight: bold;
+}
+
+.opl-string {
+    color: #A31515;
+    /* Red */
+}
+
+.opl-comment {
+    color: #008000;
+    /* Green */
+}
+
+.opl-number {
+    color: #800080;
+    /* Purple */
+}
+
+.opl-label {
+    color: #008080;
+    /* Teal */
+    font-weight: bold;
+}
+
+.opl-operator {
+    color: #000000;
+    /* Black */
+}
+
+/* Dark Mode Syntax Highlighting */
+.dark-mode .opl-code-view {
+    background-color: #333;
+    color: #e0e0e0;
+    border-color: #555;
+}
+
+.dark-mode .kw-functions {
+    color: #569CD6;
+    /* Light Blue */
+}
+
+.dark-mode .kw-commands {
+    color: #C586C0;
+    /* Light Purple */
+}
+
+.dark-mode .kw-stringfuncs {
+    color: #D7BA7D;
+    /* Light Yellow/Beige */
+}
+
+.dark-mode .opl-string {
+    color: #CE9178;
+    /* Light Red/Orange */
+}
+
+.dark-mode .opl-comment {
+    color: #6A9955;
+    /* Light Green */
+}
+
+.dark-mode .opl-number {
+    color: #C586C0;
+    /* Light Purple */
+}
+
+.dark-mode .opl-label {
+    color: #4EC9B0;
+    /* Light Teal */
+}
+
+.dark-mode .opl-operator {
+    color: #D4D4D4;
+    /* Light Grey */
+}
+
+/* Editable Syntax Highlighting Overlay */
+.opl-editor-container {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    /* Match the height of the textarea/div */
+}
+
+.opl-source-input,
+.opl-code-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 5px;
+    /* Ensure padding matches */
+    border: 1px solid #767676;
+    box-sizing: border-box;
+    font-family: Courier, "Courier New", monospace;
+    font-size: 13px;
+    /* Ensure font size matches */
+    line-height: 1.5;
+    /* Ensure line height matches */
+    white-space: pre;
+    overflow: auto;
+    background: transparent;
+}
+
+.opl-source-input {
+    z-index: 2;
+    /* Textarea on top */
+    color: inherit;
+    /* Default text color */
+    resize: none;
+    /* Disable resize to keep sync simple */
+}
+
+.opl-code-view {
+    z-index: 1;
+    /* Highlight div at bottom */
+    pointer-events: none;
+    /* Let clicks pass through to textarea */
+    background-color: #fff;
+    /* Background for the container */
+}
+
+.transparent-text {
+    color: transparent !important;
+    caret-color: black;
+    /* Keep cursor visible */
+    background: transparent !important;
+}
+
+.dark-mode .transparent-text {
+    caret-color: white;
+    /* White cursor in dark mode */
+}
+
+.dark-mode .opl-code-view {
+    background-color: #333;
+}
