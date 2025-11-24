@@ -1,57 +1,177 @@
-<Html>
-  <head>  
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="dcterms.rightsHolder" content="NotFitForPurpose">
-    <meta name="dcterms.rights" content="Copyright all rights reserved">
-    <meta name="dcterms.dateCopyrighted" content="2025">
-    <meta name="description" content="Author: NoFitnessForPurpose, Illustrator: NoFitnessForPurpose, Category: Computers">
+<html>
 
-    <title>NFfP - PSion Organiser II Web Tools</title>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="dcterms.rightsHolder" content="NotFitForPurpose">
+  <meta name="dcterms.rights" content="Copyright all rights reserved">
+  <meta name="dcterms.dateCopyrighted" content="2025">
+  <meta name="description" content="Author: NoFitnessForPurpose, Illustrator: NoFitnessForPurpose, Category: Computers">
 
-    <style>
-      body {
-        background-color: black;
-        color: white;
-        font-family: Arial, sans-serif;
-        transition: background-color 0.3s, color 0.3s;
+  <title>NFfP - PSion Organiser II Web Tools</title>
+
+  <style>
+    html {
+      width: 100%;
+     }
+	 
+    body {
+      background-color: black;
+      color: white;
+      font-family: Arial, sans-serif;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    footer {
+      font-size: 8px;
+      text-align: center;
+      padding: 3px;
+      background-color: Silver;
+      color: black;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    map {
+      display: inline;
+    }
+
+    .map-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    #map-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      /* Let clicks pass through to the map */
+      z-index: 10;
+    }
+
+    .highlight {
+      fill: rgba(252, 236, 177, 0.05);
+      /* Clear central zone */
+      stroke: rgba(252, 236, 177, 0.5);
+      /* Softer stroke opacity */
+      stroke-width: 3px;
+      filter: drop-shadow(0 0 15px #FCECB1);
+      /* Increased blur for softer glow */
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+    }
+
+    .highlight.active {
+      opacity: 1;
+      animation: none;
+    }
+
+    @keyframes pulse-glow {
+      0% {
+        opacity: 0.3;
       }
 
-      footer {
-        font-size: 8px;
-        text-align: center;
-        padding: 3px;
-        background-color: Silver;
-        color: black;
-        transition: background-color 0.3s, color 0.3s;
+      50% {
+        opacity: 0.8;
       }
 
-      map {
-        display: inline;
+      100% {
+        opacity: 0.3;
       }
-      
-    </style> 
+    }
 
-  </head>
-  <body>
-    <img src="./images/OPK-HEX-BRAND-01.jpg" width="400" alt="My responses are limited ! - EXE" usemap="#workmap" style="vertical-align:middle">
+    .highlight.pulse {
+      animation: pulse-glow 2s infinite ease-in-out;
+    }
+  </style>
 
-    <map name="workmap">
-      <area shape="circle" alt="Exe !" href="./OPKEditor2/index.htm" coords="180,555,15">
-    </map>
-    
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
-    <br>
+</head>
 
-    <footer>
-      <p>NotFitForPurpose is a creator thinking about the importance of being more than fit for the status quo.</p>
-      <p>Author: NotFitForPurpose</p>
-      <p style="color:#ccd1d1">(c) NotFitForPurpose 2025 All Rights Reserved. Contact via this repository.</p>
+<body>
+  <div class="map-container">
+    <img src="./images/OPK-HEX-BRAND-01.jpg" width="400" alt="My responses are limited ! - EXE" usemap="#workmap">
+    <svg id="map-overlay"></svg>
+  </div>
+
+  <map name="workmap">
+    <area shape="circle" alt="Exe !" href="./OPKEditor2/index.htm" coords="177,557,15" data-pulse="true">
+	<!--
+      <area shape="poly" alt="Test Rect" href="#" coords="122,539,145,552,132,575,109,562">
+	-->  
+  </map>
+
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  <br>
+  
+  <footer>
+    <p>NotFitForPurpose is a creator thinking about the importance of being more than fit for the status quo.</p>
+    <p>Author: NotFitForPurpose</p>
+    <p style="color:#ccd1d1">(c) NotFitForPurpose 2025 All Rights Reserved. Contact via this repository.</p>
   </footer>
-  </body>
-</Html>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const map = document.querySelector('map[name="workmap"]');
+      const overlay = document.getElementById('map-overlay');
+      const areas = map.querySelectorAll('area');
+
+      areas.forEach((area, index) => {
+        const shape = area.getAttribute('shape');
+        const coords = area.getAttribute('coords').split(',').map(Number);
+        let svgShape;
+
+        if (shape === 'circle') {
+          svgShape = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          svgShape.setAttribute('cx', coords[0]);
+          svgShape.setAttribute('cy', coords[1]);
+          svgShape.setAttribute('r', coords[2]);
+        } else if (shape === 'rect') {
+          svgShape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          svgShape.setAttribute('x', coords[0]);
+          svgShape.setAttribute('y', coords[1]);
+          svgShape.setAttribute('width', coords[2] - coords[0]);
+          svgShape.setAttribute('height', coords[3] - coords[1]);
+        } else if (shape === 'poly') {
+          svgShape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+          // Format points as "x,y x,y" pairs for better compatibility
+          const points = [];
+          for (let i = 0; i < coords.length; i += 2) {
+            points.push(`${coords[i]},${coords[i + 1]}`);
+          }
+          svgShape.setAttribute('points', points.join(' '));
+        }
+
+        if (svgShape) {
+          svgShape.classList.add('highlight');
+          if (area.dataset.pulse === 'true') {
+            svgShape.classList.add('pulse');
+          }
+          svgShape.setAttribute('id', 'highlight-' + index);
+          overlay.appendChild(svgShape);
+
+          area.addEventListener('mouseenter', () => {
+            svgShape.classList.add('active');
+          });
+
+          area.addEventListener('mouseleave', () => {
+            svgShape.classList.remove('active');
+          });
+        }
+      });
+    });
+  </script>
+</body>
+
+</html>
