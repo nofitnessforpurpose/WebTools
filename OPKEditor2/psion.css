@@ -79,7 +79,7 @@ h2,
 h3,
 h4,
 h5 {
-  margin-top: 40px;
+  margin-top: 10px;
   font-weight: bold;
 }
 
@@ -311,4 +311,5 @@ ol.breadcrumb li {
 .dark-mode .header .jpp {
   border-color: #555;
   filter: brightness(0.8);
+
 }
