@@ -6,8 +6,9 @@ This repository is intended to be accessed at <a href =  "https://nofitnessforpu
 ![GitHub repo size](https://img.shields.io/github/repo-size/nofitnessforpurpose/WebTools?style=flat-square)
 [![Static Badge](https://img.shields.io/badge/format-CODE-blue?style=flat-square)](https://en.wikipedia.org/)
 
+  
 Note: MIT License is applicable only to those elements authored by NFfP  
-Check Attribution [source www](https://www.jaapsch.net/psion/) for elements covered under a Non Commercial basis use.
+Check Attribution [source www](https://www.jaapsch.net/psion/) for elements covered under a Non Commercial basis use.  
 
 <BR>
 
