@@ -20,7 +20,7 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 2.  **Create a Pack**: Click "New" to start with a fresh pack.
 3.  **Edit Items**: Select an item from the sidebar to edit it.
     *   **Procedures**: Edit OPL source code in the code editor.
-    *   **Notepad**: Edit text notes (supports encryption).
+    *   **Notepad**: Edit text notes.
     *   **Data Files**: Edit database records.
 4.  **Add Items**: Click "Add Item" to create a new procedure, notepad, or data file.
 5.  **Import Items**: Click "Import Item" to load .opl, .odb, or binary files.
@@ -30,7 +30,7 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 ## Technical Details
 
 *   **Architecture**: Client-side JavaScript application (no server required).
-*   **Editor**: Custom-built `CodeEditor` component replacing Monaco Editor for lightweight, specific OPL support.
+*   **Editor**: Custom-built `CodeEditor` component for lightweight, specific OPL support.
 *   **Theming**: CSS Variable-based theming system managed by `ThemeManager`.
 *   **Storage**: `OptionsManager` persists user preferences to `localStorage`.
 
@@ -38,4 +38,5 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 
 *   Original OPK Editor by **Jaap Scherphuis**.
 *   Re-imagined by NFfP Implemented by **Antigravity**.
+
 
