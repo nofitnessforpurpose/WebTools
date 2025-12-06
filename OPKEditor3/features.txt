@@ -1,0 +1,56 @@
+OPK Editor - Feature Summary
+============================
+
+1. Pack Management
+------------------
+- Create, Open, and Save OPK packs.
+- Import and Export Intel Hex packs
+- Manage pack contents: Add, Delete, Rename, and Extract items.
+- Support for various Psion file types (OPL, OPO, APP, etc.).
+
+2. Advanced Code Viewer
+-----------------------
+- Full syntax highlighting for OPL (Open Programming Language).
+- Code folding for structured blocks (PROC, DO...UNTIL, WHILE...ENDWH).
+- Line numbering and gutter integration.
+- Search and Replace functionality.
+- Auto-indentation and formatting.
+
+3. OPL Decompiler
+-----------------
+- Decompiles OPO binaries back to readable OPL source code.
+- Intelligent handling of different OPL versions (CM, XP, LA, LZ).
+- Automatic variable naming and type inference.
+- Detection of local arrays and global variables.
+
+4. System Map (Visualizer)
+--------------------------
+- Interactive visual graph of your OPL project.
+- Displays dependencies between procedures and global variables.
+- Orthogonal routing for clear, readable links.
+- Zoom, pan, and fit-to-screen controls.
+- Click on nodes to view source code.
+
+5. OPL Command Reference
+------------------------
+- Comprehensive list of all OPL commands and functions.
+- Floating window for easy reference while coding.
+- Syntax highlighting for command usage.
+- Compatibility flags showing support for CM, XP, LA, and LZ models.
+- Hover tooltips for quick command descriptions.
+
+6. Hex Editor
+-------------
+- View files in raw Hexadecimal format.
+
+7. Theming & Customization
+--------------------------
+- Multiple built-in themes (Dark, Light, High Contrast, etc.).
+- Consistent visual style across all windows and dialogs.
+- Customizable editor preferences.
+
+8. Help & Documentation
+-----------------------
+- Integrated Help menu.
+- "About" dialog with version information.
+- Quick access to OPL Command Reference.

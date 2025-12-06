@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Psion OPK Editor - Standard Function Key Template</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #ccc;
+            /* Contrast for screen view */
+        }
+
+        .page-container {
+            background: white;
+            width: 297mm;
+            /* A4 Landscape width */
+            height: 210mm;
+            padding: 10mm;
+            box-sizing: border-box;
+            margin: 0 auto;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 16pt;
+            margin-bottom: 2mm;
+            text-transform: uppercase;
+            color: #333;
+        }
+
+        .cut-lines {
+            border: 1px dashed #999;
+            padding: 5mm;
+            margin-top: 20mm;
+        }
+
+        /* The main strip container */
+        .template-strip {
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            /* Center on page */
+            align-items: flex-start;
+            gap: 15mm;
+            /* Gap between F4-F5 and F8-F9 (Standard keyboard spacing gap) */
+        }
+
+        /* Group of 4 keys */
+        .key-group {
+            display: flex;
+            border: 2px solid #000;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        /* Individual Key Box */
+        .key-box {
+            width: 18mm;
+            /* Standard key width approx 18-19mm */
+            height: 25mm;
+            border-right: 1px solid #000;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .key-box:last-child {
+            border-right: none;
+        }
+
+        /* Key Number (F1..) */
+        .k-num {
+            font-size: 10pt;
+            font-weight: bold;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+        }
+
+        /* Key Function Text */
+        .k-func {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-size: 9pt;
+            font-weight: 600;
+            padding: 2px;
+            word-wrap: break-word;
+            line-height: 1.1;
+        }
+
+        /* Pastel Colors (Exact classes from before) */
+        .c-sys {
+            background-color: #f3e5f5 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* Purple */
+        .c-file {
+            background-color: #e3f2fd !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* Blue */
+        .c-item {
+            background-color: #e8f5e9 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* Green */
+        .c-edit {
+            background-color: #fff3e0 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* Orange */
+
+        .instructions {
+            margin-top: 20mm;
+            color: #666;
+            font-size: 10pt;
+            text-align: center;
+        }
+
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+
+            .page-container {
+                box-shadow: none;
+                width: 100%;
+                height: auto;
+                padding: 0;
+                margin: 0;
+            }
+
+            /* Force landscape usually set in print dialog, but we can try basic css */
+            @page {
+                size: landscape;
+                margin: 10mm;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <h1>Psion OPK Editor - Function Key Map</h1>
+
+        <div class="cut-lines">
+            <div style="text-align: center; margin-bottom: 5px; font-size: 8pt; color: #999;">&mdash; CUT ALONG DASHED
+                LINE &mdash;</div>
+
+            <div class="template-strip">
+
+                <!-- Group 1: F1 - F4 -->
+                <div class="key-group">
+                    <!-- F1: Help (Sys) -->
+                    <div class="key-box c-sys">
+                        <span class="k-num">F1</span>
+                        <span class="k-func">Help</span>
+                    </div>
+                    <!-- F2: New (File) -->
+                    <div class="key-box c-file">
+                        <span class="k-num">F2</span>
+                        <span class="k-func">New Pack</span>
+                    </div>
+                    <!-- F3: Open (File) -->
+                    <div class="key-box c-file">
+                        <span class="k-num">F3</span>
+                        <span class="k-func">Open Pack</span>
+                    </div>
+                    <!-- F4: Save (File) -->
+                    <div class="key-box c-file">
+                        <span class="k-num">F4</span>
+                        <span class="k-func">Save Pack</span>
+                    </div>
+                </div>
+
+                <!-- Group 2: F5 - F8 -->
+                <div class="key-group">
+                    <!-- F5: Add (Item) -->
+                    <div class="key-box c-item">
+                        <span class="k-num">F5</span>
+                        <span class="k-func">Add Item</span>
+                    </div>
+                    <!-- F6: Delete (Item) -->
+                    <div class="key-box c-item">
+                        <span class="k-num">F6</span>
+                        <span class="k-func">Delete Item</span>
+                    </div>
+                    <!-- F7: Import (Item) -->
+                    <div class="key-box c-item">
+                        <span class="k-num">F7</span>
+                        <span class="k-func">Import Item</span>
+                    </div>
+                    <!-- F8: Export (Item) -->
+                    <div class="key-box c-item">
+                        <span class="k-num">F8</span>
+                        <span class="k-func">Export Hex</span>
+                    </div>
+                </div>
+
+                <!-- Group 3: F9 - F12 -->
+                <div class="key-group">
+                    <!-- F9: Apply (Edit) -->
+                    <div class="key-box c-edit">
+                        <span class="k-num">F9</span>
+                        <span class="k-func">Apply Changes</span>
+                    </div>
+                    <!-- F10: Discard (Edit) -->
+                    <div class="key-box c-edit">
+                        <span class="k-num">F10</span>
+                        <span class="k-func">Discard Changes</span>
+                    </div>
+                    <!-- F11: Options (Sys) -->
+                    <div class="key-box c-sys">
+                        <span class="k-num">F11</span>
+                        <span class="k-func">Options</span>
+                    </div>
+                    <!-- F12: Template (Sys) -->
+                    <div class="key-box c-sys">
+                        <span class="k-num">F12</span>
+                        <span class="k-func">Key Map</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="instructions">
+            <p><strong>Printing Instructions:</strong></p>
+            <p>1. Press Ctrl+P (or Cmd+P).</p>
+            <p>2. Set Layout to <strong>Landscape</strong>.</p>
+            <p>3. Ensure "Background Graphics" is <strong>checked</strong>/enabled.</p>
+            <p>4. Scale: <strong>100%</strong> (Do not scale to fit) for accurate keyboard sizing.</p>
+        </div>
+    </div>
+</body>
+
+</html>
