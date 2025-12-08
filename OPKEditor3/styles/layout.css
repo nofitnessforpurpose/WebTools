@@ -67,6 +67,9 @@
     text-transform: uppercase;
     color: var(--sidebar-header-text);
     background-color: var(--sidebar-header-bg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 /* Sidebar Resizer */

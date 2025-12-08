@@ -716,6 +716,12 @@ function init() {
          }
       }
    });
+
+   // Add Event Listener for Delete Toggle
+   var btnToggleDelete = document.getElementById('btn-toggle-delete');
+   if (btnToggleDelete) {
+      btnToggleDelete.addEventListener('click', toggleDeleteItem);
+   }
 }
 
 // Core Functions
@@ -1221,6 +1227,35 @@ function eraseItem() {
    updateInventory();
 }
 
+function toggleDeleteItem() {
+   if (!currentItem) return;
+
+   // Prevent toggling system items (Header/EOP) or items without data
+   // Type -1 is Header, Type 255 is EOP
+   if (currentItem.type === -1 || currentItem.type === 255) {
+      alert("This record type cannot be deleted.");
+      return;
+   }
+
+   if (!currentItem.data || currentItem.data.length < 2) return;
+
+   var pack = packs[currentPackIndex];
+   if (!pack) return;
+
+   // Toggle status
+   currentItem.deleted = !currentItem.deleted;
+
+   // Update raw data
+   // Bit 7: 1=Active, 0=Deleted
+   var type = currentItem.data[1] & 0x7F;
+   currentItem.data[1] = type | (currentItem.deleted ? 0 : 0x80);
+
+   pack.unsaved = true;
+   setStatus("Item " + (currentItem.deleted ? "marked as deleted" : "restored"));
+   updateInventory();
+   updateItemButtons(true);
+}
+
 var availableTypes = {
    1: "Data file",
    3: "Procedure",
@@ -1595,7 +1630,6 @@ document.addEventListener('mouseup', function (e) {
 });
 
 // Drag and Drop for Packs on Sidebar
-// Drag and Drop for Packs on Sidebar
 // Use Capture phase to intercept File drops before they reach list items
 sidebar.addEventListener('dragover', function (e) {
    // Check if dragging files
@@ -1615,7 +1649,56 @@ sidebar.addEventListener('dragover', function (e) {
       e.dataTransfer.dropEffect = 'copy';
       sidebar.classList.add('drag-over');
    }
-}, true); // useCapture = true
+}, true);
+
+// Global Key Bindings
+document.addEventListener('keydown', function (e) {
+   // Ignore if focus is in an input or textarea
+   var activeTag = document.activeElement.tagName.toUpperCase();
+   var isInput = (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || document.activeElement.isContentEditable);
+
+   // Prevent Delete in inputs
+   if (e.key === 'Delete') {
+      if (!isInput) {
+         if (document.getElementById('btn-delete-item') && !document.getElementById('btn-delete-item').disabled) {
+            document.getElementById('btn-delete-item').click();
+         }
+      }
+      return;
+   }
+
+   // Ctrl Shortcuts
+   if (e.ctrlKey) {
+      switch (e.key.toLowerCase()) {
+         case 's':
+            e.preventDefault();
+            document.getElementById('btn-save-pack').click();
+            break;
+         case 'o':
+            e.preventDefault();
+            // Open pack button is wrapped by hidden file input logic usually, 
+            // but the button click triggers the input.
+            var btnOpen = document.getElementById('btn-open-pack');
+            if (btnOpen) btnOpen.click();
+            break;
+         case 'n':
+            e.preventDefault();
+            document.getElementById('btn-new-pack').click();
+            break;
+         case 'e':
+            e.preventDefault(); // Ctrl+E
+            document.getElementById('btn-export-hex').click();
+            break;
+      }
+   }
+
+   // F1 for Help
+   if (e.key === 'F1') {
+      e.preventDefault();
+      var btnHelp = document.getElementById('btn-help');
+      if (btnHelp) btnHelp.click();
+   }
+});
 
 sidebar.addEventListener('dragleave', function (e) {
    // Only remove if leaving the sidebar (not entering a child)
@@ -1644,4 +1727,4 @@ sidebar.addEventListener('drop', function (e) {
 
 // Start the application
 init();
-document.title = "Psion OPK Editor v3.0.1";
+document.title = "Psion OPK Editor v3.0.3";

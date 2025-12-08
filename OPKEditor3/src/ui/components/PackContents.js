@@ -293,6 +293,11 @@ var PackContents = (function () {
             row.classList.add('selected');
         }
 
+        // Deleted Item Style
+        if (item.deleted) {
+            row.classList.add('deleted');
+        }
+
         // Item Icon
         var itemIcon = document.createElement('span');
         itemIcon.className = 'item-icon';
