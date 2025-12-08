@@ -239,10 +239,13 @@ var PackContents = (function () {
 
                     // If this is a Data File, check if it has children to render
                     if (item.type === 1 && dataFileChildren[i]) {
-                        var children = dataFileChildren[i];
-                        for (var k = 0; k < children.length; k++) {
-                            var childIndex = children[k];
-                            itemsToRender.push({ item: items[childIndex], index: childIndex, indent: true });
+                        // Check collapsed state
+                        if (!item.collapsed) {
+                            var children = dataFileChildren[i];
+                            for (var k = 0; k < children.length; k++) {
+                                var childIndex = children[k];
+                                itemsToRender.push({ item: items[childIndex], index: childIndex, indent: true });
+                            }
                         }
                     }
                 }
@@ -301,6 +304,23 @@ var PackContents = (function () {
         }
         var iconClass = getItemIcon(item);
         itemIcon.innerHTML = `<i class="${iconClass}"></i>`;
+
+        // Feature: Collapse/Expand Data Files
+        if (item.type === 1) {
+            itemIcon.style.cursor = "pointer";
+            itemIcon.title = item.collapsed ? "Click to expand records" : "Click to collapse records";
+            // Optional: visual cue for collapse state (maybe rotate icon or add small chevron?)
+            // For now, relies on the fact that children disappear.
+
+            itemIcon.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                // Toggle state
+                item.collapsed = !item.collapsed;
+                render();
+            });
+        }
+
         row.appendChild(itemIcon);
 
         // Detailed Tooltip
@@ -467,6 +487,7 @@ var PackContents = (function () {
     }
 
     function handleDragOver(e) {
+        if (!dragSrcInfo) return;
         if (e.preventDefault) e.preventDefault();
         e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
         this.classList.add('over');
@@ -474,6 +495,7 @@ var PackContents = (function () {
     }
 
     function handleDragEnter(e) {
+        if (!dragSrcInfo) return;
         this.classList.add('over');
     }
 
@@ -482,6 +504,7 @@ var PackContents = (function () {
     }
 
     function handleDrop(e, toPackIndex, toItemIndex) {
+        if (!dragSrcInfo) return;
         if (e.stopPropagation) e.stopPropagation();
 
         if (dragSrcInfo) {

@@ -30,6 +30,8 @@
     overflow: auto;
     z-index: 2;
     opacity: 1 !important;
+    height: 100%;
+    box-sizing: border-box;
 }
 
 .code-render-container {

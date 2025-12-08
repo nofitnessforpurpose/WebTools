@@ -60,7 +60,7 @@ HeaderEditor.prototype.initialise = function (item) {
     var flags = item.data[0];
     initialiseForm("bit1", (flags & 0x02) != 0, this, function () { UpdateChecksum(this); });
     initialiseForm("bit2", (flags & 0x04) != 0, this, function () { UpdateChecksum(this); });
-    initialiseForm("bit3", (flags & 0x40) == 0 ? (item.data[8] & 0x80) == 0 : (flags & 0x08) == 0, this, function () { UpdateChecksum(this); });
+    initialiseForm("bit3", (flags & 0x08) == 0, this, function () { UpdateChecksum(this); });
     initialiseForm("bit4", (flags & 0x10) == 0, this, function () { FillInHeader(this); UpdateChecksum(this); });
     initialiseForm("bit5", (flags & 0x20) == 0, this, function () { UpdateChecksum(this); });
     initialiseForm("bit6", (flags & 0x40) == 0, this, function () { UpdateChecksum(this); });
@@ -144,12 +144,6 @@ HeaderEditor.prototype.getHeaderData = function () {
     }
 
     // set write protection flag properly
-    var writeChecksumBit = -1;
-    if ((flags & 0x40) == 0) {
-        // on flashpack, write protection is in different bit
-        writeChecksumBit = (flags & 0x08) ? 1 : 0;
-        flags &= 0xf7;
-    }
     newdata[0] = flags;
 
     // update checksum
@@ -158,9 +152,6 @@ HeaderEditor.prototype.getHeaderData = function () {
     sum1 += (sum2 >> 8);
     newdata[8] = sum1 & 0xff;
     newdata[9] = sum2 & 0xff;
-
-    if (writeChecksumBit == 0) newdata[8] &= 0x7f;
-    else if (writeChecksumBit == 1) newdata[8] |= 0x80;
 
     //console.log("new header: "+newdata);
 
@@ -178,7 +169,12 @@ function UpdateChecksum(editor) {
 HeaderEditor.prototype.hasUnsavedChanges = function () {
     if (FileEditor.prototype.hasUnsavedChanges.call(this)) return true;
     var newdata = this.getHeaderData();
-    return !arraysAreEqual(newdata, this.item.data);
+    // Compare only the first 8 bytes (data/flags), ignoring checksum (bytes 8-9)
+    // This prevents "unsaved changes" if the file's checksum differs from our calculation but no data was changed.
+    for (var i = 0; i < 8; i++) {
+        if (newdata[i] !== this.item.data[i]) return true;
+    }
+    return false;
 }
 HeaderEditor.prototype.applyChanges = function () {
     var newdata = this.getHeaderData();

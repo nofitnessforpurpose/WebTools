@@ -50,7 +50,7 @@ class OPLDecompiler {
 
         const numParams = readByte();
         const paramTypes = [];
-        for (let i = 0; i < numParams; i++) paramTypes.push(readByte());
+        for (let i = 0; i < numParams; i++) paramTypes.unshift(readByte());
 
         const globalTableSize = readWord();
         const globalTableEnd = offset + globalTableSize;
@@ -60,7 +60,11 @@ class OPLDecompiler {
             const len = readByte();
             const name = readString(len);
             const type = readByte();
-            const addr = readWord(); // Jaap's ref confirms Address IS present in header!
+            let addr = 0;
+            // Only read address if space permits (some headers omit it)
+            if (offset + 2 <= globalTableEnd) {
+                addr = readWord();
+            }
             globals.push({ name, type, addr });
         }
 
@@ -121,21 +125,17 @@ class OPLDecompiler {
         const varMap = {};
         const { globals, externals, stringFixups, arrayFixups, actualQCodeStart, qcodeStart, qcodeSize, numParams, paramTypes } = header;
 
-        // Map Globals
-        globals.forEach(g => {
-            let addr = g.addr;
-            if (addr > 32767) addr -= 65536;
-            varMap[addr] = { name: g.name, type: g.type, isGlobal: true };
-            const fixup = stringFixups.find(f => f.addr === g.addr);
-            if (fixup) {
-                varMap[addr].maxLen = fixup.len;
-                g.maxLen = fixup.len;
-            }
-            if (arrayFixups[g.addr]) {
-                varMap[addr].arrayLen = arrayFixups[g.addr];
-                g.arrayLen = arrayFixups[g.addr];
-            }
-        });
+        const accessedVars = new Set();
+        const intVars = new Set();
+        const floatVars = new Set();
+        const stringVars = new Set();
+        const arrayVars = new Set();
+        const externAccesses = new Set();
+
+        const externOpcodes = new Set([
+            0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, // Push extern val
+            0x14, 0x15, 0x16, 0x17, 0x18, 0x19  // Push extern ref
+        ]);
 
         const stringFixupsMap = {};
         stringFixups.forEach(f => {
@@ -143,12 +143,6 @@ class OPLDecompiler {
             if (addr > 32767) addr -= 65536;
             stringFixupsMap[addr] = f.len;
         });
-
-        const accessedVars = new Set();
-        const intVars = new Set();
-        const floatVars = new Set();
-        const stringVars = new Set();
-        const arrayVars = new Set();
 
         let pc = actualQCodeStart;
         while (pc < qcodeStart + qcodeSize) {
@@ -158,16 +152,13 @@ class OPLDecompiler {
 
             let addr = null;
             if (def.args.includes('v')) {
-                // v is variable length: 1 byte, or 2 bytes if first is >= 0xFE
                 let val = codeBlock[pc + 1];
                 if (val >= 0xFE) {
                     addr = (val << 8) | codeBlock[pc + 2];
                 } else {
-                    // Sign extend 1-byte value
                     addr = (val & 0x80) ? val - 256 : val;
                 }
             } else if (def.args.includes('V')) {
-                // V is 2 bytes
                 addr = (codeBlock[pc + 1] << 8) | codeBlock[pc + 2];
             }
 
@@ -175,42 +166,38 @@ class OPLDecompiler {
                 if (addr > 32767) addr -= 65536;
                 accessedVars.add(addr);
 
-                // Mark as accessed if already in map (e.g. Globals)
-                if (varMap[addr]) {
-                    varMap[addr].accessed = true;
+                if (externOpcodes.has(op)) {
+                    externAccesses.add(addr);
                 }
 
-                // Type detection
                 if ([0x02, 0x05, 0x0F, 0x12, 0x81, 0x09, 0x0C, 0x16, 0x19].includes(op)) stringVars.add(addr);
                 else if ([0x00, 0x03, 0x0D, 0x10, 0x7F, 0x07, 0x0A, 0x14, 0x17].includes(op)) intVars.add(addr);
                 else if ([0x01, 0x04, 0x0E, 0x11, 0x80, 0x08, 0x0B, 0x15, 0x18].includes(op)) floatVars.add(addr);
 
-                // Array detection
                 if ([0x03, 0x04, 0x05, 0x10, 0x11, 0x12, 0x0A, 0x0B, 0x0C, 0x17, 0x18, 0x19].includes(op)) {
                     arrayVars.add(addr);
                 }
             }
-
             pc += this.instHandler.getInstructionSize(codeBlock, pc, def);
         }
 
-        // Identify Parameters (Heuristic: Highest offsets are usually params in OPL stack frame?)
-        // Actually, let's use the numParams.
-        // If we have params, they are usually at positive offsets relative to something, or specific offsets.
-        // In OPL, params are pushed before call.
-        // Let's assume the standard OPL convention: Params are at the top of the accessed vars?
-        // Or maybe we can just map them if we know the offsets?
-        // Without knowing the exact stack frame layout, we'll stick to the previous heuristic:
-        // Sort accessed vars descending, take top 'numParams' as params.
-        // But we must exclude Globals first.
+        // Helper to infer type from usage
+        const getScanType = (addr) => {
+            if (stringVars.has(addr)) return 2;
+            if (intVars.has(addr)) return 0;
+            if (floatVars.has(addr)) return 1;
+            return 1;
 
-        const potentialLocalsOrParams = Array.from(accessedVars).filter(addr => !varMap[addr]);
-        // Sort Descending to separate Params (High) from Locals (Low)
-        potentialLocalsOrParams.sort((a, b) => b - a);
+        };
 
-        // Extract Params (p1 is Highest Offset)
-        const params = potentialLocalsOrParams.slice(0, numParams);
+        let availableVars = Array.from(accessedVars);
 
+        // 1. Identify Parameters (Highest offsets of available vars)
+        availableVars.sort((a, b) => b - a);
+
+        const params = availableVars.slice(0, numParams);
+
+        // 2. Map Params
         for (let i = 0; i < numParams; i++) {
             if (i < params.length) {
                 const off = params[i];
@@ -220,17 +207,126 @@ class OPLDecompiler {
             }
         }
 
-        // Handle Remaining (Locals or Externals)
+        // Use remaining vars for Globals & Locals
+        let remainingVars = availableVars.slice(numParams);
+
+        // 3. Map Globals
+        if (globals.length > 0) {
+            globals.forEach(g => {
+                let mappedAddr = null;
+                let signedAddr = g.addr;
+                if (signedAddr > 32767) signedAddr -= 65536;
+
+                // A. Explicit Address Match
+                // Only if it's in remainingVars (i.e., not a Param)
+                if (remainingVars.includes(signedAddr)) {
+                    mappedAddr = signedAddr;
+                }
+
+                // B. Fallback: Extern or Lax
+                if (mappedAddr === null) {
+                    // Start by looking at remaining variables
+                    // 1. Extern Access Check
+                    if (g.addr === 0 || !remainingVars.includes(signedAddr)) {
+                        const externCandidates = remainingVars.filter(v => externAccesses.has(v));
+                        const candIdx = externCandidates.findIndex(v => getScanType(v) === g.type);
+
+                        if (candIdx !== -1) {
+                            mappedAddr = externCandidates[candIdx];
+                        }
+                        // 2. Lax / Opportunistic Match
+                        // If unmapped, assume it maps to one of the available stack slots 
+                        // that matches the type.
+                        else if (g.addr === 0) {
+                            const laxIdx = remainingVars.findIndex(v => getScanType(v) === g.type);
+                            if (laxIdx !== -1) {
+                                mappedAddr = remainingVars[laxIdx];
+                            }
+                        }
+                    }
+                }
+
+                if (mappedAddr !== null) {
+                    varMap[mappedAddr] = { name: g.name, type: g.type, isGlobal: true };
+
+                    if (stringFixupsMap[mappedAddr]) {
+                        varMap[mappedAddr].maxLen = stringFixupsMap[mappedAddr];
+                        g.maxLen = stringFixupsMap[mappedAddr];
+                    }
+                    if (arrayFixups[mappedAddr]) {
+                        varMap[mappedAddr].arrayLen = arrayFixups[mappedAddr];
+                        g.arrayLen = arrayFixups[mappedAddr];
+                    }
+
+                    // Remove from remainingVars
+                    remainingVars = remainingVars.filter(v => v !== mappedAddr);
+                } else if (g.addr !== 0 || signedAddr !== 0) {
+                    // Force map if explicit address, even if not found in scan (for reference)
+                    // But strictly speaking, if it's not in scan, varMap won't attach to any opcode.
+                    varMap[signedAddr] = { name: g.name, type: g.type, isGlobal: true };
+                }
+            });
+        }
+
+        // 4. Map Externals (that don't have explicit offsets matching locals yet)
+        if (externals.length > 0) {
+            externals.forEach(e => {
+                let mappedAddr = null;
+
+                // If External has an explicit address, it might be handled in "Map Locals" historically, 
+                // but let's handle it here if it matches 'remainingVars'.
+                if (e.addr !== undefined) {
+                    // Address-based matching currently happens in Locals loop.
+                    // We can leave it there OR handle it here.
+                    // If we handle it here, we ensure it's prioritized.
+                    if (remainingVars.includes(e.addr)) {
+                        mappedAddr = e.addr;
+                    }
+                }
+                else {
+                    // No explicit address. Use Lax / Extern Logic.
+                    // 1. Extern Access Check
+                    const externCandidates = remainingVars.filter(v => externAccesses.has(v));
+                    const candIdx = externCandidates.findIndex(v => getScanType(v) === e.type);
+
+                    if (candIdx !== -1) {
+                        mappedAddr = externCandidates[candIdx];
+                    }
+                    // 2. Lax Match (First variable of type)
+                    else {
+                        const laxIdx = remainingVars.findIndex(v => getScanType(v) === e.type);
+                        if (laxIdx !== -1) {
+                            mappedAddr = remainingVars[laxIdx];
+                        }
+                    }
+                }
+
+                if (mappedAddr !== null) {
+                    // Apply mapping
+                    varMap[mappedAddr] = { name: e.name, type: e.type, isExternal: true }; // isExternal true effectively mimics Global usage logic
+
+                    if (stringFixupsMap[mappedAddr]) {
+                        varMap[mappedAddr].maxLen = stringFixupsMap[mappedAddr];
+                    }
+                    if (arrayFixups[mappedAddr]) {
+                        varMap[mappedAddr].arrayLen = arrayFixups[mappedAddr];
+                    }
+
+                    // Remove from remainingVars
+                    remainingVars = remainingVars.filter(v => v !== mappedAddr);
+                }
+            });
+        }
+
+        // 5. Map Locals
         let localCounter = 1;
-        // Sort by offset to ensure deterministic naming (descending for stack order?)
-        potentialLocalsOrParams.sort((a, b) => b - a);
+        const locals = remainingVars;
 
-        potentialLocalsOrParams.forEach(off => {
+        locals.forEach(off => {
             if (!varMap[off]) {
-                // Check if it's in Externals list (by address)
-                const ext = externals.find(e => e.addr === off); // If externals have addr
+                const ext = externals.find(e => e.addr === off);
 
-                let type = 1; // Default Float
+                let type = 1;
                 let suffix = '';
                 if (stringVars.has(off)) { type = 2; suffix = '$'; }
                 else if (intVars.has(off)) { type = 0; suffix = '%'; }
@@ -239,20 +335,8 @@ class OPLDecompiler {
                     let name = ext.name || `L${Math.abs(off).toString(16).toUpperCase()}${suffix}`;
                     varMap[off] = { name: name, type: ext.type !== undefined ? ext.type : type, isExternal: true };
                 } else {
-                    // It's a Local
-                    // Generate sequential name L1, L2, etc.
                     let name = `L${localCounter}${suffix}`;
-
-                    // Ensure uniqueness
-                    while (true) {
-                        let collision = false;
-                        for (const key in varMap) {
-                            if (varMap[key].name === name) {
-                                collision = true;
-                                break;
-                            }
-                        }
-                        if (!collision) break;
+                    while (Object.values(varMap).some(v => v.name === name)) {
                         localCounter++;
                         name = `L${localCounter}${suffix}`;
                     }
@@ -262,47 +346,26 @@ class OPLDecompiler {
 
                     if (stringFixupsMap[off]) varMap[off].maxLen = stringFixupsMap[off];
                     if (arrayFixups[off]) varMap[off].arrayLen = arrayFixups[off];
-
-                    // Infer size from stack layout
-                    // potentialLocalsOrParams is sorted descending (b - a)
-                    // e.g. -10, -20, -30
-                    // Size of var at -20 is (-10) - (-20) = 10
-                    // Size of var at -10 is (Start of Locals) - (-10)
-                    // Start of locals is usually 0 (FP).
-
-                    let nextOff = 0; // Default top of stack (FP)
-                    const idx = potentialLocalsOrParams.indexOf(off);
-                    if (idx > 0) {
-                        nextOff = potentialLocalsOrParams[idx - 1];
+                    if (arrayVars.has(off)) {
+                        varMap[off].isArray = true;
                     }
 
+                    // Size inference
+                    let nextOff = 0;
+                    // Note: 'availableVars' is sorted but contains Params/Globals/Locals.
+                    // To infer distinct size for Locals, ideally we look at 'availableVars' 
+                    // (which is ALL vars sorted). 
+                    // So we can still use availableVars for neighbor finding.
+                    const idx = availableVars.indexOf(off);
+                    if (idx > 0) nextOff = availableVars[idx - 1];
                     const size = Math.abs(nextOff - off);
 
-                    if (type === 2) { // String
-                        if (!varMap[off].maxLen) {
-                            // If no fixup, infer from size
-                            // String takes maxLen + 1 bytes
-                            const inferredLen = size - 1;
-                            if (inferredLen > 0 && inferredLen < 256) {
-                                varMap[off].maxLen = inferredLen;
-                            } else {
-                                varMap[off].maxLen = 255; // Fallback
-                            }
-                        }
+                    if (type === 2 && !varMap[off].maxLen) {
+                        const inferredLen = size - 1;
+                        varMap[off].maxLen = (inferredLen > 0 && inferredLen < 256) ? inferredLen : 255;
                     } else if (varMap[off].isArray) {
-                        // Array
-                        // Int Array: 2 * len + 2 (size word)
-                        // Float Array: 8 * len + 2
-                        // String Array: (maxLen + 1) * len + 2
-                        // We don't know maxLen for string array easily without fixup
-                        // But for Int/Float:
-                        if (type === 0) {
-                            const len = Math.floor((size - 2) / 2);
-                            if (len > 0) varMap[off].arrayLen = len;
-                        } else if (type === 1) {
-                            const len = Math.floor((size - 2) / 8);
-                            if (len > 0) varMap[off].arrayLen = len;
-                        }
+                        if (type === 0) varMap[off].arrayLen = Math.floor((size - 2) / 2);
+                        if (type === 1) varMap[off].arrayLen = Math.floor((size - 2) / 8);
                     }
                 }
             }

@@ -15,18 +15,21 @@ function DragDropList(listelement, moved, numfixedtop, numfixedbottom) {
     this.classList.add('dragElem');
   }
   function handleDragOver(e) {
+    if (!self.dragSrcEl) return;
     if (e.preventDefault) e.preventDefault(); // Necessary. Allows us to drop.
     this.classList.add('over');
     e.dataTransfer.dropEffect = 'move';  // See the section on the DataTransfer object.
     return false;
   }
   function handleDragEnter(e) {
+    if (!self.dragSrcEl) return;
     // this / e.target is the current hover target.
   }
   function handleDragLeave(e) {
     this.classList.remove('over');  // this / e.target is previous target element.
   }
   function handleDrop(e) {
+    if (!self.dragSrcEl) return;
     // this/e.target is current target element.
     if (e.stopPropagation) e.stopPropagation(); // Stops some browsers from redirecting.
     // Don't do anything if dropping the same column we're dragging.
@@ -43,8 +46,9 @@ function DragDropList(listelement, moved, numfixedtop, numfixedbottom) {
   }
   function handleDragEnd(e) {
     // this/e.target is the source node.
-    self.dragSrcEl.classList.remove('dragElem');
+    if (self.dragSrcEl) self.dragSrcEl.classList.remove('dragElem');
     this.classList.remove('over');
+    self.dragSrcEl = null;
   }
   function addDnDHandlers(elem) {
     elem.addEventListener('dragstart', handleDragStart, false);

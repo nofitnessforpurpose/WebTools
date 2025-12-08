@@ -345,7 +345,7 @@ const QCODE_DEFS = {
     0x8C: { args: '', pops: '', pushes: 'I', desc: 'DAY' },
     0x8D: { args: '', pops: 'I S', pushes: 'I', desc: 'DISP' },
     0x8E: { args: '', pops: '', pushes: 'I', desc: 'ERR' },
-    0x8F: { args: '', pops: 'S I', pushes: 'I', desc: 'FIND' },
+    0x8F: { args: '', pops: 'S', pushes: 'I', desc: 'FIND' },
     0x90: { args: '', pops: '', pushes: 'I', desc: 'FREE' },
     0x91: { args: '', pops: '', pushes: 'I', desc: 'GET' },
     0x92: { args: '', pops: '', pushes: 'I', desc: 'HOUR' },
@@ -430,6 +430,7 @@ const QCODE_DEFS = {
     0xE1: { args: '', pops: 'Flist', pushes: 'F', desc: 'STD' },
     0xE2: { args: '', pops: 'Flist', pushes: 'F', desc: 'SUM' },
     0xE3: { args: '', pops: 'Flist', pushes: 'F', desc: 'VAR' },
+    0xED: { args: 'b', pops: '', pushes: '', desc: 'EXT' }, // Extended Opcode Prefix
     0xEF: { args: 'v', pops: '', pushes: '', desc: 'REM LZ_EF' }, // LZ Specific?
     0xFB: { args: 'D', pops: '', pushes: '', desc: 'ELSEIF' }, // LZ Specific
     0xFC: { args: '', pops: '', pushes: '', desc: 'REM LZ_FC' }, // LZ Specific

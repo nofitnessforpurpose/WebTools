@@ -34,10 +34,10 @@ class SourceGenerator {
         source += "\n";
 
         const date = new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '');
-        source += `  REM Decompiled Source - OPK - Editor ${typeof APP_VERSION !== 'undefined' ? APP_VERSION : '3.0.0'} \n`;
+        source += `  REM Decompiled Source - OPK - Editor ${typeof APP_VERSION !== 'undefined' ? APP_VERSION : '3.0.3'} \n`;
         source += `  REM ${date} \n`;
 
-        if (isLZ) source += "  REM LZ Variant Specific Code\n";
+        if (isLZ) source += "  REM LZ Variant QCode\n";
         else source += "  REM CM,XP,LA & LZ code\n";
 
         if (externals.length > 0) {
@@ -150,9 +150,13 @@ class SourceGenerator {
                     indentLevel++;
                     pendingElse = null;
                 }
-                const hex = codeBlock[pc].toString(16).toUpperCase().padStart(2, '0');
-                source += `  REM Unknown QCode ${hex} \n`;
-                source += `  REM ${hex} \n`;
+                if (pc < codeBlock.length) {
+                    const hex = codeBlock[pc].toString(16).toUpperCase().padStart(2, '0');
+                    source += `  REM Unknown QCode ${hex} \n`;
+                    source += `  REM ${hex} \n`;
+                } else {
+                    source += `  REM Unknown QCode (EOF) \n`;
+                }
                 pc++;
                 continue;
             }

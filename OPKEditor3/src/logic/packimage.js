@@ -267,6 +267,12 @@ PackItem.prototype = {
          this.name = "";
       }
    },
+   getFullData: function () {
+      var ln = this.getLength();
+      var fullData = new Uint8Array(ln);
+      this.storeData(fullData, 0);
+      return fullData;
+   },
 };
 
 

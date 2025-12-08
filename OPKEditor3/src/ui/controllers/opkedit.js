@@ -318,7 +318,7 @@ function showOptionsDialog() {
    element.querySelector('#opt-splash').checked = OptionsManager.getOption('showSplashScreen') !== false;
    element.querySelector('#opt-restorepacks').checked = OptionsManager.getOption('restorePacks') === true;
    element.querySelector('#opt-grouprecords').checked = OptionsManager.getOption('groupDataRecords') === true;
-   element.querySelector('#opt-hexbytes').value = OptionsManager.getOption('hexBytesPerRow') || 8;
+   element.querySelector('#opt-hexbytes').value = OptionsManager.getOption('hexBytesPerRow') || 16;
 
    // Initialize Memory Map Options
    var mmPageBreaksCheckbox = element.querySelector('#opt-mm-pagebreaks');
@@ -1033,7 +1033,10 @@ function itemSelected(packIndex, itemIndex) {
    if (i < editors.length) {
       currentEditor = editors[i];
       legacyEditorElement.style.display = 'block';
-      currentEditor.initialise(currentItem);
+      // Calculate start address for display
+      // Add 6 bytes for the OPK header (OPK + length) which are not items
+      var startAddr = getItemAddres(pack, itemIndex) + 6;
+      currentEditor.initialise(currentItem, startAddr);
    } else {
       console.warn("No editor found for type " + tp);
    }
@@ -1042,6 +1045,9 @@ function itemSelected(packIndex, itemIndex) {
    updateItemButtons(false);
    return true;
 }
+
+// Alias for PackContents.js
+var selectItem = itemSelected;
 
 function canLoadPack(e) {
    if (!discardUnsavedPack()) {
@@ -1054,8 +1060,11 @@ function canLoadPack(e) {
 
 
 function fileChosen() {
+   loadPackFromFiles(loadpackbutton.getFiles());
+}
+
+function loadPackFromFiles(files) {
    if (typeof HexViewer !== 'undefined') HexViewer.close();
-   var files = loadpackbutton.getFiles();
    if (files.length != 0) {
       var file = files[0];
       var fname = file.name.toLowerCase();
@@ -1584,6 +1593,54 @@ document.addEventListener('mouseup', function (e) {
       document.body.style.cursor = 'default';
    }
 });
+
+// Drag and Drop for Packs on Sidebar
+// Drag and Drop for Packs on Sidebar
+// Use Capture phase to intercept File drops before they reach list items
+sidebar.addEventListener('dragover', function (e) {
+   // Check if dragging files
+   var isFile = false;
+   if (e.dataTransfer.types) {
+      for (var i = 0; i < e.dataTransfer.types.length; i++) {
+         if (e.dataTransfer.types[i] === "Files") {
+            isFile = true;
+            break;
+         }
+      }
+   }
+
+   if (isFile) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'copy';
+      sidebar.classList.add('drag-over');
+   }
+}, true); // useCapture = true
+
+sidebar.addEventListener('dragleave', function (e) {
+   // Only remove if leaving the sidebar (not entering a child)
+   // But in capture mode, logic is tricky. Simplest is to just remove class.
+   sidebar.classList.remove('drag-over');
+}, true);
+
+sidebar.addEventListener('drop', function (e) {
+   var isFile = false;
+   if (e.dataTransfer.types) {
+      for (var i = 0; i < e.dataTransfer.types.length; i++) {
+         if (e.dataTransfer.types[i] === "Files") {
+            isFile = true;
+            break;
+         }
+      }
+   }
+
+   if (isFile && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      e.preventDefault();
+      e.stopPropagation();
+      sidebar.classList.remove('drag-over');
+      loadPackFromFiles(e.dataTransfer.files);
+   }
+}, true); // useCapture = true
 
 // Start the application
 init();

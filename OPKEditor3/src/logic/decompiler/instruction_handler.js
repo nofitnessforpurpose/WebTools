@@ -18,7 +18,8 @@ class InstructionHandler {
             for (const arg of args) {
                 if (!arg || arg === '-') continue;
                 else if (arg === 'v') {
-                    if (codeBlock[pc + size] >= 0xFD) size += 2;
+                    const val = codeBlock[pc + size];
+                    if (val >= 0xFD || val === 0xED) size += 2;
                     else size += 1;
                 }
                 else if (arg === 'B') size += 1;
@@ -95,6 +96,9 @@ class InstructionHandler {
                     if (b1 >= 0xFD) {
                         const b2 = codeBlock[offset++];
                         val = (b1 << 8) | b2;
+                    } else if (b1 === 0xED) {
+                        const b2 = codeBlock[offset++];
+                        val = (b1 << 8) | b2;
                     } else {
                         // Sign extend 1-byte value
                         val = (b1 & 0x80) ? b1 - 256 : b1;
@@ -126,8 +130,6 @@ class InstructionHandler {
                 } else if (arg === 'm') {
                     res[arg] = (codeBlock[offset] << 8) | codeBlock[offset + 1];
                     offset += 2;
-                } else if (arg === 'B' || arg === 'O' || arg === 's' || arg === 'i') {
-                    res[arg] = codeBlock[offset++];
                 } else if (arg === 'S') {
                     const len = codeBlock[offset++];
                     let s = "";
@@ -629,7 +631,22 @@ class InstructionHandler {
             // Let's assume it pops 1 value (Integer/Boolean).
             const condObj = stack.pop();
             const cond = condObj ? (condObj.text || '0') : '0';
-            return `ELSEIF ${cond}`;
+            return `ELSEIF ${cond} : REM LZ`;
+        }
+
+        if (def.desc === 'EXT') {
+            const subcode = args.b;
+            const hex = subcode.toString(16).toUpperCase().padStart(2, '0');
+
+            // Known LZ Extended Opcodes (Speculative mapping based on context)
+            // E6: Start of statement / Line marker?
+            // EA: PAUSE (Variable duration?)
+            // EE: PAUSE?
+            // F0: PAUSE?
+            // E8: PAUSE?
+
+            // For now, just output a clearer REM
+            return `REM LZ_EXT ${hex}`;
         }
 
         if (op === 0xFE) {
