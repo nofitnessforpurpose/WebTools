@@ -1,6 +1,6 @@
 # OPK Editor 3 (Redesigned)
 
-A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This tool allows you to create, view, and edit OPK files, including OPL procedures, data files, and notepad entries.
+A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This tool allows you to create, view, and edit OPK files, including OPL procedures, data files, and LZ notepad entries etc.
 
 ## Features
 
@@ -20,12 +20,13 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 2.  **Create a Pack**: Click "New" to start with a fresh pack.
 3.  **Edit Items**: Select an item from the sidebar to edit it.
     *   **Procedures**: View OPL source code in the code editor.
-    *   **Notepad**: Edit text notes (supports encryption).
+    *   **Notepad**: Edit LZ text notes (supports encryption and decryption).
     *   **Data Files**: Edit database records.
 4.  **Add Items**: Click "Add Item" to create a new procedure, notepad, or data file.
 5.  **Import Items**: Click "Import Item" to load .opl, .odb, or binary files.
 6.  **Save**: Click "Save" to download the modified .opk file.
-7.  **Options**: Click "Options" to configure the editor (Theme, Line Numbers, Folding).
+7.  **Options**: Click "Options" to configure the editor (Theme, Line Numbers, Code Folding).
+8.  ** Drag and drop pack files directly into the Pack Contents view.
 
 ## Technical Details
 
@@ -37,4 +38,7 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 ## Credits
 
 *   Original OPK Editor by **Jaap Scherphuis**.
+*   Icons by **Font Awesome**
 *   Re-imagined by NFfP Implemented by **Antigravity**.
+
+
