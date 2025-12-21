@@ -39,6 +39,7 @@ var ThemeManager = {
             '--status-bar-text': 'white',
             '--icon-color': '#cccccc',
             '--icon-hover-bg': '#3e3e3e',
+            '--editor-bg': '#151515', // Slightly darker than bg
             // Syntax
             '--syntax-functions': '#dcdcaa',
             '--syntax-commands': '#c586c0',
@@ -85,6 +86,7 @@ var ThemeManager = {
             '--status-bar-text': 'white',
             '--icon-color': '#666666',
             '--icon-hover-bg': '#e0e0e0',
+            '--editor-bg': '#ffffff',
             // Syntax
             '--syntax-functions': '#795e26',
             '--syntax-commands': '#af00db',
@@ -131,6 +133,7 @@ var ThemeManager = {
             '--status-bar-text': 'white',
             '--icon-color': '#a0a8b7',
             '--icon-hover-bg': '#1e2230',
+            '--editor-bg': '#050608',
             // Syntax
             '--syntax-functions': '#ff00ff',
             '--syntax-commands': '#00ffff',
@@ -177,6 +180,7 @@ var ThemeManager = {
             '--status-bar-text': 'white',
             '--icon-color': '#f8f8f2',
             '--icon-hover-bg': '#3e3d32',
+            '--editor-bg': '#272822',
             // Syntax
             '--syntax-functions': '#66d9ef',
             '--syntax-commands': '#f92672',
@@ -223,6 +227,7 @@ var ThemeManager = {
             '--status-bar-text': 'white',
             '--icon-color': '#839496',
             '--icon-hover-bg': '#586e75',
+            '--editor-bg': '#002b36',
             // Syntax
             '--syntax-functions': '#268bd2',
             '--syntax-commands': '#859900',
@@ -269,6 +274,7 @@ var ThemeManager = {
             '--status-bar-text': 'white',
             '--icon-color': '#657b83',
             '--icon-hover-bg': '#93a1a1',
+            '--editor-bg': '#fdf6e3',
             // Syntax
             '--syntax-functions': '#268bd2',
             '--syntax-commands': '#859900',
@@ -315,6 +321,7 @@ var ThemeManager = {
             '--status-bar-text': '#282a36',
             '--icon-color': '#f8f8f2',
             '--icon-hover-bg': '#44475a',
+            '--editor-bg': '#282a36',
             // Syntax
             '--syntax-functions': '#50fa7b',
             '--syntax-commands': '#ff79c6',
@@ -361,6 +368,7 @@ var ThemeManager = {
             '--status-bar-text': '#2e3440',
             '--icon-color': '#d8dee9',
             '--icon-hover-bg': '#434c5e',
+            '--editor-bg': '#2e3440',
             // Syntax
             '--syntax-functions': '#88c0d0',
             '--syntax-commands': '#81a1c1',
@@ -591,8 +599,12 @@ var ThemeManager = {
     },
 
     applyTheme: function (theme) {
-        console.log("Applying theme:", theme);
-        var baseTheme = this.baseThemes[theme] || 'dark';
+
+        var baseTheme = this.baseThemes[theme];
+        if (!baseTheme) {
+            if (theme === 'custom1' || theme === 'custom2') baseTheme = 'dark'; // Default custom to dark base
+            else baseTheme = 'dark';
+        }
         document.documentElement.setAttribute('data-theme', baseTheme);
 
         // Apply syntax highlighting variables
@@ -605,8 +617,20 @@ var ThemeManager = {
         // Merge defaults with overrides
         for (var key in defs) {
             var value = themeOverrides[key] || defs[key];
-            console.log("Setting var:", key, value);
             document.documentElement.style.setProperty(key, value);
+
+            // Auto-generate RGB variables for transparency support
+            // e.g. --bg-color -> --bg-color-rgb: 30, 30, 30
+            if (value && value.startsWith('#')) {
+                var hex = value.substring(1);
+                if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+                if (hex.length === 6) {
+                    var r = parseInt(hex.substring(0, 2), 16);
+                    var g = parseInt(hex.substring(2, 4), 16);
+                    var b = parseInt(hex.substring(4, 6), 16);
+                    document.documentElement.style.setProperty(key + '-rgb', r + ', ' + g + ', ' + b);
+                }
+            }
         }
 
         // Dispatch event for other components (like editor) to update if needed
@@ -615,7 +639,15 @@ var ThemeManager = {
     },
 
     getThemeDefinition: function (theme) {
+        // Support custom themes requiring overrides even if no base definition exists
         var defs = this.themeDefinitions[theme] || this.themeDefinitions['dark'];
+
+        // Use empty base for custom themes to ensure we only use the overrides + base defaults if needed
+        if (theme === 'custom1' || theme === 'custom2') {
+            // For custom themes, start with the 'dark' theme as a fallback base
+            defs = this.themeDefinitions['dark'];
+        }
+
         var overrides = OptionsManager.getOption('themeOverrides') || {};
         var themeOverrides = overrides[theme] || {};
 
@@ -635,6 +667,61 @@ var ThemeManager = {
         if (this.currentTheme === theme) {
             this.applyTheme(theme);
         }
+    },
+
+    getAvailableThemes: function () {
+        var themes = [];
+        // Defaults
+        for (var key in this.themeDefinitions) {
+            themes.push({ key: key, name: this.formatThemeName(key) });
+        }
+
+        // Custom Themes (from Options)
+        var customNames = OptionsManager.getOption('customThemeNames') || {};
+        if (customNames['custom1']) themes.push({ key: 'custom1', name: customNames['custom1'] });
+        else themes.push({ key: 'custom1', name: 'Custom Theme 1' });
+
+        if (customNames['custom2']) themes.push({ key: 'custom2', name: customNames['custom2'] });
+        else themes.push({ key: 'custom2', name: 'Custom Theme 2' });
+
+        return themes.sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    formatThemeName: function (key) {
+        return key.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    },
+
+    resetAll: function () {
+        OptionsManager.setOption('themeOverrides', {});
+        OptionsManager.setOption('customThemeNames', {});
+        this.setTheme('dark'); // Default to dark
+    },
+
+    importTheme: function (sourceKey, targetKey, newName) {
+        var sourceDef = this.getThemeDefinition(sourceKey);
+
+        // Save Definition
+        var overrides = OptionsManager.getOption('themeOverrides') || {};
+        overrides[targetKey] = sourceDef;
+        OptionsManager.setOption('themeOverrides', overrides);
+
+        // Save Name
+        if (newName) {
+            var customNames = OptionsManager.getOption('customThemeNames') || {};
+            customNames[targetKey] = newName;
+            OptionsManager.setOption('customThemeNames', customNames);
+        }
+
+        // Apply if current
+        if (this.currentTheme === targetKey) {
+            this.applyTheme(targetKey);
+        }
+    },
+
+    setThemeName: function (key, name) {
+        var customNames = OptionsManager.getOption('customThemeNames') || {};
+        customNames[key] = name;
+        OptionsManager.setOption('customThemeNames', customNames);
     },
 
     updateThemeDefinition: function (theme, definition) {

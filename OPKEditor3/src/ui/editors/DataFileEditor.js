@@ -9,6 +9,7 @@ DataFileEditor.prototype = Object.create(FileEditor.prototype);
 DataFileEditor.prototype.initialise = function (item) {
     if (!this.myelement) {
         var newelement = document.createElement('div');
+        newelement.className = 'legacy-editor-container';
         newelement.innerHTML =
             "<form action='#'><fieldset><legend>Data File Header</legend>" +
             "<div>File name: <input type='text' id='filename'></div>" +

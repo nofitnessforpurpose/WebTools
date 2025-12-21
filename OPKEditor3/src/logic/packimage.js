@@ -189,11 +189,11 @@ var FileDescriptions = {
    0x87: "Notepad file",
    0x86: "Pager setup file",
    0x85: "Spreadsheet file",
-   0x84: "Comms Link setup file",
+   0x84: "Comms Link Setup",
    0x83: "Procedure",
    0x82: "CM/XP diary file",
    0x81: "Data file ",  //+(this.data[10]-0x8f);
-   0x80: "Data block",
+   0x80: "Long Record",
    0x10: "Deleted file record ", //+(tp-0x0f);
    0x0f: "Deleted block file of type 15",
    0x0e: "Deleted block file of type 14",
@@ -206,8 +206,8 @@ var FileDescriptions = {
    0x07: "Deleted notepad file",
    0x06: "Deleted pager setup file",
    0x05: "Deleted spreadsheet file",
-   0x04: "Deleted Comms Link setup file",
-   0x03: "Deleted procedure",
+   0x04: "Deleted Comms Link Setup",
+   0x03: "OPL Text (Source)",
    0x02: "Deleted CM/XP diary file",
    0x01: "Deleted data file ", // +(this.data[10]-0x8f);
    0x00: "Failed data block header",

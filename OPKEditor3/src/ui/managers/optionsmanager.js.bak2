@@ -26,7 +26,7 @@ var OptionsManager = {
             free: '#073642'
         },
         memoryMapShowPageBreaks: true,
-        memoryMapDisplaySize: 8192,
+        memoryMapDisplaySize: 32768,
         memoryMapBarHeight: 30,
         iconVersion: '6',
         iconStyle: 'solid',
@@ -35,22 +35,13 @@ var OptionsManager = {
         collapseDataFiles: false,
         showAddresses: false,
         showDecompilerLog: false,
-        showIconToolbar: true,
-        showMenuBar: true,
         decompileInlineAssembly: true,
-        stickyProcedureHeader: false,
-        showGlobalUsageLinks: true,
-        spreadsheetMode: 'legacy', // 'legacy' (Hex/ASCII) or 'enhanced' (Grid Stub)
+        decompileInlineAssembly: true,
+        stickyProcedureHeader: true
     },
 
     init: function () {
         this.loadOptions();
-
-        // Validation: At least one toolbar MUST be visible
-        if (this.options.showIconToolbar === false && this.options.showMenuBar === false) {
-            this.options.showMenuBar = true;
-        }
-
         this.applyOptions();
     },
 
@@ -145,20 +136,6 @@ var OptionsManager = {
                 }
             }
         });
-
-        // Apply Icon Toolbar visibility
-        var iconToolbar = document.getElementById('icon-toolbar');
-        if (iconToolbar) {
-            iconToolbar.style.display = this.options.showIconToolbar ? 'flex' : 'none';
-        }
-
-        // Apply Menu Bar visibility
-        var menuBar = document.getElementById('toolbar');
-        if (menuBar) {
-            menuBar.style.display = this.options.showMenuBar ? 'flex' : 'none';
-        }
-
-        window.dispatchEvent(new Event('resize'));
     }
 };
 

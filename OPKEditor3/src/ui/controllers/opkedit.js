@@ -50,14 +50,16 @@ function Button(id, clickcallback, inputId, filecallback) {
    }
 }
 
-// Global State
-var packs = []; // Changed from single pack to array
-var currentPack = null; // Track the currently active pack (for adding items etc)
-var currentEditor;
-var currentItem;
-var currentPackIndex = -1; // Index of the pack containing the current item
-var selectedPackIndex = -1; // Index of the selected pack header
-var syntaxHighlightingEnabled = true;
+// Global State - Proxied to AppStore
+Object.defineProperty(window, 'packs', { get: function () { return AppStore.state.packs; }, set: function (v) { AppStore.state.packs = v; } });
+Object.defineProperty(window, 'currentPack', { get: function () { return AppStore.state.currentPack; }, set: function (v) { AppStore.state.currentPack = v; } });
+Object.defineProperty(window, 'currentEditor', { get: function () { return AppStore.state.currentEditor; }, set: function (v) { AppStore.state.currentEditor = v; } });
+Object.defineProperty(window, 'currentItem', { get: function () { return AppStore.state.currentItem; }, set: function (v) { AppStore.state.currentItem = v; } });
+Object.defineProperty(window, 'currentPackIndex', { get: function () { return AppStore.state.currentPackIndex; }, set: function (v) { AppStore.state.currentPackIndex = v; } });
+Object.defineProperty(window, 'selectedPackIndex', { get: function () { return AppStore.state.selectedPackIndex; }, set: function (v) { AppStore.state.selectedPackIndex = v; } });
+Object.defineProperty(window, 'syntaxHighlightingEnabled', { get: function () { return AppStore.state.syntaxHighlightingEnabled; }, set: function (v) { AppStore.state.syntaxHighlightingEnabled = v; } });
+var decompilerLogWindow;
+var saveTimer = null;
 
 // UI Elements
 var inventoryelement = document.getElementById("pack-list");
@@ -72,55 +74,290 @@ var editors = [
    new HeaderEditor(legacyEditorElement, handleEditorMessage),
    new HeaderlessFileEditor(legacyEditorElement, handleEditorMessage),
    new DataFileEditor(legacyEditorElement, handleEditorMessage),
+   new CommsSetupEditor(legacyEditorElement, handleEditorMessage),
    new ProcedureFileEditor(legacyEditorElement, codeEditorElement, handleEditorMessage),
-   new NotePadFileEditor(legacyEditorElement, codeEditorElement, handleEditorMessage),
+   new LZNotepadFileEditor(legacyEditorElement, codeEditorElement, handleEditorMessage),
+   new SpreadsheetFileEditor(legacyEditorElement, handleEditorMessage),
+   new PagerSetupFileEditor(legacyEditorElement, handleEditorMessage),
+   new DiaryFileEditor(legacyEditorElement, handleEditorMessage),
    new RecordEditor(legacyEditorElement, handleEditorMessage),
-   new HexEditor(legacyEditorElement, handleEditorMessage, [2, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15]),
+   new HexEditor(legacyEditorElement, handleEditorMessage, [4, 8, 9, 10, 11, 12, 13, 14, 15]),
    new MemoryMapEditor(legacyEditorElement, handleEditorMessage)
 ];
 
 // Buttons
-var newpackbutton = new Button("btn-new-pack", createNew);
-var savepackbutton = new Button("btn-save-pack", packSaved);
-var savehexbutton = new Button("btn-export-hex", exportHex);
 var discardbutton = new Button("btn-discard", discardEdits);
 var applybutton = new Button("btn-apply", applyEdits);
-var loadpackbutton = new Button("btn-open-pack", null, "file-input-pack", fileChosen);
-var newitembutton = new Button("btn-add-item", createNewItem);
-var loaditembutton = new Button("btn-import-item", null, "file-input-item", itemChosen);
 var eraseitembutton = new Button("btn-delete-item", eraseItem);
 var optionsbutton = new Button("btn-options", showOptionsDialog);
 
-// Help Menu Handlers
-var btnHelp = document.getElementById('btn-help');
-var dropdownContent = document.getElementById('help-dropdown');
+// Init File Inputs (Manually since Button helpers removed)
+var fileInputPack = document.getElementById("file-input-pack");
+if (fileInputPack) fileInputPack.addEventListener('change', fileChosen);
 
-if (btnHelp && dropdownContent) {
-   btnHelp.addEventListener('click', function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      dropdownContent.classList.toggle('show');
-      btnHelp.classList.toggle('active');
-   });
+var fileInputItem = document.getElementById("file-input-item");
+if (fileInputItem) fileInputItem.addEventListener('change', itemChosen);
 
-   // Close dropdown when clicking outside
-   window.addEventListener('click', function (e) {
-      if (!e.target.matches('.dropbtn') && !e.target.closest('.dropbtn')) {
-         if (dropdownContent.classList.contains('show')) {
-            dropdownContent.classList.remove('show');
-            btnHelp.classList.remove('active');
+// Menu Manager
+var registeredMenus = [];
+
+function registerMenu(buttonId, menuId, onOpenCallback) {
+   var btn = document.getElementById(buttonId);
+   var menu = document.getElementById(menuId);
+
+   if (btn && menu) {
+      var menuObj = {
+         id: menuId,
+         btn: btn,
+         menu: menu,
+         onOpen: onOpenCallback
+      };
+
+      registeredMenus.push(menuObj);
+
+      btn.addEventListener('click', function (e) {
+         e.preventDefault();
+         e.stopPropagation();
+         toggleMenu(menuId);
+      });
+
+      // Prevent clicks inside menu from closing it immediately (unless it's a link action)
+      menu.addEventListener('click', function (e) {
+         e.stopPropagation();
+      });
+   }
+}
+
+function toggleMenu(menuId) {
+   registeredMenus.forEach(function (m) {
+      if (m.id === menuId) {
+         var isOpening = !m.menu.classList.contains('show');
+
+         if (isOpening) {
+            // Open this menu
+            m.menu.classList.add('show');
+            m.btn.classList.add('active');
+            if (m.onOpen) m.onOpen();
+
+            // Auto-focus first enabled item
+            setTimeout(function () {
+               var firstLink = m.menu.querySelector('a:not(.disabled)');
+               if (firstLink) firstLink.focus();
+            }, 0);
+         } else {
+            // Close this menu
+            m.menu.classList.remove('show');
+            m.btn.classList.remove('active');
          }
+      } else {
+         // Close others
+         m.menu.classList.remove('show');
+         m.btn.classList.remove('active');
       }
    });
 }
 
+function closeAllMenus() {
+   registeredMenus.forEach(function (m) {
+      m.menu.classList.remove('show');
+      m.btn.classList.remove('active');
+   });
+}
+
+// Global Click Listener for Menus
+window.addEventListener('click', function (e) {
+   // If clicking outside of any registered menu button, close all
+   // (Inner menu clicks are stopped by stopPropagation in registerMenu, 
+   // except for links which bubble up or are handled directly)
+   closeAllMenus();
+});
+
+// Register Menus
+// Register Menus
+registerMenu('btn-file-menu', 'file-dropdown', populateFileMenu);
+registerMenu('btn-help', 'help-dropdown');
+
+
+// Static New Menu Handlers
+if (document.getElementById('menu-new-pack')) {
+   document.getElementById('menu-new-pack').addEventListener('click', function (e) {
+      e.preventDefault();
+      createNew(e);
+      closeAllMenus();
+   });
+
+   document.getElementById('menu-new-proc').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      var data = [0x00, 0x00, 0x00, 0x0A, 80, 82, 79, 67, 78, 65, 77, 69, 58, 0];
+      createBlockFile(data, "PROCNAME", 3);
+      closeAllMenus();
+   });
+
+   document.getElementById('menu-new-notepad').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      var data = [0x00, 0x02, 8, 0, 0x00, 0x09, 78, 79, 84, 69, 80, 65, 68, 58, 0];
+      createBlockFile(data, "NOTEPAD", 7);
+      closeAllMenus();
+   });
+
+   document.getElementById('menu-new-datafile').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      var id = getFreeFileId();
+      if (id > 0) {
+         var hdritem = createFileHeader("DATAFILE", 1, id + 0x8f);
+         addItemToPack(hdritem);
+         updateInventory();
+      }
+      closeAllMenus();
+   });
+}
+
+// Open/Save Populators removed (merged into populateFileMenu)
+
+// Open Menu Handlers
+if (document.getElementById('menu-open-pack')) {
+   document.getElementById('menu-open-pack').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (fileInputPack) fileInputPack.click(); // Trigger hidden input
+      closeAllMenus();
+   });
+
+   document.getElementById('menu-import-item').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      if (fileInputItem) fileInputItem.click(); // Trigger hidden input
+      closeAllMenus();
+   });
+}
+
+// Save Menu Handlers
+if (document.getElementById('menu-save-pack')) {
+   document.getElementById('menu-save-pack').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      packSaved();
+      closeAllMenus();
+   });
+
+   document.getElementById('menu-export-hex').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      exportHex();
+      closeAllMenus();
+   });
+
+   document.getElementById('menu-export-item').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      exportCurrentItem();
+      closeAllMenus();
+   });
+}
+
+
+function populateFileMenu() {
+   var packOpen = (currentPackIndex >= 0);
+   var itemSelected = (currentItem !== null && currentItem !== undefined);
+
+   // Update Save/Export States
+   var packIds = ['menu-save-pack', 'menu-export-hex', 'menu-open-pack']; // Open Pack is always enabled anyway
+   packIds.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) {
+         if (packOpen) el.classList.remove('disabled');
+         else el.classList.add('disabled');
+      }
+   });
+
+   // Open Pack shouldn't be disabled actually, user can always open a pack.
+   var openPackEl = document.getElementById('menu-open-pack');
+   if (openPackEl) openPackEl.classList.remove('disabled');
+
+   // Import/Export Item
+   var itemIds = ['menu-export-item'];
+   // Import Item requires a Pack to be open
+   var importItemEl = document.getElementById('menu-import-item');
+   if (importItemEl) {
+      if (packOpen) importItemEl.classList.remove('disabled');
+      else importItemEl.classList.add('disabled');
+   }
+
+   // Export Item requires an Item selected
+   var exportItemEl = document.getElementById('menu-export-item');
+   if (exportItemEl) {
+      if (itemSelected) exportItemEl.classList.remove('disabled');
+      else exportItemEl.classList.add('disabled');
+   }
+
+   // Update Static New Items
+
+   var staticIds = ['menu-new-proc', 'menu-new-notepad', 'menu-new-datafile'];
+   staticIds.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) {
+         if (packOpen) el.classList.remove('disabled');
+         else el.classList.add('disabled');
+      }
+   });
+
+   // Dynamic Items
+   var container = document.getElementById('new-dynamic-container');
+   var separator = document.getElementById('new-dynamic-separator');
+   if (!container) return;
+
+   container.innerHTML = '';
+   if (separator) separator.style.display = 'none';
+
+   if (packOpen) {
+      var files = getDataFiles();
+      var hasFiles = false;
+
+      // Check if we have any valid files to add records to
+      for (var i = 1; i < 110; i++) {
+         if (files[i]) {
+            hasFiles = true;
+            break;
+         }
+      }
+
+      if (hasFiles) {
+         if (separator) separator.style.display = 'block';
+
+         // Add "Record for..." items
+         for (var i = 1; i < 110; i++) {
+            if (files[i]) {
+               var a = document.createElement('a');
+               a.href = "#";
+               a.innerHTML = '<i class="fas fa-table-list" style="width: 20px;"></i> New Record for ' + files[i];
+               a.setAttribute('data-file-id', i + 0xf); // i + 15 matches createNewItem logic
+
+               a.addEventListener('click', function (e) {
+                  e.preventDefault();
+                  var type = parseInt(this.getAttribute('data-file-id'));
+                  var hdritem = new PackItem([1, type + 0x80, 0x20], 0, 3);
+                  hdritem.setDescription();
+                  addItemToPack(hdritem);
+                  updateInventory();
+                  closeAllMenus();
+               });
+
+               container.appendChild(a);
+            }
+         }
+      }
+   }
+}
+
+// Help Menu Handlers (Now handled by RegisterMenu but need static listeners for items)
 var menuAbout = document.getElementById('menu-about');
 if (menuAbout) {
    menuAbout.addEventListener('click', function (e) {
       e.preventDefault();
       showAboutDialog();
-      dropdownContent.classList.remove('show');
-      btnHelp.classList.remove('active');
+      closeAllMenus();
    });
 }
 
@@ -133,454 +370,625 @@ if (menuOplRef) {
       } else {
          console.error("OPLCommandReference not loaded");
       }
-      dropdownContent.classList.remove('show');
-      btnHelp.classList.remove('active');
+      closeAllMenus();
    });
 }
 // Dialog Functions
 function showOptionsDialog() {
-   var element = document.createElement('div');
-   element.innerHTML =
-      "<div class='tabs'>" +
-      // Tab Order: General -> Themes -> Code Renderer -> Memory Map -> Icons
-      "<button class='tab-btn active' data-tab='tab-general'>General</button>" +
-      "<button class='tab-btn' data-tab='tab-themes'>Themes</button>" +
-      "<button class='tab-btn' data-tab='tab-renderer'>Code Renderer</button>" +
-      "<button class='tab-btn' data-tab='tab-memorymap'>Memory Map</button>" +
-      "<button class='tab-btn' data-tab='tab-icons'>Icons</button>" +
-      "</div>" +
-      "<form id='options-form' style='text-align: left; padding: 10px; min-width: 500px;'>" +
-      "<div id='tab-general' class='tab-content active'>" +
-      "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-linenumbers'> Show Line Numbers</label></div>" +
-      "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-folding'> Enable Code Folding</label></div>" +
-      "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-syntax'> Enable Syntax Highlighting</label></div>" +
-      "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-guidelines'> Show Guidelines in Pack List</label></div>" +
-      "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-show-addresses'> Show Addresses in Pack List</label></div>" +
-      "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-splash'> Show Splash Screen on Startup</label></div>" +
-      "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-restorepacks'> Restore Opened Packs on Startup</label></div>" +
-      "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-grouprecords'> Group Data Records under Data Files</label></div>" +
-      "<div style='margin-bottom: 10px;'><label>Hex Editor Bytes Per Row: <select id='opt-hexbytes' style='margin-left: 5px; padding: 2px;'><option value='8'>8</option><option value='16'>16</option></select></label></div>" +
+   try {
+      var element = document.createElement('div');
+      element.innerHTML =
+         "<div class='tabs'>" +
+         // Tab Order: General -> Themes -> Code Renderer -> Memory Map -> Icons
+         "<button class='tab-btn active' data-tab='tab-general'>General</button>" +
+         "<button class='tab-btn' data-tab='tab-visuals'>Visuals</button>" +
+         "<button class='tab-btn' data-tab='tab-themes'>Theme Selection</button>" +
+         "<button class='tab-btn' data-tab='tab-theme-editor'>Theme Editor</button>" +
+         "<button class='tab-btn' data-tab='tab-renderer'>Code Renderer</button>" +
+         "<button class='tab-btn' data-tab='tab-memorymap'>Memory Map</button>" +
+         "<button class='tab-btn' data-tab='tab-icons'>Icons</button>" +
+         "</div>" +
+         "<form id='options-form' style='text-align: left; padding: 10px; min-width: 500px; min-height: 500px;'>" +
+         "<div id='tab-general' class='tab-content active'>" +
+         "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 30px;'>" +
+         "<div>" +
+         "<h4>Application</h4>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-splash'> Show Splash Screen on Startup</label></div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-restorepacks'> Restore Opened Packs on Startup</label></div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-show-toolbar'> Show Icon Tool Bar</label></div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-show-menubar'> Show Main Menu Bar</label></div>" +
+         "</div>" +
+         "<div>" +
+         "<h4>Pack List View</h4>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-guidelines'> Show Guidelines in Pack List</label></div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-show-addresses'> Show Addresses in Pack List</label></div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-grouprecords'> Group Data Records under Data Files</label></div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-collapsefiles'> Collapse Data Files by default</label></div>" +
+         "</div>" +
+         "</div>" +
+         "<hr style='margin: 10px 0; border: 0; border-top: 1px solid var(--border-color);'>" +
+         "<h4>Editor Settings</h4>" +
+         "<div style='display: grid; grid-template-columns: 1fr 1fr; gap: 30px;'>" +
+         "<div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-linenumbers'> Show Line Numbers</label></div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-folding'> Enable Code Folding</label></div>" +
+         "</div>" +
+         "<div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-syntax'> Enable Syntax Highlighting</label></div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-stickyproc'> Fix Procedure Name at Top</label></div>" +
+         "</div>" +
+         "</div>" +
+         "<hr style='margin: 10px 0; border: 0; border-top: 1px solid var(--border-color);'>" +
+         "</div>" +
 
+         "<div id='tab-visuals' class='tab-content'>" +
+         "<h4>Decompiler</h4>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-decompiler-log'> Show Decompiler Log Window</label></div>" +
+         "<h4>Hex Editor Settings</h4>" +
+         "<div style='margin-bottom: 10px;'><label>Hex Editor Bytes Per Row: <select id='opt-hexbytes' style='margin-left: 5px; padding: 2px;'><option value='8'>8</option><option value='16'>16</option></select></label></div>" +
+         "<h4>Spreadsheet Editor Settings</h4>" +
+         "<div style='margin-bottom: 10px;'><label>Spreadsheet Editor Mode: <select id='opt-sheetmode' style='margin-left: 5px; padding: 2px;'><option value='legacy'>Legacy (Hex/ASCII)</option><option value='enhanced'>Enhanced (Grid - Beta)</option></select></label></div>" +
+         "</div>" +
 
-      "</div>" +
+         "<div id='tab-themes' class='tab-content'>" +
+         "<div>Select Theme: <select id='opt-theme' style='padding: 5px; width: 100%; margin-top: 5px;'></select></div>" +
+         "<div style='margin-top: 15px; font-size: 12px; color: var(--text-color); opacity: 0.7;'>Select a theme to change the application's appearance.</div>" +
+         "<hr style='margin: 15px 0; border: 0; border-top: 1px solid var(--border-color);'>" +
 
-      "<div id='tab-themes' class='tab-content'>" +
-      "<div>Select Theme: <select id='opt-theme' style='padding: 5px; width: 100%; margin-top: 5px;'></select></div>" +
-      "<div style='margin-top: 15px; font-size: 12px; color: var(--text-color); opacity: 0.7;'>Select a theme to change the application's appearance.</div>" +
-      "<hr style='margin: 15px 0; border: 0; border-top: 1px solid var(--border-color);'>" +
-      "<h4>Theme Editor</h4>" +
-      "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;'>" +
-      "<div><label>Background</label><br><input type='color' id='edit-bg-color' style='width: 100%;'></div>" +
-      "<div><label>Text</label><br><input type='color' id='edit-text-color' style='width: 100%;'></div>" +
-      "<div><label>Toolbar BG</label><br><input type='color' id='edit-toolbar-bg' style='width: 100%;'></div>" +
-      "<div><label>Sidebar BG</label><br><input type='color' id='edit-sidebar-bg' style='width: 100%;'></div>" +
-      "<div><label>Status Bar</label><br><input type='color' id='edit-status-bg' style='width: 100%;'></div>" +
-      "<div><label>Selection</label><br><input type='color' id='edit-select-bg' style='width: 100%;'></div>" +
-      "<div><label>Editor Text</label><br><input type='color' id='edit-editor-text' style='width: 100%;'></div>" +
-      "<div><label>Editor Cursor</label><br><input type='color' id='edit-editor-cursor' style='width: 100%;'></div>" +
-      "<div><label>Sidebar Text</label><br><input type='color' id='edit-sidebar-text' style='width: 100%;'></div>" +
-      "<div><label>Toolbar Border</label><br><input type='color' id='edit-toolbar-border' style='width: 100%;'></div>" +
-      "<div><label>Input Text</label><br><input type='color' id='edit-input-text' style='width: 100%;'></div>" +
-      "<div><label>Input BG</label><br><input type='color' id='edit-input-bg' style='width: 100%;'></div>" +
-      "<div><label>Modal BG</label><br><input type='color' id='edit-modal-bg' style='width: 100%;'></div>" +
-      "</div>" +
-      "<div style='margin-top: 10px; font-size: 11px; color: var(--text-color); opacity: 0.7;'>Changes apply immediately to the current view.</div>" +
-      "</div>" +
-      "<div id='tab-icons' class='tab-content'>" +
-      "<h4>Icon Settings</h4>" +
-      "<div style='margin-bottom: 15px;'><label>Font Awesome Version: <select id='opt-icon-version' style='margin-left: 5px; padding: 2px;'><option value='6'>Version 6 (Latest)</option><option value='5'>Version 5 (Legacy)</option></select></label></div>" +
-      "<div style='margin-bottom: 15px;'><label>Icon Style: <select id='opt-icon-style' style='margin-left: 5px; padding: 2px;'><option value='solid'>Solid (Filled)</option><option value='regular'>Regular (Outlined)</option></select></label></div>" +
-      "<div style='margin-top: 10px; font-size: 12px; color: var(--text-color); opacity: 0.7;'>Note: Some icons may look different between versions.</div>" +
-      "</div>" +
-      "<div id='tab-renderer' class='tab-content'>" +
-      "<h4>Syntax Highlighting</h4>" +
-      "<div style='margin-bottom: 10px; font-size: 12px; color: var(--text-color); opacity: 0.7;'>Customize syntax colors for the <b>current theme</b>.</div>" +
-      "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;'>" +
-      "<div><label>Functions</label><br><input type='color' id='syntax-functions' style='width: 100%;'></div>" +
-      "<div><label>Commands</label><br><input type='color' id='syntax-commands' style='width: 100%;'></div>" +
-      "<div><label>String Funcs</label><br><input type='color' id='syntax-stringfuncs' style='width: 100%;'></div>" +
-      "<div><label>Strings</label><br><input type='color' id='syntax-string' style='width: 100%;'></div>" +
-      "<div><label>Comments</label><br><input type='color' id='syntax-comment' style='width: 100%;'></div>" +
-      "<div><label>Numbers</label><br><input type='color' id='syntax-number' style='width: 100%;'></div>" +
-      "<div><label>Labels</label><br><input type='color' id='syntax-label' style='width: 100%;'></div>" +
-      "<div><label>Operators</label><br><input type='color' id='syntax-operator' style='width: 100%;'></div>" +
-      "</div>" +
-      "<div style='margin-top: 15px; display: flex; gap: 10px;'>" +
-      "<button id='reset-syntax' class='modal-btn' style='background-color: #666;'>Reset to Default</button>" +
-      "</div>" +
-      "</div>" +
-      "<div id='tab-memorymap' class='tab-content'>" +
-      "<h4>Memory Map Settings</h4>" +
-      "<div style='margin-bottom: 15px;'><label>Orientation: <select id='opt-mm-orientation' style='margin-left: 5px; padding: 2px;'><option value='horizontal'>Horizontal</option><option value='vertical'>Vertical</option></select></label></div>" +
-      "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-mm-pagebreaks'> Show Page Boundary Markers</label></div>" +
-      "<div style='margin-bottom: 10px;'><label>Memory Map Display Size: <select id='opt-mm-size' style='margin-left: 5px; padding: 2px;'>" +
-      "<option value='8192'>8 kB</option>" +
-      "<option value='16384'>16 kB</option>" +
-      "<option value='32768'>32 kB</option>" +
-      "<option value='65536'>64 kB</option>" +
-      "<option value='131072'>128 kB</option>" +
-      "<option value='262144'>256 kB</option>" +
-      "<option value='524288'>512 kB</option>" +
-      "</select></label></div>" +
-      "<div style='margin-bottom: 10px;'><label>Memory Map Bar Height: <select id='opt-mm-height' style='margin-left: 5px; padding: 2px;'>" +
-      "<option value='20'>Small (20px)</option>" +
-      "<option value='30'>Medium (30px)</option>" +
-      "<option value='40'>Large (40px)</option>" +
-      "<option value='50'>Extra Large (50px)</option>" +
-      "</select></label></div>" +
-      "<h4>Content Colors</h4>" +
-      "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;'>" +
-      "<div><label>Header</label><br><input type='color' id='mm-color-header' style='width: 100%;'></div>" +
-      "<div><label>Procedure</label><br><input type='color' id='mm-color-procedure' style='width: 100%;'></div>" +
-      "<div><label>Data File</label><br><input type='color' id='mm-color-datafile' style='width: 100%;'></div>" +
-      "<div><label>Diary</label><br><input type='color' id='mm-color-diary' style='width: 100%;'></div>" +
-      "<div><label>Comms</label><br><input type='color' id='mm-color-comms' style='width: 100%;'></div>" +
-      "<div><label>Sheet</label><br><input type='color' id='mm-color-sheet' style='width: 100%;'></div>" +
-      "<div><label>Pager</label><br><input type='color' id='mm-color-pager' style='width: 100%;'></div>" +
-      "<div><label>Notepad</label><br><input type='color' id='mm-color-notepad' style='width: 100%;'></div>" +
-      "<div><label>Block</label><br><input type='color' id='mm-color-block' style='width: 100%;'></div>" +
-      "<div><label>Record</label><br><input type='color' id='mm-color-record' style='width: 100%;'></div>" +
-      "<div><label>Unknown</label><br><input type='color' id='mm-color-unknown' style='width: 100%;'></div>" +
-      "<div><label>Free Space</label><br><input type='color' id='mm-color-free' style='width: 100%;'></div>" +
-      "</div>" +
-      "</div>" +
-      "</form>";
+         // New Theme Management Section
+         "<h4>Theme Management</h4>" +
+         "<div style='border: 1px solid var(--border-color); padding: 10px; border-radius: 4px; background: var(--input-bg); margin-bottom: 15px;'>" +
 
-   // Populate Memory Map Size Options
-   var mmSizeSelect = element.querySelector('#opt-mm-size');
-   mmSizeSelect.innerHTML = ""; // Clear existing options
+         // Custom Theme 1
+         "<div style='margin-bottom: 10px; padding: 5px; border-bottom: 1px solid var(--border-color);'>" +
+         "<div style='font-weight: bold; margin-bottom: 5px;'>Custom Theme 1</div>" +
+         "<div style='display: flex; gap: 5px; margin-bottom: 5px;'>" +
+         "<input type='text' id='custom1-name' placeholder='Theme Name' style='flex: 1; padding: 3px;'>" +
+         "<button id='btn-rename-custom1' style='padding: 3px 8px; cursor: pointer;'>Rename</button>" +
+         "</div>" +
+         "<div style='display: flex; gap: 5px; align-items: center;'>" +
+         "<span style='font-size: 11px;'>Import from:</span>" +
+         "<select id='import-custom1-source' style='flex: 1; padding: 3px;'></select>" +
+         "<button id='btn-import-custom1' style='padding: 3px 8px; cursor: pointer;'>Import & Overwrite</button>" +
+         "</div>" +
+         "</div>" +
 
-   var packSize = 32768; // Default fallback
-   var activePack = getActivePack();
-   if (activePack && activePack.items && activePack.items.length > 0) {
-      var sizeMultiplier = activePack.items[0].data[1];
-      packSize = sizeMultiplier * 8192;
-   }
+         // Custom Theme 2
+         "<div style='margin-bottom: 5px; padding: 5px;'>" +
+         "<div style='font-weight: bold; margin-bottom: 5px;'>Custom Theme 2</div>" +
+         "<div style='display: flex; gap: 5px; margin-bottom: 5px;'>" +
+         "<input type='text' id='custom2-name' placeholder='Theme Name' style='flex: 1; padding: 3px;'>" +
+         "<button id='btn-rename-custom2' style='padding: 3px 8px; cursor: pointer;'>Rename</button>" +
+         "</div>" +
+         "<div style='display: flex; gap: 5px; align-items: center;'>" +
+         "<span style='font-size: 11px;'>Import from:</span>" +
+         "<select id='import-custom2-source' style='flex: 1; padding: 3px;'></select>" +
+         "<button id='btn-import-custom2' style='padding: 3px 8px; cursor: pointer;'>Import & Overwrite</button>" +
+         "</div>" +
+         "</div>" +
 
-   // Generate options: 8k, 16k, 32k... up to packSize
-   // Also ensure we have at least one option if packSize is small
-   var sizes = [];
-   for (var s = 1024; s <= packSize; s *= 2) {
-      sizes.push(s);
-   }
-   // If packSize is not a power of 2 (unlikely for standard packs but possible), add it?
-   // Standard Psion packs are usually powers of 2.
-   // If sizes is empty (pack < 8k?), add 8k anyway or just packSize
-   if (sizes.length === 0) sizes.push(8192);
+         // Global Actions (Moved to Bottom)
+         "<div style='margin-top: 20px; text-align: left;'>" +
+         "<button id='btn-reset-themes' style='background: #d32f2f; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;'>Reset All Themes to Defaults</button>" +
+         "</div>" +
 
-   sizes.forEach(function (s) {
-      var opt = document.createElement('option');
-      opt.value = s;
-      opt.innerText = (s / 1024) + " kB";
-      mmSizeSelect.appendChild(opt);
-   });
+         "</div>" +
 
+         "</div>" +
 
+         "</div>" +
 
-   // Initialize values
-   if (activePack && activePack.items && activePack.items.length > 0) {
-      var isPaged = (activePack.items[0].data[0] !== 0x7a);
-      if (!isPaged) {
-         mmPageBreaksCheckbox.disabled = true;
-         mmPageBreaksCheckbox.parentElement.style.opacity = '0.5';
-         mmPageBreaksCheckbox.parentElement.title = "Not available for linear packs";
+         "<div id='tab-theme-editor' class='tab-content'>" +
+         "<h4>Theme Editor</h4>" +
+         "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;'>" +
+         "<div><label>Background</label><br><input type='color' id='edit-bg-color' style='width: 100%;'></div>" +
+         "<div><label>Text</label><br><input type='color' id='edit-text-color' style='width: 100%;'></div>" +
+         "<div><label>Toolbar BG</label><br><input type='color' id='edit-toolbar-bg' style='width: 100%;'></div>" +
+         "<div><label>Sidebar BG</label><br><input type='color' id='edit-sidebar-bg' style='width: 100%;'></div>" +
+         "<div><label>Status Bar</label><br><input type='color' id='edit-status-bg' style='width: 100%;'></div>" +
+         "<div><label>Selection</label><br><input type='color' id='edit-select-bg' style='width: 100%;'></div>" +
+         "<div><label>Editor Text</label><br><input type='color' id='edit-editor-text' style='width: 100%;'></div>" +
+         "<div><label>Editor Cursor</label><br><input type='color' id='edit-editor-cursor' style='width: 100%;'></div>" +
+         "<div><label>Sidebar Text</label><br><input type='color' id='edit-sidebar-text' style='width: 100%;'></div>" +
+         "<div><label>Toolbar Border</label><br><input type='color' id='edit-toolbar-border' style='width: 100%;'></div>" +
+         "<div><label>Input Text</label><br><input type='color' id='edit-input-text' style='width: 100%;'></div>" +
+         "<div><label>Input BG</label><br><input type='color' id='edit-input-bg' style='width: 100%;'></div>" +
+         "<div><label>Modal BG</label><br><input type='color' id='edit-modal-bg' style='width: 100%;'></div>" +
+         "</div>" +
+         "<div style='margin-top: 10px; font-size: 11px; color: var(--text-color); opacity: 0.7;'>Changes apply immediately to the current view.</div>" +
+         "</div>" +
+         "<div id='tab-icons' class='tab-content'>" +
+         "<h4>Icon Settings</h4>" +
+         "<div style='margin-bottom: 15px;'><label>Font Awesome Version: <select id='opt-icon-version' style='margin-left: 5px; padding: 2px;'><option value='6'>Version 6 (Latest)</option><option value='5'>Version 5 (Legacy)</option></select></label></div>" +
+         "<div style='margin-bottom: 15px;'><label>Icon Style: <select id='opt-icon-style' style='margin-left: 5px; padding: 2px;'><option value='solid'>Solid (Filled)</option><option value='regular'>Regular (Outlined)</option></select></label></div>" +
+         "<div style='margin-top: 10px; font-size: 12px; color: var(--text-color); opacity: 0.7;'>Note: Some icons may look different between versions.</div>" +
+         "</div>" +
+         "<div id='tab-renderer' class='tab-content'>" +
+         "<h4>Syntax Highlighting</h4>" +
+         "<div style='margin-bottom: 10px; font-size: 12px; color: var(--text-color); opacity: 0.7;'>Customize syntax colors for the <b>current theme</b>.</div>" +
+         "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;'>" +
+         "<div><label>Functions</label><br><input type='color' id='syntax-functions' style='width: 100%;'></div>" +
+         "<div><label>Commands</label><br><input type='color' id='syntax-commands' style='width: 100%;'></div>" +
+         "<div><label>String Funcs</label><br><input type='color' id='syntax-stringfuncs' style='width: 100%;'></div>" +
+         "<div><label>Strings</label><br><input type='color' id='syntax-string' style='width: 100%;'></div>" +
+         "<div><label>Comments</label><br><input type='color' id='syntax-comment' style='width: 100%;'></div>" +
+         "<div><label>Numbers</label><br><input type='color' id='syntax-number' style='width: 100%;'></div>" +
+         "<div><label>Labels</label><br><input type='color' id='syntax-label' style='width: 100%;'></div>" +
+         "<div><label>Operators</label><br><input type='color' id='syntax-operator' style='width: 100%;'></div>" +
+         "</div>" +
+         "<div style='margin-top: 15px; display: flex; gap: 10px;'>" +
+         "<button id='reset-syntax' class='modal-btn' style='background-color: #666;'>Reset to Default</button>" +
+         "</div>" +
+         "</div>" +
+         "<div id='tab-memorymap' class='tab-content'>" +
+         "<h4>Memory Map Settings</h4>" +
+         "<div style='margin-bottom: 15px;'><label>Orientation: <select id='opt-mm-orientation' style='margin-left: 5px; padding: 2px;'><option value='horizontal'>Horizontal</option><option value='vertical'>Vertical</option></select></label></div>" +
+         "<div style='margin-bottom: 10px;'><label><input type='checkbox' id='opt-mm-pagebreaks'> Show Page Boundary Markers</label></div>" +
+         "<div style='margin-bottom: 10px;'><label>Memory Map Display Size: <select id='opt-mm-size' style='margin-left: 5px; padding: 2px;'>" +
+         "<option value='8192'>8 kB</option>" +
+         "<option value='16384'>16 kB</option>" +
+         "<option value='32768'>32 kB</option>" +
+         "<option value='65536'>64 kB</option>" +
+         "<option value='131072'>128 kB</option>" +
+         "<option value='262144'>256 kB</option>" +
+         "<option value='524288'>512 kB</option>" +
+         "</select></label></div>" +
+         "<div style='margin-bottom: 10px;'><label>Memory Map Bar Weight: <select id='opt-mm-height' style='margin-left: 5px; padding: 2px;'>" +
+         "<option value='20'>Small (20px)</option>" +
+         "<option value='30'>Medium (30px)</option>" +
+         "<option value='40'>Large (40px)</option>" +
+         "<option value='50'>Extra Large (50px)</option>" +
+         "</select></label></div>" +
+         "<h4>Content Colors</h4>" +
+         "<div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;'>" +
+         "<div><label>Header</label><br><input type='color' id='mm-color-header' style='width: 100%;'></div>" +
+         "<div><label>Procedure</label><br><input type='color' id='mm-color-procedure' style='width: 100%;'></div>" +
+         "<div><label>Data File</label><br><input type='color' id='mm-color-datafile' style='width: 100%;'></div>" +
+         "<div><label>Diary</label><br><input type='color' id='mm-color-diary' style='width: 100%;'></div>" +
+         "<div><label>Comms</label><br><input type='color' id='mm-color-comms' style='width: 100%;'></div>" +
+         "<div><label>Sheet</label><br><input type='color' id='mm-color-sheet' style='width: 100%;'></div>" +
+         "<div><label>Pager</label><br><input type='color' id='mm-color-pager' style='width: 100%;'></div>" +
+         "<div><label>Notepad</label><br><input type='color' id='mm-color-notepad' style='width: 100%;'></div>" +
+         "<div><label>Block</label><br><input type='color' id='mm-color-block' style='width: 100%;'></div>" +
+         "<div><label>Record</label><br><input type='color' id='mm-color-record' style='width: 100%;'></div>" +
+         "<div><label>Unknown</label><br><input type='color' id='mm-color-unknown' style='width: 100%;'></div>" +
+         "<div><label>Free Space</label><br><input type='color' id='mm-color-free' style='width: 100%;'></div>" +
+         "</div>" +
+         "</div>" +
+         "</form>";
+
+      // Populate Memory Map Size Options
+      var mmSizeSelect = element.querySelector('#opt-mm-size');
+      mmSizeSelect.innerHTML = ""; // Clear existing options
+
+      var packSize = 32768; // Default fallback
+      var activePack = getActivePack();
+      if (activePack && activePack.items && activePack.items.length > 0) {
+         var sizeMultiplier = activePack.items[0].data[1];
+         packSize = sizeMultiplier * 8192;
       }
-   }
-   element.querySelector('#opt-mm-size').value = OptionsManager.getOption('memoryMapDisplaySize') || 32768;
 
-   // Initialize Icon Options
-   element.querySelector('#opt-icon-version').value = OptionsManager.getOption('iconVersion') || '6';
-   element.querySelector('#opt-icon-style').value = OptionsManager.getOption('iconStyle') || 'solid';
+      // Generate options: 8k, 16k, 32k... up to packSize
+      // Also ensure we have at least one option if packSize is small
+      var sizes = [];
+      for (var s = 1024; s <= packSize; s *= 2) {
+         sizes.push(s);
+      }
+      // If sizes is empty (pack < 8k?), add 8k anyway or just packSize
+      if (sizes.length === 0) sizes.push(8192);
 
-   // Dynamic Theme Population
-   var themeSelect = element.querySelector('#opt-theme');
-   if (typeof ThemeManager !== 'undefined' && ThemeManager.themeDefinitions) {
-      var themes = Object.keys(ThemeManager.themeDefinitions).sort();
-      themes.forEach(function (tKey) {
+      sizes.forEach(function (s) {
          var opt = document.createElement('option');
-         opt.value = tKey;
-         // Capitalize first letter for display, or use a map
-         opt.innerText = tKey.charAt(0).toUpperCase() + tKey.slice(1).replace(/-/g, ' ');
-         themeSelect.appendChild(opt);
+         opt.value = s;
+         opt.innerText = (s / 1024) + " kB";
+         mmSizeSelect.appendChild(opt);
       });
-   }
 
-   // Initialize Theme Selection
-   element.querySelector('#opt-theme').value = OptionsManager.getOption('theme') || 'dark';
 
-   // Initialize General Options
-   element.querySelector('#opt-linenumbers').checked = OptionsManager.getOption('showLineNumbers') !== false;
-   element.querySelector('#opt-folding').checked = OptionsManager.getOption('codeFolding') !== false;
-   element.querySelector('#opt-syntax').checked = OptionsManager.getOption('syntaxHighlighting') !== false;
-   element.querySelector('#opt-syntax').checked = OptionsManager.getOption('syntaxHighlighting') !== false;
-   element.querySelector('#opt-guidelines').checked = OptionsManager.getOption('showGuidelines') !== false;
-   element.querySelector('#opt-show-addresses').checked = OptionsManager.getOption('showAddresses') === true;
-   element.querySelector('#opt-splash').checked = OptionsManager.getOption('showSplashScreen') !== false;
-   element.querySelector('#opt-restorepacks').checked = OptionsManager.getOption('restorePacks') === true;
-   element.querySelector('#opt-grouprecords').checked = OptionsManager.getOption('groupDataRecords') === true;
-   element.querySelector('#opt-hexbytes').value = OptionsManager.getOption('hexBytesPerRow') || 16;
 
-   // Initialize Memory Map Options
-   var mmPageBreaksCheckbox = element.querySelector('#opt-mm-pagebreaks');
-   mmPageBreaksCheckbox.checked = OptionsManager.getOption('memoryMapShowPageBreaks') !== false;
+      // Initialize values
+      var mmPageBreaksCheckbox = element.querySelector('#opt-mm-pagebreaks');
+      mmPageBreaksCheckbox.checked = OptionsManager.getOption('memoryMapShowPageBreaks') !== false;
 
-   // Add listeners
-   element.querySelector('#opt-linenumbers').addEventListener('change', function () {
-      OptionsManager.setOption('showLineNumbers', this.checked);
-      // Refresh editors
-      editors.forEach(function (ed) {
-         if (ed.render) ed.render();
-      });
-   });
-
-   element.querySelector('#opt-folding').addEventListener('change', function () {
-      OptionsManager.setOption('codeFolding', this.checked);
-      editors.forEach(function (ed) {
-         if (ed.render) ed.render();
-      });
-   });
-
-   element.querySelector('#opt-syntax').addEventListener('change', function () {
-      OptionsManager.setOption('syntaxHighlighting', this.checked);
-      editors.forEach(function (ed) {
-         if (ed.render) ed.render();
-      });
-   });
-
-   element.querySelector('#opt-guidelines').addEventListener('change', function () {
-      OptionsManager.setOption('showGuidelines', this.checked);
-      var packList = document.getElementById('pack-list');
-      if (this.checked) {
-         packList.classList.remove('hide-guidelines');
-      } else {
-         packList.classList.add('hide-guidelines');
-      }
-   });
-
-   element.querySelector('#opt-show-addresses').addEventListener('change', function () {
-      OptionsManager.setOption('showAddresses', this.checked);
-      var packList = document.getElementById('pack-list');
-      if (this.checked) {
-         packList.classList.add('show-addresses');
-      } else {
-         packList.classList.remove('show-addresses');
-      }
-   });
-
-   element.querySelector('#opt-splash').addEventListener('change', function () {
-      OptionsManager.setOption('showSplashScreen', this.checked);
-   });
-
-   element.querySelector('#opt-restorepacks').addEventListener('change', function () {
-      OptionsManager.setOption('restorePacks', this.checked);
-      if (!this.checked) {
-         localStorage.removeItem('opkedit_open_packs');
-      }
-   });
-
-   element.querySelector('#opt-grouprecords').addEventListener('change', function () {
-      OptionsManager.setOption('groupDataRecords', this.checked);
-      updateInventory();
-   });
-
-   element.querySelector('#opt-hexbytes').addEventListener('change', function () {
-      OptionsManager.setOption('hexBytesPerRow', parseInt(this.value));
-      // Refresh editors if any is HexEditor
-      if (currentEditor instanceof HexEditor) {
-         currentEditor.renderHexView();
-      }
-   });
-
-   element.querySelector('#opt-mm-pagebreaks').addEventListener('change', function () {
-      OptionsManager.setOption('memoryMapShowPageBreaks', this.checked);
-      if (currentEditor instanceof MemoryMapEditor) {
-         currentEditor.initialise(currentEditor.item);
-      }
-   });
-
-   element.querySelector('#opt-mm-size').addEventListener('change', function () {
-      OptionsManager.setOption('memoryMapDisplaySize', parseInt(this.value));
-      if (currentEditor instanceof MemoryMapEditor) {
-         currentEditor.initialise(currentEditor.item);
-      }
-   });
-
-   element.querySelector('#opt-mm-height').value = OptionsManager.getOption('memoryMapBarHeight') || 30;
-   element.querySelector('#opt-mm-height').addEventListener('change', function () {
-      OptionsManager.setOption('memoryMapBarHeight', parseInt(this.value));
-      if (currentEditor instanceof MemoryMapEditor) {
-         currentEditor.initialise(currentEditor.item);
-      }
-   });
-
-   // Icon Settings Logic
-   element.querySelector('#opt-icon-version').addEventListener('change', function () {
-      OptionsManager.setOption('iconVersion', this.value);
-      updateInventory();
-   });
-
-   element.querySelector('#opt-icon-style').addEventListener('change', function () {
-      OptionsManager.setOption('iconStyle', this.value);
-      updateInventory();
-   });
-
-   // Helper to get computed style
-   function getCSSVar(name) {
-      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-   }
-
-   // Helper to set style
-   function setCSSVar(name, value) {
-      document.documentElement.style.setProperty(name, value);
-   }
-
-   // Tab Switching Logic
-   var tabs = element.querySelectorAll('.tab-btn');
-   tabs.forEach(function (tab) {
-      tab.addEventListener('click', function (e) {
-         e.preventDefault();
-         element.querySelectorAll('.tab-btn').forEach(function (t) { t.classList.remove('active'); });
-         element.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
-         tab.classList.add('active');
-         var targetId = tab.getAttribute('data-tab');
-         element.querySelector('#' + targetId).classList.add('active');
-      });
-   });
-
-   // Theme Editor Logic
-   var themeSelect = element.querySelector('#opt-theme');
-   var inputs = {
-      '--bg-color': element.querySelector('#edit-bg-color'),
-      '--text-color': element.querySelector('#edit-text-color'),
-      '--toolbar-bg': element.querySelector('#edit-toolbar-bg'),
-      '--sidebar-bg': element.querySelector('#edit-sidebar-bg'),
-      '--status-bar-bg': element.querySelector('#edit-status-bg'),
-      '--list-selected-bg': element.querySelector('#edit-select-bg'),
-      '--editor-text-color': element.querySelector('#edit-editor-text'),
-      '--editor-cursor-color': element.querySelector('#edit-editor-cursor'),
-      '--sidebar-item-text': element.querySelector('#edit-sidebar-text'),
-      '--toolbar-border-color': element.querySelector('#edit-toolbar-border'),
-      '--input-text-color': element.querySelector('#edit-input-text'),
-      '--input-bg': element.querySelector('#edit-input-bg'),
-      '--modal-bg': element.querySelector('#edit-modal-bg')
-   };
-
-   var syntaxInputs = {
-      '--syntax-functions': element.querySelector('#syntax-functions'),
-      '--syntax-commands': element.querySelector('#syntax-commands'),
-      '--syntax-stringfuncs': element.querySelector('#syntax-stringfuncs'),
-      '--syntax-string': element.querySelector('#syntax-string'),
-      '--syntax-comment': element.querySelector('#syntax-comment'),
-      '--syntax-number': element.querySelector('#syntax-number'),
-      '--syntax-label': element.querySelector('#syntax-label'),
-      '--syntax-operator': element.querySelector('#syntax-operator')
-   };
-
-   // Initialize inputs with current values
-   function updateInputs() {
-      for (var key in inputs) {
-         inputs[key].value = getCSSVar(key) || '#000000';
-      }
-
-      // Update syntax inputs from ThemeManager
-      var currentTheme = ThemeManager.currentTheme;
-      var defs = ThemeManager.getThemeDefinition(currentTheme);
-      for (var key in syntaxInputs) {
-         syntaxInputs[key].value = defs[key] || getCSSVar(key) || '#000000';
-      }
-   }
-
-   // Wait for dialog to be in DOM to get computed styles
-   setTimeout(updateInputs, 0);
-
-   // Update inputs when theme changes
-   themeSelect.addEventListener('change', function () {
-      ThemeManager.setTheme(this.value);
-      setTimeout(updateInputs, 50); // Allow CSS to apply
-   });
-
-   // Add listeners to inputs
-   for (var key in inputs) {
-      (function (varName, input) {
-         input.addEventListener('input', function () {
-            setCSSVar(varName, this.value);
-         });
-      })(key, inputs[key]);
-   }
-
-   // Add listeners to syntax inputs
-   for (var key in syntaxInputs) {
-      (function (varName, input) {
-         input.addEventListener('input', function () {
-            // Update CSS variable immediately for preview
-            setCSSVar(varName, this.value);
-
-            // Save to ThemeManager
-            var currentTheme = ThemeManager.currentTheme;
-            var defs = ThemeManager.getThemeDefinition(currentTheme);
-            defs[varName] = this.value;
-            ThemeManager.updateThemeDefinition(currentTheme, defs);
-         });
-      })(key, syntaxInputs[key]);
-   }
-
-   // Reset Syntax Button
-   element.querySelector('#reset-syntax').addEventListener('click', function () {
-      var currentTheme = ThemeManager.currentTheme;
-      var overrides = OptionsManager.getOption('themeOverrides') || {};
-      if (overrides[currentTheme]) {
-         delete overrides[currentTheme];
-         OptionsManager.setOption('themeOverrides', overrides);
-         ThemeManager.applyTheme(currentTheme);
-         setTimeout(updateInputs, 50);
-      }
-   });
-
-   // Memory Map Logic
-   var mmOrientation = element.querySelector('#opt-mm-orientation');
-   mmOrientation.value = OptionsManager.getOption('memoryMapOrientation') || 'horizontal';
-   mmOrientation.addEventListener('change', function () {
-      OptionsManager.setOption('memoryMapOrientation', this.value);
-      // Refresh Memory Map if active
-      if (currentEditor instanceof MemoryMapEditor) {
-         currentEditor.initialise(currentEditor.item);
-      }
-   });
-
-   var mmColors = {
-      '--mm-color-header': element.querySelector('#mm-color-header'),
-      '--mm-color-procedure': element.querySelector('#mm-color-procedure'),
-      '--mm-color-datafile': element.querySelector('#mm-color-datafile'),
-      '--mm-color-diary': element.querySelector('#mm-color-diary'),
-      '--mm-color-comms': element.querySelector('#mm-color-comms'),
-      '--mm-color-sheet': element.querySelector('#mm-color-sheet'),
-      '--mm-color-pager': element.querySelector('#mm-color-pager'),
-      '--mm-color-notepad': element.querySelector('#mm-color-notepad'),
-      '--mm-color-block': element.querySelector('#mm-color-block'),
-      '--mm-color-record': element.querySelector('#mm-color-record'),
-      '--mm-color-unknown': element.querySelector('#mm-color-unknown'),
-      '--mm-color-free': element.querySelector('#mm-color-free')
-   };
-
-   // Update MM inputs from ThemeManager
-   function updateMMInputs() {
-      var currentTheme = ThemeManager.currentTheme;
-      var defs = ThemeManager.getThemeDefinition(currentTheme);
-      for (var key in mmColors) {
-         if (mmColors[key]) {
-            mmColors[key].value = defs[key] || getCSSVar(key) || '#000000';
+      if (activePack && activePack.items && activePack.items.length > 0) {
+         var isPaged = (activePack.items[0].data[0] !== 0x7a);
+         if (!isPaged) {
+            mmPageBreaksCheckbox.disabled = true;
+            mmPageBreaksCheckbox.parentElement.style.opacity = '0.5';
+            mmPageBreaksCheckbox.parentElement.title = "Not available for linear packs";
          }
       }
-   }
-   setTimeout(updateMMInputs, 0);
+      element.querySelector('#opt-mm-size').value = OptionsManager.getOption('memoryMapDisplaySize') || 32768;
 
-   // Update MM inputs when theme changes
-   themeSelect.addEventListener('change', function () {
-      setTimeout(updateMMInputs, 50);
-   });
+      // Initialize Icon Options
+      element.querySelector('#opt-icon-version').value = OptionsManager.getOption('iconVersion') || '6';
+      element.querySelector('#opt-icon-style').value = OptionsManager.getOption('iconStyle') || 'solid';
 
-   for (var key in mmColors) {
-      if (mmColors[key]) {
+      // Dynamic Theme Population & Management
+      if (typeof ThemeManager !== 'undefined' && ThemeManager.themeDefinitions) {
+
+         var populateThemeSelects = function () {
+            var availableThemes = ThemeManager.getAvailableThemes();
+
+            // Main Select
+            var themeSelect = element.querySelector('#opt-theme');
+            themeSelect.innerHTML = '';
+            availableThemes.forEach(function (t) {
+               var option = document.createElement('option');
+               option.value = t.key;
+               option.text = t.name;
+               themeSelect.appendChild(option);
+            });
+            themeSelect.value = ThemeManager.currentTheme;
+
+            // Import Source Selects
+            var import1 = element.querySelector('#import-custom1-source');
+            var import2 = element.querySelector('#import-custom2-source');
+            if (import1 && import2) {
+               import1.innerHTML = '';
+               import2.innerHTML = '';
+               availableThemes.forEach(function (t) {
+                  var opt1 = document.createElement('option');
+                  var opt2 = document.createElement('option');
+                  opt1.value = t.key; opt1.text = t.name;
+                  opt2.value = t.key; opt2.text = t.name;
+                  import1.appendChild(opt1);
+                  import2.appendChild(opt2);
+               });
+            }
+
+            // Set Inputs for Custom Names
+            var customNames = OptionsManager.getOption('customThemeNames') || {};
+            var name1 = element.querySelector('#custom1-name');
+            var name2 = element.querySelector('#custom2-name');
+            if (name1) name1.value = customNames['custom1'] || 'Custom Theme 1';
+            if (name2) name2.value = customNames['custom2'] || 'Custom Theme 2';
+         };
+
+         populateThemeSelects();
+
+         // Listeners for Management Buttons
+         var btnReset = element.querySelector('#btn-reset-themes');
+         if (btnReset) {
+            btnReset.onclick = function (e) {
+               e.preventDefault();
+               if (confirm('Are you sure you want to reset ALL themes to default? This will delete custom themes.')) {
+                  ThemeManager.resetAll();
+                  // ThemeManager.resetAll sets theme to 'dark'
+                  populateThemeSelects();
+                  setTimeout(updateInputs, 50);
+                  setTimeout(updateMMInputs, 50);
+               }
+            };
+         }
+
+         // Custom 1
+         var btnRename1 = element.querySelector('#btn-rename-custom1');
+         if (btnRename1) {
+            btnRename1.onclick = function (e) {
+               e.preventDefault();
+               var name = element.querySelector('#custom1-name').value;
+               if (name) { ThemeManager.setThemeName('custom1', name); populateThemeSelects(); }
+            };
+         }
+         var btnImport1 = element.querySelector('#btn-import-custom1');
+         if (btnImport1) {
+            btnImport1.onclick = function (e) {
+               e.preventDefault();
+               var source = element.querySelector('#import-custom1-source').value;
+               var name = element.querySelector('#custom1-name').value;
+               if (confirm("Overwrite 'Custom Theme 1' with settings from '" + source + "'?")) {
+                  ThemeManager.importTheme(source, 'custom1', name);
+                  populateThemeSelects();
+                  ThemeManager.setTheme('custom1');
+                  if (themeSelect) themeSelect.value = 'custom1';
+                  setTimeout(updateInputs, 50);
+                  setTimeout(updateMMInputs, 50);
+               }
+            };
+         }
+
+         // Custom 2
+         var btnRename2 = element.querySelector('#btn-rename-custom2');
+         if (btnRename2) {
+            btnRename2.onclick = function (e) {
+               e.preventDefault();
+               var name = element.querySelector('#custom2-name').value;
+               if (name) { ThemeManager.setThemeName('custom2', name); populateThemeSelects(); }
+            };
+         }
+         var btnImport2 = element.querySelector('#btn-import-custom2');
+         if (btnImport2) {
+            btnImport2.onclick = function (e) {
+               e.preventDefault();
+               var source = element.querySelector('#import-custom2-source').value;
+               var name = element.querySelector('#custom2-name').value;
+               if (confirm("Overwrite 'Custom Theme 2' with settings from '" + source + "'?")) {
+                  ThemeManager.importTheme(source, 'custom2', name);
+                  populateThemeSelects();
+                  ThemeManager.setTheme('custom2');
+                  if (themeSelect) themeSelect.value = 'custom2';
+                  setTimeout(updateInputs, 50);
+                  setTimeout(updateMMInputs, 50);
+               }
+            };
+         }
+      }
+
+      // Initialize General Options
+      element.querySelector('#opt-linenumbers').checked = OptionsManager.getOption('showLineNumbers') !== false;
+      element.querySelector('#opt-folding').checked = OptionsManager.getOption('codeFolding') !== false;
+      element.querySelector('#opt-syntax').checked = OptionsManager.getOption('syntaxHighlighting') !== false;
+      element.querySelector('#opt-guidelines').checked = OptionsManager.getOption('showGuidelines') !== false;
+      element.querySelector('#opt-show-addresses').checked = OptionsManager.getOption('showAddresses') === true;
+      element.querySelector('#opt-splash').checked = OptionsManager.getOption('showSplashScreen') !== false;
+      element.querySelector('#opt-restorepacks').checked = OptionsManager.getOption('restorePacks') === true;
+      element.querySelector('#opt-show-toolbar').checked = OptionsManager.getOption('showIconToolbar') !== false;
+      element.querySelector('#opt-show-menubar').checked = OptionsManager.getOption('showMenuBar') !== false;
+      element.querySelector('#opt-stickyproc').checked = OptionsManager.getOption('stickyProcedureHeader') !== false;
+      element.querySelector('#opt-grouprecords').checked = OptionsManager.getOption('groupDataRecords') === true;
+      element.querySelector('#opt-collapsefiles').checked = OptionsManager.getOption('collapseDataFiles') === true;
+      element.querySelector('#opt-hexbytes').value = OptionsManager.getOption('hexBytesPerRow') || 16;
+      element.querySelector('#opt-sheetmode').value = OptionsManager.getOption('spreadsheetMode') || 'legacy';
+
+      // Initialize Visuals Options
+      var decompilerLogCheckbox = element.querySelector('#opt-decompiler-log');
+      if (decompilerLogCheckbox) {
+         decompilerLogCheckbox.checked = OptionsManager.getOption('showDecompilerLog') === true;
+      }
+
+      // Initialize Memory Map Options
+
+
+      // Add listeners
+      element.querySelector('#opt-linenumbers').addEventListener('change', function () {
+         OptionsManager.setOption('showLineNumbers', this.checked);
+         // Refresh editors
+         editors.forEach(function (ed) {
+            if (ed.render) ed.render();
+         });
+      });
+
+      element.querySelector('#opt-folding').addEventListener('change', function () {
+         OptionsManager.setOption('codeFolding', this.checked);
+         editors.forEach(function (ed) {
+            if (ed.render) ed.render();
+         });
+      });
+
+      element.querySelector('#opt-syntax').addEventListener('change', function () {
+         OptionsManager.setOption('syntaxHighlighting', this.checked);
+         editors.forEach(function (ed) {
+            if (ed.render) ed.render();
+         });
+      });
+
+      element.querySelector('#opt-guidelines').addEventListener('change', function () {
+         OptionsManager.setOption('showGuidelines', this.checked);
+         var packList = document.getElementById('pack-list');
+         if (this.checked) {
+            packList.classList.remove('hide-guidelines');
+         } else {
+            packList.classList.add('hide-guidelines');
+         }
+      });
+
+      element.querySelector('#opt-show-addresses').addEventListener('change', function () {
+         OptionsManager.setOption('showAddresses', this.checked);
+         var packList = document.getElementById('pack-list');
+         if (this.checked) {
+            packList.classList.add('show-addresses');
+         } else {
+            packList.classList.remove('show-addresses');
+         }
+      });
+
+      element.querySelector('#opt-splash').addEventListener('change', function () {
+         OptionsManager.setOption('showSplashScreen', this.checked);
+      });
+
+      element.querySelector('#opt-restorepacks').addEventListener('change', function () {
+         OptionsManager.setOption('restorePacks', this.checked);
+         if (!this.checked) {
+            localStorage.removeItem('opkedit_open_packs');
+         }
+      });
+
+      element.querySelector('#opt-show-toolbar').addEventListener('change', function () {
+         OptionsManager.setOption('showIconToolbar', this.checked);
+         // Rule: At least one must be selected
+         if (!this.checked && !OptionsManager.getOption('showMenuBar')) {
+            element.querySelector('#opt-show-menubar').checked = true;
+            OptionsManager.setOption('showMenuBar', true);
+         }
+      });
+
+      element.querySelector('#opt-show-menubar').addEventListener('change', function () {
+         OptionsManager.setOption('showMenuBar', this.checked);
+         // Rule: At least one must be selected
+         if (!this.checked && !OptionsManager.getOption('showIconToolbar')) {
+            this.checked = true;
+            OptionsManager.setOption('showMenuBar', true);
+         }
+      });
+
+      element.querySelector('#opt-stickyproc').addEventListener('change', function () {
+         OptionsManager.setOption('stickyProcedureHeader', this.checked);
+         // Reload item if it's a Procedure to apply layout changes
+         if (currentItem && currentItem.type === 3) { // Type 3 is Procedure
+            // Force re-selection
+            var packIx = currentPackIndex;
+            var itemIx = packs[packIx].items.indexOf(currentItem);
+            if (itemIx >= 0) {
+               // Close and re-open to re-initialize editor with new mode
+               if (closeEditor()) {
+                  selectItem(packIx, itemIx);
+               }
+            }
+         }
+      });
+
+      element.querySelector('#opt-grouprecords').addEventListener('change', function () {
+         OptionsManager.setOption('groupDataRecords', this.checked);
+         updateInventory();
+      });
+
+      element.querySelector('#opt-collapsefiles').addEventListener('change', function () {
+         OptionsManager.setOption('collapseDataFiles', this.checked);
+         updateInventory();
+      });
+
+      element.querySelector('#opt-hexbytes').addEventListener('change', function () {
+         OptionsManager.setOption('hexBytesPerRow', parseInt(this.value));
+         // Refresh editors if any is HexEditor
+         if (currentEditor instanceof HexEditor) {
+            currentEditor.renderHexView();
+         }
+      });
+
+      element.querySelector('#opt-sheetmode').addEventListener('change', function () {
+         OptionsManager.setOption('spreadsheetMode', this.value);
+         // Refresh editor if currently active
+         if (currentEditor instanceof SpreadsheetFileEditor) {
+            currentEditor.initialise(currentEditor.item);
+         }
+      });
+
+
+
+      var decompilerLogCheckbox = element.querySelector('#opt-decompiler-log');
+      if (decompilerLogCheckbox) {
+         decompilerLogCheckbox.addEventListener('change', function () {
+            OptionsManager.setOption('showDecompilerLog', this.checked);
+            if (typeof decompilerLogWindow !== 'undefined' && decompilerLogWindow) {
+               decompilerLogWindow.updateVisibility();
+               // If toggled ON and current editor is a procedure, refresh the log
+               if (this.checked && currentEditor instanceof ProcedureFileEditor) {
+                  currentEditor.refreshDecompilerLog(true);
+               }
+            }
+         });
+      }
+
+      element.querySelector('#opt-mm-pagebreaks').addEventListener('change', function () {
+         OptionsManager.setOption('memoryMapShowPageBreaks', this.checked);
+         if (currentEditor instanceof MemoryMapEditor) {
+            currentEditor.initialise(currentEditor.item);
+         }
+      });
+
+      element.querySelector('#opt-mm-size').addEventListener('change', function () {
+         OptionsManager.setOption('memoryMapDisplaySize', parseInt(this.value));
+         if (currentEditor instanceof MemoryMapEditor) {
+            currentEditor.initialise(currentEditor.item);
+         }
+      });
+
+      element.querySelector('#opt-mm-height').value = OptionsManager.getOption('memoryMapBarHeight') || 30;
+      element.querySelector('#opt-mm-height').addEventListener('change', function () {
+         OptionsManager.setOption('memoryMapBarHeight', parseInt(this.value));
+         if (currentEditor instanceof MemoryMapEditor) {
+            currentEditor.initialise(currentEditor.item);
+         }
+      });
+
+      // Icon Settings Logic
+      element.querySelector('#opt-icon-version').addEventListener('change', function () {
+         OptionsManager.setOption('iconVersion', this.value);
+         updateInventory();
+      });
+
+      element.querySelector('#opt-icon-style').addEventListener('change', function () {
+         OptionsManager.setOption('iconStyle', this.value);
+         updateInventory();
+      });
+
+      // Helper to get computed style
+      function getCSSVar(name) {
+         return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      // Helper to set style
+      function setCSSVar(name, value) {
+         document.documentElement.style.setProperty(name, value);
+      }
+
+      // Tab Switching Logic
+      var tabs = element.querySelectorAll('.tab-btn');
+      tabs.forEach(function (tab) {
+         tab.addEventListener('click', function (e) {
+            e.preventDefault();
+            element.querySelectorAll('.tab-btn').forEach(function (t) { t.classList.remove('active'); });
+            element.querySelectorAll('.tab-content').forEach(function (c) { c.classList.remove('active'); });
+            tab.classList.add('active');
+            var targetId = tab.getAttribute('data-tab');
+            element.querySelector('#' + targetId).classList.add('active');
+         });
+      });
+
+      // Theme Editor Logic
+      var themeSelect = element.querySelector('#opt-theme');
+      var inputs = {
+         '--bg-color': element.querySelector('#edit-bg-color'),
+         '--text-color': element.querySelector('#edit-text-color'),
+         '--toolbar-bg': element.querySelector('#edit-toolbar-bg'),
+         '--sidebar-bg': element.querySelector('#edit-sidebar-bg'),
+         '--status-bar-bg': element.querySelector('#edit-status-bg'),
+         '--list-selected-bg': element.querySelector('#edit-select-bg'),
+         '--editor-text-color': element.querySelector('#edit-editor-text'),
+         '--editor-cursor-color': element.querySelector('#edit-editor-cursor'),
+         '--sidebar-item-text': element.querySelector('#edit-sidebar-text'),
+         '--toolbar-border-color': element.querySelector('#edit-toolbar-border'),
+         '--input-text-color': element.querySelector('#edit-input-text'),
+         '--input-bg': element.querySelector('#edit-input-bg'),
+         '--modal-bg': element.querySelector('#edit-modal-bg')
+      };
+
+      var syntaxInputs = {
+         '--syntax-functions': element.querySelector('#syntax-functions'),
+         '--syntax-commands': element.querySelector('#syntax-commands'),
+         '--syntax-stringfuncs': element.querySelector('#syntax-stringfuncs'),
+         '--syntax-string': element.querySelector('#syntax-string'),
+         '--syntax-comment': element.querySelector('#syntax-comment'),
+         '--syntax-number': element.querySelector('#syntax-number'),
+         '--syntax-label': element.querySelector('#syntax-label'),
+         '--syntax-operator': element.querySelector('#syntax-operator')
+      };
+
+      // Initialize inputs with current values
+      function updateInputs() {
+         for (var key in inputs) {
+            inputs[key].value = getCSSVar(key) || '#000000';
+         }
+
+         // Update syntax inputs from ThemeManager
+         var currentTheme = ThemeManager.currentTheme;
+         var defs = ThemeManager.getThemeDefinition(currentTheme);
+         for (var key in syntaxInputs) {
+            syntaxInputs[key].value = defs[key] || getCSSVar(key) || '#000000';
+         }
+      }
+
+      // Wait for dialog to be in DOM to get computed styles
+      setTimeout(updateInputs, 0);
+
+      // Update inputs when theme changes
+      themeSelect.addEventListener('change', function () {
+         ThemeManager.setTheme(this.value);
+         setTimeout(updateInputs, 50); // Allow CSS to apply
+      });
+
+      // Add listeners to inputs
+      for (var key in inputs) {
+         (function (varName, input) {
+            input.addEventListener('input', function () {
+               setCSSVar(varName, this.value);
+            });
+         })(key, inputs[key]);
+      }
+
+      // Add listeners to syntax inputs
+      for (var key in syntaxInputs) {
          (function (varName, input) {
             input.addEventListener('input', function () {
                // Update CSS variable immediately for preview
@@ -591,38 +999,114 @@ function showOptionsDialog() {
                var defs = ThemeManager.getThemeDefinition(currentTheme);
                defs[varName] = this.value;
                ThemeManager.updateThemeDefinition(currentTheme, defs);
-
-               // Refresh Memory Map if active
-               if (currentEditor instanceof MemoryMapEditor) {
-                  currentEditor.initialise(currentEditor.item);
-               }
             });
-         })(key, mmColors[key]);
+         })(key, syntaxInputs[key]);
       }
+
+      // Reset Syntax Button
+      element.querySelector('#reset-syntax').addEventListener('click', function () {
+         var currentTheme = ThemeManager.currentTheme;
+         var overrides = OptionsManager.getOption('themeOverrides') || {};
+         if (overrides[currentTheme]) {
+            delete overrides[currentTheme];
+            OptionsManager.setOption('themeOverrides', overrides);
+            ThemeManager.applyTheme(currentTheme);
+            setTimeout(updateInputs, 50);
+         }
+      });
+
+      // Memory Map Logic
+      var mmOrientation = element.querySelector('#opt-mm-orientation');
+      mmOrientation.value = OptionsManager.getOption('memoryMapOrientation') || 'horizontal';
+      mmOrientation.addEventListener('change', function () {
+         OptionsManager.setOption('memoryMapOrientation', this.value);
+         // Refresh Memory Map if active
+         if (currentEditor instanceof MemoryMapEditor) {
+            currentEditor.initialise(currentEditor.item);
+         }
+      });
+
+      var mmColors = {
+         '--mm-color-header': element.querySelector('#mm-color-header'),
+         '--mm-color-procedure': element.querySelector('#mm-color-procedure'),
+         '--mm-color-datafile': element.querySelector('#mm-color-datafile'),
+         '--mm-color-diary': element.querySelector('#mm-color-diary'),
+         '--mm-color-comms': element.querySelector('#mm-color-comms'),
+         '--mm-color-sheet': element.querySelector('#mm-color-sheet'),
+         '--mm-color-pager': element.querySelector('#mm-color-pager'),
+         '--mm-color-notepad': element.querySelector('#mm-color-notepad'),
+         '--mm-color-block': element.querySelector('#mm-color-block'),
+         '--mm-color-record': element.querySelector('#mm-color-record'),
+         '--mm-color-unknown': element.querySelector('#mm-color-unknown'),
+         '--mm-color-free': element.querySelector('#mm-color-free')
+      };
+
+      // Update MM inputs from ThemeManager
+      function updateMMInputs() {
+         var currentTheme = ThemeManager.currentTheme;
+         var defs = ThemeManager.getThemeDefinition(currentTheme);
+         for (var key in mmColors) {
+            if (mmColors[key]) {
+               mmColors[key].value = defs[key] || getCSSVar(key) || '#000000';
+            }
+         }
+      }
+      setTimeout(updateMMInputs, 0);
+
+      // Update MM inputs when theme changes
+      themeSelect.addEventListener('change', function () {
+         setTimeout(updateMMInputs, 50);
+      });
+
+      for (var key in mmColors) {
+         if (mmColors[key]) {
+            (function (varName, input) {
+               input.addEventListener('input', function () {
+                  // Update CSS variable immediately for preview
+                  setCSSVar(varName, this.value);
+
+                  // Save to ThemeManager
+                  var currentTheme = ThemeManager.currentTheme;
+                  var defs = ThemeManager.getThemeDefinition(currentTheme);
+                  defs[varName] = this.value;
+                  ThemeManager.updateThemeDefinition(currentTheme, defs);
+
+                  // Refresh Memory Map if active
+                  if (currentEditor instanceof MemoryMapEditor) {
+                     currentEditor.initialise(currentEditor.item);
+                  }
+               });
+            })(key, mmColors[key]);
+         }
+      }
+
+      var dialog = new ModalDialog(element, function () {
+         // Most options are saved immediately via event listeners.
+         // We only need to handle final cleanup or specific actions here if any.
+
+         // Apply Guidelines Setting (Visual update only, option already saved)
+         var packList = document.getElementById('pack-list');
+         if (OptionsManager.getOption('showGuidelines')) {
+            packList.classList.remove('hide-guidelines');
+         } else {
+            packList.classList.add('hide-guidelines');
+         }
+
+         if (currentEditor && currentEditor.codeEditorInstance) {
+            currentEditor.codeEditorInstance.update();
+         }
+         if (currentEditor instanceof HexEditor) {
+            currentEditor.renderHexView();
+         }
+         updateInventory(); // Re-render pack list to apply new icon settings
+      });
+
+
+      dialog.start();
+   } catch (e) {
+      console.error("Failed to open Options Dialog:", e);
+      alert("An error occurred while opening the options dialog. Please check the console for details.");
    }
-
-   var dialog = new ModalDialog(element, function () {
-      // Most options are saved immediately via event listeners.
-      // We only need to handle final cleanup or specific actions here if any.
-
-      // Apply Guidelines Setting (Visual update only, option already saved)
-      var packList = document.getElementById('pack-list');
-      if (OptionsManager.getOption('showGuidelines')) {
-         packList.classList.remove('hide-guidelines');
-      } else {
-         packList.classList.add('hide-guidelines');
-      }
-
-      if (currentEditor && currentEditor.codeEditorInstance) {
-         currentEditor.codeEditorInstance.update();
-      }
-      if (currentEditor instanceof HexEditor) {
-         currentEditor.renderHexView();
-      }
-      updateInventory(); // Re-render pack list to apply new icon settings
-   });
-
-   dialog.start();
 }
 
 function showAboutDialog(isSplash) {
@@ -635,7 +1119,9 @@ function showAboutDialog(isSplash) {
       "<p>Version " + APP_VERSION + "</p>" +
       "<hr style='margin: 15px auto; width: 80%; border: 0; border-top: 1px solid #ccc;'>" +
       "<p>Original by <b>Jaap Scherphuis</b></p>" +
-      "<p>Reimagined by <b>NFfP</b>, Implemented with precision by <b>Antigravity</b>.</p>" +
+      "<p>Icons by <b>Font Awesome</b></p>" +
+      "<p>Implemented with precision by <b>Antigravity</b>.</p>" +
+      "<p>Reimagined by <b>NFfP</b>.</p>" +
       "</div>";
 
    var dialog = new ModalDialog(element, null);
@@ -650,6 +1136,8 @@ function showAboutDialog(isSplash) {
 
 // Initialization
 function init() {
+   initIconToolbar();
+   decompilerLogWindow = new DecompilerLogWindow();
    updateInventory();
 
    if (OptionsManager.getOption('showSplashScreen') !== false) {
@@ -667,38 +1155,71 @@ function init() {
 
    // Restore Opened Packs
    if (OptionsManager.getOption('restorePacks')) {
-      console.log("Restore Packs: Option enabled");
-      var cached = localStorage.getItem('opkedit_cached_pack');
-      if (cached) {
+
+
+      // Migration: Check for legacy single pack and move to list
+      var legacy = localStorage.getItem('opkedit_cached_pack');
+      if (legacy) {
          try {
-            var packData = JSON.parse(cached);
-            console.log("Restore Packs: Found cached content for", packData.name);
+            var lData = JSON.parse(legacy);
+            var existingPacks = [];
+            try { existingPacks = JSON.parse(localStorage.getItem('opkedit_cached_packs') || '[]'); } catch (e) { console.warn("Failed to load cached packs:", e); }
 
-            // Decode Base64
-            var binaryString = atob(packData.data);
-            var len = binaryString.length;
-            var bytes = new Uint8Array(len);
-            for (var i = 0; i < len; i++) {
-               bytes[i] = binaryString.charCodeAt(i);
+            // Avoid duplicates during migration
+            var exists = false;
+            for (var k = 0; k < existingPacks.length; k++) { if (existingPacks[k].name === lData.name) exists = true; }
+
+            if (!exists) {
+               existingPacks.push(lData);
+               localStorage.setItem('opkedit_cached_packs', JSON.stringify(existingPacks));
+
             }
+            localStorage.removeItem('opkedit_cached_pack');
+         } catch (e) {
+            console.warn("Restore Packs: Legacy migration failed", e);
+         }
+      }
 
-            var newPack = new PackImage(bytes);
-            newPack.unsaved = false;
-            newPack.filename = packData.name;
+      var cachedPacks = [];
+      try {
+         var stored = localStorage.getItem('opkedit_cached_packs');
+         if (stored) cachedPacks = JSON.parse(stored);
+      } catch (e) { console.error("Error in loadSession:", e); }
 
-            packs.push(newPack);
+      if (cachedPacks.length > 0) {
+
+
+         cachedPacks.forEach(function (packData) {
+            try {
+               // Decode Base64
+               var binaryString = atob(packData.data);
+               var len = binaryString.length;
+               var bytes = new Uint8Array(len);
+               for (var i = 0; i < len; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+               }
+
+               var newPack = new PackImage(bytes);
+               newPack.unsaved = false;
+               newPack.filename = packData.name;
+
+               packs.push(newPack);
+               updatePackChecksums(newPack);
+
+            } catch (e) {
+               console.error("Restore Packs: Failed to load cached pack " + packData.name, e);
+            }
+         });
+
+         if (packs.length > 0) {
             currentPackIndex = 0;
             selectedPackIndex = 0;
-            updatePackChecksums(newPack);
-            // Update inventory to show the loaded pack
             updateInventory();
-            setStatus("Restored pack: " + packData.name);
-         } catch (e) {
-            console.error("Restore Packs: Failed to load cached pack", e);
+            setStatus("Restored " + packs.length + " pack(s).");
          }
       }
    } else {
-      console.log("Restore Packs: Option disabled");
+
    }
 
    // Global Theme Change Listener
@@ -709,19 +1230,8 @@ function init() {
       // Also update syntax highlighting if needed (handled by CSS vars usually, but editor might need redraw)
       if (currentEditor && currentEditor.codeEditorInstance) {
          // Force update/redraw if the code editor supports it
-         if (document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-            if (currentItem || selectedPackIndex >= 0) {
-               eraseItem();
-            }
-         }
       }
    });
-
-   // Add Event Listener for Delete Toggle
-   var btnToggleDelete = document.getElementById('btn-toggle-delete');
-   if (btnToggleDelete) {
-      btnToggleDelete.addEventListener('click', toggleDeleteItem);
-   }
 }
 
 // Core Functions
@@ -777,6 +1287,32 @@ function downloadFileFromUrl(filename, url) {
    document.body.removeChild(a);
 }
 
+function exportCurrentItem() {
+   if (!currentItem) return;
+
+   var filename = "item.bin";
+   if (currentItem.name) {
+      filename = currentItem.name.trim();
+   }
+
+   // Heuristic for extension
+   var type = currentItem.type;
+   if (type === 3) filename += ".opl";
+   else if (type === 7) filename += ".nts";
+   else if (type >= 16) filename += ".odb";
+   else if (!filename.match(/\.[a-z0-9]{3}$/i)) filename += ".bin";
+
+   var userFilename = prompt("Save item as:", filename);
+   if (userFilename) {
+      // Logic to reconstruct file format if needed?
+      // For now, assuming currentItem.data is the payload we want.
+      var blob = new Blob([currentItem.data], { type: "application/octet-stream" });
+      var url = URL.createObjectURL(blob);
+      downloadFileFromUrl(userFilename, url);
+      URL.revokeObjectURL(url);
+   }
+}
+
 function updateItemButtons(isDirty) {
    discardbutton.setActive(isDirty);
    applybutton.setActive(isDirty);
@@ -784,15 +1320,165 @@ function updateItemButtons(isDirty) {
    var activePack = getActivePack();
    var hasPack = !!activePack;
 
-   savepackbutton.setActive(!isDirty && hasPack);
-   savehexbutton.setActive(!isDirty && hasPack);
+   // Check Menu States (handled on open mostly, but can force check if needed)
+   // savepackbutton.setActive... REMOVED
+   // savehexbutton.setActive... REMOVED
+   // newitembutton.setActive... REMOVED
+   // loaditembutton.setActive... REMOVED
 
    // Enable delete if an item is selected OR a pack header is selected
    var canDelete = (!isDirty && ((currentItem && currentItem.type >= 0) || selectedPackIndex >= 0));
    eraseitembutton.setActive(canDelete);
 
-   newitembutton.setActive(!isDirty && hasPack);
-   loaditembutton.setActive(!isDirty && hasPack);
+   // Sync Icon Toolbar
+   if (toolbarButtons) {
+      toolbarButtons.btnNewPack.setActive(!isDirty);
+      toolbarButtons.btnOpenPack.setActive(!isDirty);
+      toolbarButtons.btnSavePack.setActive(hasPack);
+      toolbarButtons.btnImportItem.setActive(hasPack && !isDirty);
+      toolbarButtons.btnExportItem.setActive(!!currentItem && !isDirty);
+      toolbarButtons.btnNewProc.setActive(hasPack && !isDirty);
+      toolbarButtons.btnNewNotepad.setActive(hasPack && !isDirty);
+      toolbarButtons.btnNewData.setActive(hasPack && !isDirty);
+      toolbarButtons.btnDelete.setActive(canDelete);
+      toolbarButtons.btnApply.setActive(isDirty);
+      toolbarButtons.btnDiscard.setActive(isDirty);
+
+      toolbarButtons.btnAbout.setActive(true);
+      toolbarButtons.btnMaxMin.setActive(true);
+      toolbarButtons.btnOptions.setActive(true);
+      toolbarButtons.btnOplRef.setActive(true);
+
+      var hasActivePack = hasPack && !isDirty;
+      toolbarButtons.btnPackHeader.setActive(hasActivePack);
+      toolbarButtons.btnMemoryMap.setActive(hasActivePack);
+      toolbarButtons.btnVisualizer.setActive(hasActivePack);
+   }
+}
+
+var toolbarButtons = null;
+
+function initIconToolbar() {
+   var container = document.getElementById('icon-toolbar');
+   if (!container) return;
+
+   container.innerHTML = '';
+
+   function createToolbarBtn(id, icon, title, callback) {
+      var btn = document.createElement('button');
+      btn.className = 'tool-btn';
+      btn.id = id;
+      btn.title = title;
+      btn.innerHTML = '<i class="' + icon + '"></i>';
+      container.appendChild(btn);
+      return new Button(id, callback);
+   }
+
+   function createSeparator() {
+      var sep = document.createElement('div');
+      sep.className = 'tool-separator';
+      container.appendChild(sep);
+   }
+
+   function createSpacer() {
+      var spacer = document.createElement('div');
+      spacer.style.flex = '1';
+      container.appendChild(spacer);
+   }
+
+   toolbarButtons = {};
+
+   toolbarButtons.btnNewPack = createToolbarBtn('tbtn-new-pack', 'fas fa-box', 'New Pack', createNew);
+   toolbarButtons.btnOpenPack = createToolbarBtn('tbtn-open-pack', 'fas fa-folder-open', 'Open Pack', function () { if (fileInputPack) fileInputPack.click(); });
+   toolbarButtons.btnSavePack = createToolbarBtn('tbtn-save-pack', 'fas fa-save', 'Save Pack', packSaved);
+
+   createSeparator();
+
+   toolbarButtons.btnImportItem = createToolbarBtn('tbtn-import-item', 'fas fa-file-import', 'Import Item', function () { if (fileInputItem) fileInputItem.click(); });
+   toolbarButtons.btnExportItem = createToolbarBtn('tbtn-export-item', 'fas fa-file-export', 'Export Item', exportCurrentItem);
+
+   createSeparator();
+
+   toolbarButtons.btnDelete = createToolbarBtn('tbtn-delete', 'fas fa-trash-can', 'Delete', eraseItem);
+
+   createSeparator();
+
+   toolbarButtons.btnNewProc = createToolbarBtn('tbtn-new-proc', 'fas fa-file-code', 'New OPL Procedure', function () {
+      var data = [0x00, 0x00, 0x00, 0x0A, 80, 82, 79, 67, 78, 65, 77, 69, 58, 0];
+      createBlockFile(data, "PROCNAME", 3);
+   });
+   toolbarButtons.btnNewNotepad = createToolbarBtn('tbtn-new-notepad', 'fas fa-sticky-note', 'New Notepad Entry', function () {
+      var data = [0x00, 0x02, 8, 0, 0x00, 0x09, 78, 79, 84, 69, 80, 65, 68, 58, 0];
+      createBlockFile(data, "NOTEPAD", 7);
+   });
+   toolbarButtons.btnNewData = createToolbarBtn('tbtn-new-data', 'fas fa-database', 'New Data File', function () {
+      var id = getFreeFileId();
+      if (id > 0) {
+         var hdritem = createFileHeader("DATAFILE", 1, id + 0x8f);
+         addItemToPack(hdritem);
+         updateInventory();
+      }
+   });
+
+   createSeparator();
+
+   toolbarButtons.btnApply = createToolbarBtn('tbtn-apply', 'fas fa-circle-check', 'Apply Changes', applyEdits);
+   toolbarButtons.btnDiscard = createToolbarBtn('tbtn-discard', 'fas fa-rotate-left', 'Discard Changes', discardEdits);
+
+   createSeparator();
+
+   toolbarButtons.btnPackHeader = createToolbarBtn('tbtn-pack-header', 'fas fa-receipt', 'Pack Header', function () {
+      if (currentPackIndex >= 0) selectItem(currentPackIndex, 0);
+   });
+
+   toolbarButtons.btnMemoryMap = createToolbarBtn('tbtn-memory-map', 'fas fa-map', 'Memory Map', function () {
+      if (currentPackIndex >= 0) selectPack(currentPackIndex);
+   });
+
+   toolbarButtons.btnVisualizer = createToolbarBtn('tbtn-visualizer', 'fas fa-diagram-project', 'Code Visualizer', function () {
+      if (typeof CodeVisualizer !== 'undefined') CodeVisualizer.showSystemMap(packs);
+   });
+
+   createSpacer();
+
+   toolbarButtons.btnOptions = createToolbarBtn('tbtn-options', 'fas fa-sliders', 'Options', function () {
+      if (typeof showOptionsDialog === 'function') showOptionsDialog();
+   });
+
+   toolbarButtons.btnOplRef = createToolbarBtn('tbtn-opl-ref', 'fas fa-book', 'OPL Command Reference', function () {
+      if (typeof OPLCommandReference !== 'undefined') new OPLCommandReference().open();
+   });
+
+   toolbarButtons.btnAbout = createToolbarBtn('tbtn-about', 'fas fa-circle-info', 'About', function () {
+      if (typeof showAboutDialog === 'function') showAboutDialog();
+   });
+
+   toolbarButtons.btnMaxMin = createToolbarBtn('tbtn-max-min', 'fas fa-expand', 'Toggle Fullscreen', function () {
+      if (!document.fullscreenElement) {
+         document.documentElement.requestFullscreen().catch(function (e) {
+            console.error("Error attempting to enable full-screen mode:", e.message);
+         });
+      } else {
+         if (document.exitFullscreen) {
+            document.exitFullscreen();
+         }
+      }
+   });
+
+   // Listen for fullscreen change to update icon
+   document.addEventListener('fullscreenchange', function () {
+      var icon = document.querySelector('#tbtn-max-min i');
+      if (icon) {
+         if (document.fullscreenElement) {
+            icon.className = 'fas fa-compress';
+         } else {
+            icon.className = 'fas fa-expand';
+         }
+      }
+   });
+
+   if (typeof OptionsManager !== 'undefined') OptionsManager.applyOptions();
+   updateItemButtons(false);
 }
 
 function discardEdits() {
@@ -892,6 +1578,20 @@ function updatePackChecksums(pack) {
 
 function updateInventory() {
    PackContents.render();
+
+   // Update watermark
+   var editorContainer = document.getElementById('editor-container');
+   if (editorContainer) {
+      if (!packs || packs.length === 0) {
+         editorContainer.classList.add('watermark');
+      } else {
+         editorContainer.classList.remove('watermark');
+      }
+   }
+
+   // Auto-save session state (Debounced)
+   if (saveTimer) clearTimeout(saveTimer);
+   saveTimer = setTimeout(saveSession, 1000);
 }
 
 // Drag and Drop Logic
@@ -998,6 +1698,10 @@ function itemMoved(fromPackIx, fromItemIx, toPackIx, toItemIx, isCopy) {
 }
 
 function selectPack(index) {
+   if (selectedPackIndex === index && currentItem === null && currentEditor instanceof MemoryMapEditor) {
+      if (typeof PackContents !== 'undefined') PackContents.selectPack(index);
+      return;
+   }
    if (!closeEditor()) return;
    selectedPackIndex = index;
    currentPackIndex = index;
@@ -1005,21 +1709,36 @@ function selectPack(index) {
    updateInventory();
 
    // Show Memory Map
-   var mmEditor = editors.find(function (e) { return e instanceof MemoryMapEditor; });
-   if (mmEditor) {
-      currentEditor = mmEditor;
-      mmEditor.initialise({ type: 255 });
+   if (index >= 0 && index < packs.length) {
+      var mmEditor = editors.find(function (e) { return e instanceof MemoryMapEditor; });
+      if (mmEditor) {
+         currentEditor = mmEditor;
+         mmEditor.initialise({ type: 255 });
 
-      var packName = packs[index].filename || "Untitled Pack";
-      if (document.getElementById('current-file-name')) document.getElementById('current-file-name').innerText = packName;
+         var packName = packs[index].filename || "Untitled Pack";
+         if (document.getElementById('current-file-name')) document.getElementById('current-file-name').innerText = packName;
 
-      if (document.getElementById('code-editor-container')) document.getElementById('code-editor-container').style.display = 'none';
-      if (legacyEditorElement) legacyEditorElement.style.display = 'block';
+         if (document.getElementById('code-editor-container')) document.getElementById('code-editor-container').style.display = 'none';
+         if (legacyEditorElement) legacyEditorElement.style.display = 'block';
+      }
+   } else {
+      if (document.getElementById('current-file-name')) document.getElementById('current-file-name').innerText = "No Pack Selected";
    }
+}
+
+function selectItem(packIdx, itemIdx) {
+   var pack = packs[packIdx];
+   var item = pack ? pack.items[itemIdx] : null;
+   if (currentItem === item) {
+      if (typeof PackContents !== 'undefined') PackContents.selectItem(packIdx, itemIdx);
+      return;
+   }
+   itemSelected(packIdx, itemIdx);
 }
 
 function itemSelected(packIndex, itemIndex) {
    var pack = packs[packIndex];
+   if (!pack) return false;
    var isok = itemIndex >= 0 && itemIndex < pack.items.length;
    if (!isok) return false;
 
@@ -1033,21 +1752,65 @@ function itemSelected(packIndex, itemIndex) {
    var tp = currentItem.type;
 
    var i = 0;
-   while (i < editors.length && !editors[i].acceptsType(tp)) {
-      i++;
+   var selectedEditor = null;
+
+   // Heuristic for Type 0 (Data Block)
+   if (tp === 0) {
+      // Check if it's a standard Length-Prefixed Record
+      // Record Format: [Length] [Type] [Data...]
+      // If data[0] + 2 == data.length, it's a single record.
+      if (currentItem.data.length >= 2 && currentItem.data[0] + 2 === currentItem.data.length) {
+         // Additional check: The 'Type' byte (index 1) must be a valid Record Type ID
+         // Record Types are 16 (0x10) to 126 (0x7E) (File IDs 1-111 + offset 15)
+         var recType = currentItem.data[1] & 0x7f;
+         if (recType >= 16 && recType <= 126) {
+            // It looks like a valid record. Try to find RecordEditor.
+            var recordEditor = editors.find(function (e) { return e instanceof RecordEditor; });
+            if (recordEditor) {
+               selectedEditor = recordEditor;
+            }
+         } else {
+            // Invalid File ID -> Hex Viewer
+            var hexEditor = editors.find(function (e) { return e instanceof HexEditor; });
+            if (hexEditor) {
+               selectedEditor = hexEditor;
+            }
+         }
+      } else {
+         // Default to Hex Viewer for other Data Blocks (ODB, etc.)
+         var hexEditor = editors.find(function (e) { return e instanceof HexEditor; });
+         if (hexEditor) {
+            selectedEditor = hexEditor;
+         }
+      }
    }
-   if (i < editors.length) {
-      currentEditor = editors[i];
+
+   if (!selectedEditor) {
+      while (i < editors.length && !editors[i].acceptsType(tp)) {
+         i++;
+      }
+      if (i < editors.length) {
+         selectedEditor = editors[i];
+      }
+   }
+
+   if (selectedEditor) {
+      currentEditor = selectedEditor;
       legacyEditorElement.style.display = 'block';
-      // Calculate start address for display
-      // Add 6 bytes for the OPK header (OPK + length) which are not items
-      var startAddr = getItemAddres(pack, itemIndex) + 6;
+      // Use relative address 0 to match Hex Viewer (Memory Map) behavior
+      // var startAddr = getItemAddres(pack, itemIndex) + 6;
+      var startAddr = 0;
       currentEditor.initialise(currentItem, startAddr);
    } else {
       console.warn("No editor found for type " + tp);
    }
 
-   updateInventory();
+   // Optimized update: Don't re-render entire list, just update selection
+   if (typeof PackContents !== 'undefined' && PackContents.selectItem) {
+      PackContents.selectItem(packIndex, itemIndex);
+   } else {
+      updateInventory();
+   }
    updateItemButtons(false);
    return true;
 }
@@ -1066,7 +1829,10 @@ function canLoadPack(e) {
 
 
 function fileChosen() {
-   loadPackFromFiles(loadpackbutton.getFiles());
+   var fileInput = document.getElementById("file-input-pack");
+   if (fileInput && fileInput.files.length > 0) {
+      loadPackFromFiles(fileInput.files);
+   }
 }
 
 function loadPackFromFiles(files) {
@@ -1144,8 +1910,18 @@ function loadPackFromFiles(files) {
                         name: nm,
                         data: base64
                      };
-                     localStorage.setItem('opkedit_cached_pack', JSON.stringify(cachedPack));
-                     console.log("Auto-Load: Pack content saved to storage.");
+                     var cachedPacks = [];
+                     try {
+                        var stored = localStorage.getItem('opkedit_cached_packs');
+                        if (stored) cachedPacks = JSON.parse(stored);
+                     } catch (e) { console.error("Drop handler error:", e); }
+
+                     // Remove existing if updating
+                     cachedPacks = cachedPacks.filter(function (p) { return p.name !== nm; });
+                     cachedPacks.push(cachedPack);
+
+                     localStorage.setItem('opkedit_cached_packs', JSON.stringify(cachedPacks));
+
                   } catch (e) {
                      console.warn("Auto-Load: Failed to save pack content.", e);
                   }
@@ -1159,6 +1935,7 @@ function loadPackFromFiles(files) {
                updateInventory();
 
                setStatus("Loaded OPK file: " + nm);
+               saveSession();
             }
          );
       }
@@ -1176,19 +1953,51 @@ function eraseItem() {
       if (OptionsManager.getOption('restorePacks')) {
          var pack = packs[selectedPackIndex];
          if (pack) {
-            var cached = localStorage.getItem('opkedit_cached_pack');
-            if (cached) {
+            try {
+               // Check if the pack being deleted is in the list
+               var cachedPacks = [];
                try {
-                  var cachedData = JSON.parse(cached);
-                  // Check if the pack being deleted is the one in cache
-                  if (cachedData.name === pack.filename) {
-                     localStorage.removeItem('opkedit_cached_pack');
-                     console.log("Auto-Load: Removed cached pack from storage.");
-                  }
-               } catch (e) {
-                  console.warn("Auto-Load: Failed to check cache on delete", e);
+                  var stored = localStorage.getItem('opkedit_cached_packs');
+                  if (stored) cachedPacks = JSON.parse(stored);
+               } catch (e) { console.error("File entry read error:", e); }
+
+               var initialLen = cachedPacks.length;
+               cachedPacks = cachedPacks.filter(function (p) { return p.name !== pack.filename; });
+
+               if (cachedPacks.length < initialLen) {
+                  localStorage.setItem('opkedit_cached_packs', JSON.stringify(cachedPacks));
                }
+
+               // Legacy cleanup
+               var legacy = localStorage.getItem('opkedit_cached_pack');
+               if (legacy) {
+                  try {
+                     var lData = JSON.parse(legacy);
+                     if (lData.name === pack.filename) {
+                        localStorage.removeItem('opkedit_cached_pack');
+                     }
+                  } catch (e) { console.error("File parse error:", e); }
+               }
+            } catch (e) {
+               console.warn("Auto-Load: Failed to check cache on delete", e);
             }
+
+            // Fix: Also remove from open packs list (Filespaths)
+            try {
+               var storedPaths = localStorage.getItem('opkedit_open_packs');
+               if (storedPaths) {
+                  var openPacks = JSON.parse(storedPaths);
+                  var initialOpenLen = openPacks.length;
+                  // Remove entries ending with filename
+                  openPacks = openPacks.filter(function (p) {
+                     return !p.endsWith(pack.filename) && !p.endsWith(pack.filename.replace('.opk', '.hex'));
+                  });
+
+                  if (openPacks.length < initialOpenLen) {
+                     localStorage.setItem('opkedit_open_packs', JSON.stringify(openPacks));
+                  }
+               }
+            } catch (e) { console.error("Remove open pack error:", e); }
          }
       }
 
@@ -1200,7 +2009,10 @@ function eraseItem() {
    }
 
    if (!currentItem) return;
-   if (currentItem.type < 0) return;
+   if (currentItem.type < 0 || currentItem.type === 255) {
+      alert("This record cannot be deleted.");
+      return;
+   }
 
    var pack = packs[currentPackIndex];
    if (!pack) return;
@@ -1225,35 +2037,6 @@ function eraseItem() {
    }
    currentItem = null;
    updateInventory();
-}
-
-function toggleDeleteItem() {
-   if (!currentItem) return;
-
-   // Prevent toggling system items (Header/EOP) or items without data
-   // Type -1 is Header, Type 255 is EOP
-   if (currentItem.type === -1 || currentItem.type === 255) {
-      alert("This record type cannot be deleted.");
-      return;
-   }
-
-   if (!currentItem.data || currentItem.data.length < 2) return;
-
-   var pack = packs[currentPackIndex];
-   if (!pack) return;
-
-   // Toggle status
-   currentItem.deleted = !currentItem.deleted;
-
-   // Update raw data
-   // Bit 7: 1=Active, 0=Deleted
-   var type = currentItem.data[1] & 0x7F;
-   currentItem.data[1] = type | (currentItem.deleted ? 0 : 0x80);
-
-   pack.unsaved = true;
-   setStatus("Item " + (currentItem.deleted ? "marked as deleted" : "restored"));
-   updateInventory();
-   updateItemButtons(true);
 }
 
 var availableTypes = {
@@ -1287,10 +2070,10 @@ function createNewItem() {
          updateInventory();
       } else if (type == 3) {
          var data = [0x00, 0x00, 0x00, 0x0A, 80, 82, 79, 67, 78, 65, 77, 69, 58, 0];
-         createBlockFile(data, "PROCNAME", type);
+         createBlockFile(data, "PROCNAME", 3);
       } else if (type == 7) {
          var data = [0x00, 0x02, 8, 0, 0x00, 0x09, 78, 79, 84, 69, 80, 65, 68, 58, 0];
-         createBlockFile(data, "NOTEPAD", type);
+         createBlockFile(data, "NOTEPAD", 7);
       } else if (type > 0x0f) {
          var hdritem = new PackItem([1, type + 0x80, 0x20], 0, 3);
          hdritem.setDescription();
@@ -1319,6 +2102,37 @@ function createNewItem() {
    chooseTypeScreen.start();
 }
 
+function saveSession() {
+   if (!OptionsManager.getOption('restorePacks')) return;
+
+   var sessionPacks = [];
+   try {
+      for (var i = 0; i < packs.length; i++) {
+         var p = packs[i];
+         // Serialize pack content
+         // Get raw binary data from PackImage
+         var rawData = p.getRawData();
+
+         // Convert to Base64
+         var binary = '';
+         var len = rawData.byteLength;
+         for (var j = 0; j < len; j++) {
+            binary += String.fromCharCode(rawData[j]);
+         }
+         var base64 = btoa(binary);
+
+         sessionPacks.push({
+            name: p.filename || "Untitled",
+            data: base64
+         });
+      }
+      localStorage.setItem('opkedit_cached_packs', JSON.stringify(sessionPacks));
+   } catch (e) {
+      console.warn("Session Save Failed (Quota?):", e);
+   }
+}
+
+
 function createBlockFile(data, name, type) {
    var hdritem = createFileHeader(name, type, 0);
    var c2item = new PackItem(data, 0, data.length);
@@ -1330,11 +2144,95 @@ function createBlockFile(data, name, type) {
    updateInventory();
 }
 
+// Re-implemented packSaved
+async function packSaved() {
+   if (!closeEditor()) return;
+
+   var pack = packs[currentPackIndex];
+   if (!pack) return;
+
+   var data = pack.getRawData();
+
+   // Try File System Access API
+   if (window.showSaveFilePicker) {
+      try {
+         const options = {
+            suggestedName: pack.filename || "pack.opk",
+            types: [
+               {
+                  description: 'Psion Pack File',
+                  accept: { 'application/octet-stream': ['.opk'] },
+               },
+            ],
+         };
+         const handle = await window.showSaveFilePicker(options);
+         const writable = await handle.createWritable();
+         await writable.write(data);
+         await writable.close();
+
+         pack.unsaved = false;
+         pack.filename = handle.name;
+         updateInventory();
+         setStatus("Pack saved to " + handle.name);
+         return;
+      } catch (err) {
+         if (err.name !== 'AbortError') {
+            console.error('Save File Picker failed:', err);
+            // Fallback to classic download
+         } else {
+            return; // User cancelled
+         }
+      }
+   }
+
+   // Fallback: Classic Download
+   var filename = prompt("Save Pack As:", pack.filename || "pack.opk");
+   if (filename) {
+      var blob = new Blob([data], { type: "application/octet-stream" });
+      var url = URL.createObjectURL(blob);
+      downloadFileFromUrl(filename, url);
+      URL.revokeObjectURL(url);
+
+      pack.unsaved = false;
+      pack.filename = filename;
+      updateInventory();
+      setStatus("Pack downloaded as " + filename);
+   }
+}
+
+function exportHex() {
+   if (!closeEditor()) return;
+   var pack = packs[currentPackIndex];
+   if (!pack) return;
+
+   var ihex = packToIntelHex(pack);
+   var filename = pack.filename ? pack.filename.replace(/\.opk$/i, "") + ".hex" : "pack.hex";
+
+   // Try File System Access API for Hex
+   if (window.showSaveFilePicker) {
+      // ... (Similar logic, skipping for brevity unless requested, 
+      // sticking to classic download for hex unless user asked for hex dialog too.
+      // User asked "For the pack save feature...". I'll add simple prompt for Hex too for consistency)
+   }
+
+   var userFilename = prompt("Export Hex As:", filename);
+   if (userFilename) {
+      var blob = new Blob([ihex], { type: "text/plain" });
+      var url = URL.createObjectURL(blob);
+      downloadFileFromUrl(userFilename, url);
+      URL.revokeObjectURL(url);
+      setStatus("Hex file exported.");
+   }
+}
+
 function itemChosen() {
    var pack = packs[currentPackIndex];
    if (!pack) return;
 
-   var files = loaditembutton.getFiles();
+   var fileInput = document.getElementById("file-input-item");
+   if (!fileInput) return;
+
+   var files = fileInput.files;
    for (var i = 0; i < files.length; i++) {
       var fn = files[i].name;
       if (fn.match(/\.((ODB)|(OPL)|(NTS))$/i)) {
@@ -1343,6 +2241,8 @@ function itemChosen() {
          LoadLocalBinaryFile(files[i], createItemFromFileData);
       }
    }
+   // Reset input to allow re-selecting same file
+   fileInput.value = '';
 }
 
 function getFreeFileId() {
@@ -1421,16 +2321,24 @@ function createItemFromFileData(filedata, name) {
       }
    } else if (name.substr(-4).toUpperCase() == ".OPL") {
       var hdritem = createFileHeader(name, 3, 0);
-      var ln = filedata.length + 6;
+      // Add +1 for Null Terminator
+      var ln = filedata.length + 6 + 1;
       var blkhdr = new Uint8Array(4);
       blkhdr[0] = 2; blkhdr[1] = 0x80; blkhdr[2] = (ln >> 8) & 0xff; blkhdr[3] = ln & 0xff;
-      var itemdata = new Uint8Array(6 + filedata.length);
+
+      var itemdata = new Uint8Array(6 + filedata.length + 1);
       itemdata[0] = 0; itemdata[1] = 0;
-      itemdata[2] = (filedata.length >> 8) & 0xff; itemdata[3] = filedata.length & 0xff;
+      // Source Length includes Null Terminator
+      var srclen = filedata.length + 1;
+      itemdata[2] = (srclen >> 8) & 0xff; itemdata[3] = srclen & 0xff;
+
       for (var i = 0; i < filedata.length; i++) {
          var c = filedata.charCodeAt(i);
          itemdata[4 + i] = c == 10 ? 0 : c;
       }
+      // Null Terminator
+      itemdata[4 + filedata.length] = 0;
+
       var dataitem = new PackItem(itemdata, 0, itemdata.length);
       var blkhdritem = new PackItem(blkhdr, 0, 4);
       blkhdritem.child = dataitem;
@@ -1617,7 +2525,7 @@ resizer.addEventListener('mousedown', function (e) {
 document.addEventListener('mousemove', function (e) {
    if (!isResizing) return;
    var newWidth = e.clientX;
-   if (newWidth < 200) newWidth = 200;
+   if (newWidth < 170) newWidth = 170;
    if (newWidth > 600) newWidth = 600;
    sidebar.style.width = newWidth + 'px';
 });
@@ -1629,6 +2537,7 @@ document.addEventListener('mouseup', function (e) {
    }
 });
 
+// Drag and Drop for Packs on Sidebar
 // Drag and Drop for Packs on Sidebar
 // Use Capture phase to intercept File drops before they reach list items
 sidebar.addEventListener('dragover', function (e) {
@@ -1649,56 +2558,7 @@ sidebar.addEventListener('dragover', function (e) {
       e.dataTransfer.dropEffect = 'copy';
       sidebar.classList.add('drag-over');
    }
-}, true);
-
-// Global Key Bindings
-document.addEventListener('keydown', function (e) {
-   // Ignore if focus is in an input or textarea
-   var activeTag = document.activeElement.tagName.toUpperCase();
-   var isInput = (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || document.activeElement.isContentEditable);
-
-   // Prevent Delete in inputs
-   if (e.key === 'Delete') {
-      if (!isInput) {
-         if (document.getElementById('btn-delete-item') && !document.getElementById('btn-delete-item').disabled) {
-            document.getElementById('btn-delete-item').click();
-         }
-      }
-      return;
-   }
-
-   // Ctrl Shortcuts
-   if (e.ctrlKey) {
-      switch (e.key.toLowerCase()) {
-         case 's':
-            e.preventDefault();
-            document.getElementById('btn-save-pack').click();
-            break;
-         case 'o':
-            e.preventDefault();
-            // Open pack button is wrapped by hidden file input logic usually, 
-            // but the button click triggers the input.
-            var btnOpen = document.getElementById('btn-open-pack');
-            if (btnOpen) btnOpen.click();
-            break;
-         case 'n':
-            e.preventDefault();
-            document.getElementById('btn-new-pack').click();
-            break;
-         case 'e':
-            e.preventDefault(); // Ctrl+E
-            document.getElementById('btn-export-hex').click();
-            break;
-      }
-   }
-
-   // F1 for Help
-   if (e.key === 'F1') {
-      e.preventDefault();
-      var btnHelp = document.getElementById('btn-help');
-      if (btnHelp) btnHelp.click();
-   }
-});
+}, true); // useCapture = true
 
 sidebar.addEventListener('dragleave', function (e) {
    // Only remove if leaving the sidebar (not entering a child)
@@ -1725,6 +2585,81 @@ sidebar.addEventListener('drop', function (e) {
    }
 }, true); // useCapture = true
 
+// Keyboard Shortcuts
+function setupKeyboardShortcuts() {
+   document.addEventListener('keydown', function (e) {
+      // Check for active dropdowns
+      var activeDropdown = null;
+      registeredMenus.forEach(function (m) {
+         if (m.menu.classList.contains('show')) activeDropdown = m.menu;
+      });
+
+      // Check for Ctrl (Windows) or Meta (Mac)
+      var isCtrl = e.ctrlKey || e.metaKey;
+
+      if (isCtrl) {
+         if (e.key === 'n' || e.key === 'N') {
+            e.preventDefault();
+            // Toggle File Menu
+            var btn = document.getElementById('btn-file-menu');
+            if (btn) btn.click();
+         } else if (e.key === 'o' || e.key === 'O') {
+            e.preventDefault();
+            // Direct Open Pack
+            var link = document.getElementById('menu-open-pack');
+            if (link) link.click();
+         } else if (e.key === 's' || e.key === 'S') {
+            e.preventDefault();
+            // Direct Save Pack
+            packSaved();
+         }
+      } else {
+         // Navigation Keys (No Ctrl)
+         if (activeDropdown) {
+            if (e.key === 'Escape') {
+               e.preventDefault();
+               closeAllMenus();
+               return;
+            } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+               e.preventDefault();
+               navigateMenu(activeDropdown, e.key === 'ArrowDown' ? 1 : -1);
+               return;
+            } else if (e.key === 'Enter') {
+               // If focused element is a link in the dropdown, let default click happen
+               // But if focus is on the button, Enter might have opened it.
+               if (document.activeElement && activeDropdown.contains(document.activeElement)) {
+                  // Let default action proceed (click)
+                  return;
+               }
+            }
+         }
+      }
+   });
+}
+
+function navigateMenu(dropdown, direction) {
+   // Find all enabled links
+   var links = Array.from(dropdown.querySelectorAll('a')).filter(function (el) {
+      return !el.classList.contains('disabled') && el.offsetParent !== null; // Visible and enabled
+   });
+
+   if (links.length === 0) return;
+
+   var index = links.indexOf(document.activeElement);
+
+   if (index === -1) {
+      // Focus first item if nothing selected
+      links[0].focus();
+   } else {
+      var newIndex = index + direction;
+      // Clamp or Loop? Let's Clamp currently.
+      if (newIndex >= 0 && newIndex < links.length) {
+         links[newIndex].focus();
+      }
+   }
+}
+
 // Start the application
+setupKeyboardShortcuts();
 init();
-document.title = "Psion OPK Editor v3.0.3";
+document.title = "Psion OPK Editor v" + APP_VERSION;

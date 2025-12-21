@@ -37,4 +37,6 @@ class DecompilerStack {
 
 if (typeof window !== 'undefined') {
     window.DecompilerStack = DecompilerStack;
+} else if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { DecompilerStack };
 }

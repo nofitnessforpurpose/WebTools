@@ -4,20 +4,41 @@
  * Architecture: Navigation View
  * -----------------------------
  * Manages the "Pack Contents" sidebar.
- * 
- * Responsibilities:
- * 1. Rendering: Displays the list of items in the pack (files, records, etc.).
- * 2. Interaction: Handles clicks to select items for editing.
- * 3. Drag and Drop: Implements reordering of items within the pack.
- * 
- * It communicates with the Controller (opkedit.js) to update the main view.
+ * Refactored to a Class for flexible instantiation (e.g. into pop-out windows).
  */
-var PackContents = (function () {
-    var container = document.getElementById("pack-list");
+class PackContentsView {
+    constructor(containerElement) {
+        this.container = containerElement;
+        this.dragSrcInfo = null;
 
+        // Bind methods
+        this.handleDragOver = this.handleDragOver.bind(this);
+        this.handleDragEnter = this.handleDragEnter.bind(this);
+        this.handleDragLeave = this.handleDragLeave.bind(this);
+        this.handleDrop = this.handleDrop.bind(this);
+        this.handleDragEnd = this.handleDragEnd.bind(this);
+        this.render = this.render.bind(this);
+    }
 
+    setContainer(newContainer) {
+        this.container = newContainer;
+        this.render();
+    }
 
-    function render() {
+    render() {
+        if (!this.container) return;
+        var container = this.container;
+
+        // Store focus state before clearing
+        var focusedElement = document.activeElement;
+        var focusedPackIdx = null;
+        var focusedItemIdx = null;
+
+        if (focusedElement && container.contains(focusedElement)) {
+            focusedPackIdx = focusedElement.getAttribute('data-pack-idx');
+            focusedItemIdx = focusedElement.getAttribute('data-item-idx');
+        }
+
         // Clear container
         while (container.firstChild) {
             container.removeChild(container.firstChild);
@@ -25,9 +46,60 @@ var PackContents = (function () {
 
         if (typeof checksumselement !== 'undefined' && checksumselement) checksumselement.innerHTML = "";
 
+        // Feature: Recycle Button in Sidebar Header
+        var sidebarHeader = document.getElementById('sidebar-header');
+        if (sidebarHeader) {
+            // Check if button already exists
+            if (!sidebarHeader.querySelector('.recycle-btn')) {
+                var btnRecycle = document.createElement('i');
+                btnRecycle.className = 'fas fa-recycle recycle-btn';
+                btnRecycle.title = "Toggle Deleted Status";
+                btnRecycle.style.cursor = 'pointer';
+                btnRecycle.style.marginLeft = 'auto'; // Push to right if flex
+                btnRecycle.style.float = 'right'; // Fallback
+                btnRecycle.style.paddingLeft = '10px';
+
+                btnRecycle.onclick = function (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Toggle deleted status of currentItem
+                    if (typeof currentItem !== 'undefined' && currentItem) {
+                        currentItem.deleted = !currentItem.deleted;
+
+                        // Update Binary Data (Bit 7 of Type Byte)
+                        if (currentItem.data && currentItem.data.length > 1) {
+                            if (currentItem.deleted) {
+                                currentItem.data[1] &= 0x7F; // Clear bit 7 (Deleted)
+                            } else {
+                                currentItem.data[1] |= 0x80; // Set bit 7 (Active)
+                            }
+                        }
+
+                        // Update description/internal state
+                        if (currentItem.setDescription) currentItem.setDescription();
+
+                        // Mark pack unsaved
+                        if (typeof packs !== 'undefined' && typeof currentPackIndex !== 'undefined' && packs[currentPackIndex]) {
+                            packs[currentPackIndex].unsaved = true;
+                        }
+
+                        // Force Save to Storage
+                        if (typeof saveSession !== 'undefined') {
+                            saveSession();
+                        }
+
+                        updateInventory(); // Refresh view
+                    } else {
+                        alert("No item selected.");
+                    }
+                };
+                sidebarHeader.appendChild(btnRecycle);
+            }
+        }
+
         if (packs.length > 0) {
             // Update file info for the active pack
-            var activePack = getActivePack();
+            var activePack = getActivePack(); // Global function
             if (activePack) {
                 if (typeof fileinfoelement !== 'undefined' && fileinfoelement) {
                     fileinfoelement.innerText = activePack.filename ? activePack.filename : "Untitled";
@@ -46,41 +118,57 @@ var PackContents = (function () {
             for (var pIdx = 0; pIdx < packs.length; pIdx++) {
                 var pack = packs[pIdx];
 
-                // Recalculate checksums if dirty or missing
                 if (pack.unsaved || !pack.checksums) {
-                    updatePackChecksums(pack);
+                    updatePackChecksums(pack); // Global function
                 }
 
-                var packWrapper = createPackElement(pack, pIdx);
+                var packWrapper = this.createPackElement(pack, pIdx);
                 container.appendChild(packWrapper);
             }
 
             // Drag and Drop for Packs
-            new DragDropList(container, function (src, dest) {
-                // Move pack in array
-                var pack = packs.splice(src, 1)[0];
-                packs.splice(dest, 0, pack);
+            // Assuming DragDropList is a global utility that handles list reordering
+            if (typeof DragDropList !== 'undefined') {
+                new DragDropList(container, function (src, dest) {
+                    // Move pack in array
+                    var pack = packs.splice(src, 1)[0];
+                    packs.splice(dest, 0, pack);
 
-                // Update indices
-                if (currentPackIndex === src) currentPackIndex = dest;
-                else if (currentPackIndex > src && currentPackIndex <= dest) currentPackIndex--;
-                else if (currentPackIndex < src && currentPackIndex >= dest) currentPackIndex++;
+                    // Update indices
+                    if (currentPackIndex === src) currentPackIndex = dest;
+                    else if (currentPackIndex > src && currentPackIndex <= dest) currentPackIndex--;
+                    else if (currentPackIndex < src && currentPackIndex >= dest) currentPackIndex++;
 
-                if (selectedPackIndex === src) selectedPackIndex = dest;
-                else if (selectedPackIndex > src && selectedPackIndex <= dest) selectedPackIndex--;
-                else if (selectedPackIndex < src && selectedPackIndex >= dest) selectedPackIndex++;
+                    if (selectedPackIndex === src) selectedPackIndex = dest;
+                    else if (selectedPackIndex > src && selectedPackIndex <= dest) selectedPackIndex--;
+                    else if (selectedPackIndex < src && selectedPackIndex >= dest) selectedPackIndex++;
 
-                render(); // Re-render
-            }, 0, 0);
+                    this.render(); // Re-render
+                }.bind(this), 0, 0);
+            }
 
         } else {
             if (typeof fileinfoelement !== 'undefined' && fileinfoelement) fileinfoelement.innerText = "No Packs";
         }
 
-        updateItemButtons(false);
+        updateItemButtons(false); // Global function
+
+        // Restore focus
+        if (focusedPackIdx !== null) {
+            var selector = '[data-pack-idx="' + focusedPackIdx + '"]';
+            if (focusedItemIdx !== null) {
+                selector += '[data-item-idx="' + focusedItemIdx + '"]';
+            } else {
+                selector = '.pack-header' + selector;
+            }
+            var elementToFocus = container.querySelector(selector);
+            if (elementToFocus) {
+                elementToFocus.focus();
+            }
+        }
     }
 
-    function createPackElement(pack, pIdx) {
+    createPackElement(pack, pIdx) {
         var packWrapper = document.createElement('div');
         packWrapper.className = 'pack-wrapper';
         packWrapper.style.borderBottom = '1px solid var(--border-color)';
@@ -88,7 +176,9 @@ var PackContents = (function () {
         // Pack Header
         var packHeader = document.createElement('div');
         packHeader.className = 'pack-header';
-        if (pIdx === currentPackIndex) {
+        packHeader.setAttribute('data-pack-idx', pIdx);
+        packHeader.setAttribute('tabindex', '0');
+        if (pIdx === currentPackIndex && selectedPackIndex === pIdx) {
             packHeader.classList.add('selected');
         }
 
@@ -107,8 +197,8 @@ var PackContents = (function () {
         // Tooltip Events for Pack Header
         icon.addEventListener('mouseenter', function (e) {
             var rect = e.target.getBoundingClientRect();
-            TooltipManager.show(rect.left, rect.bottom, generatePackTooltip(pack));
-        });
+            TooltipManager.show(rect.left, rect.bottom, this.generatePackTooltip(pack));
+        }.bind(this));
         icon.addEventListener('mouseleave', function () {
             TooltipManager.hide();
         });
@@ -116,14 +206,15 @@ var PackContents = (function () {
         // Feature: Click Pack Folder to visualize MAIN procedure
         icon.style.cursor = "pointer";
         icon.title = "Click to visualize MAIN procedure";
-        icon.addEventListener('click', function (e) {
+        icon.onclick = function (e) {
+            e.preventDefault();
             e.stopPropagation();
             if (typeof CodeVisualizer !== 'undefined') {
                 CodeVisualizer.showSystemMap(packs);
             } else {
-                alert("Code Visualizer not available.");
+                console.error("Visualizer: CodeVisualizer is UNDEFINED");
             }
-        });
+        };
 
         var title = document.createElement('span');
         title.innerText = pack.filename ? pack.filename : "Untitled Pack " + (pIdx + 1);
@@ -141,14 +232,24 @@ var PackContents = (function () {
         packHeader.appendChild(toggle);
 
         // Pack Header Click Events
+        var self = this;
+        packHeader.addEventListener('focus', function () {
+            // Sync selection state on focus, but avoid redundant re-renders
+            if (typeof selectedPackIndex !== 'undefined' && selectedPackIndex !== pIdx) {
+                // If we use selectPack(pIdx), it might trigger another focus which is fine
+                // with the optimization I added in opkedit.js
+                selectPack(pIdx);
+            }
+        });
+
         packHeader.addEventListener('click', function (e) {
             if (e.target.classList.contains('pack-toggle')) {
                 packs[pIdx].collapsed = !packs[pIdx].collapsed;
-                render();
+                self.render();
                 e.stopPropagation();
                 return;
             }
-            selectPack(pIdx);
+            selectPack(pIdx); // Global function
         });
 
         // Double click to rename
@@ -168,7 +269,7 @@ var PackContents = (function () {
                     packs[pIdx].filename = newName;
                     packs[pIdx].unsaved = true;
                 }
-                render();
+                self.render();
             }
 
             input.addEventListener('blur', saveName);
@@ -181,6 +282,64 @@ var PackContents = (function () {
             title.innerHTML = '';
             title.appendChild(input);
             input.focus();
+        });
+
+        packHeader.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                selectPack(pIdx);
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                // Ensure this pack is selected before erasing
+                selectPack(pIdx);
+                if (typeof eraseItem === 'function') {
+                    eraseItem();
+                }
+            } else if (e.key === 'ArrowRight') {
+                if (pack.collapsed) {
+                    pack.collapsed = false;
+                    self.render();
+                }
+            } else if (e.key === 'ArrowLeft') {
+                if (!pack.collapsed) {
+                    pack.collapsed = true;
+                    self.render();
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                var pWrapper = this.closest('.pack-wrapper');
+                // Move to first item if expanded, or next pack
+                if (!pack.collapsed && pWrapper.querySelector('.pack-contents')) {
+                    var firstItem = pWrapper.querySelector('.pack-item-row');
+                    if (firstItem) firstItem.focus();
+                } else {
+                    var nextPack = pWrapper.nextElementSibling;
+                    if (nextPack) {
+                        var nextHeader = nextPack.querySelector('.pack-header');
+                        if (nextHeader) nextHeader.focus();
+                    }
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                var pWrapper = this.closest('.pack-wrapper');
+                var prevPack = pWrapper.previousElementSibling;
+                if (prevPack) {
+                    // If prev pack is expanded, go to its last item
+                    var prevPackIdx = pIdx - 1;
+                    if (prevPackIdx >= 0 && !packs[prevPackIdx].collapsed) {
+                        var items = prevPack.querySelectorAll('.pack-item-row');
+                        if (items.length > 0) {
+                            items[items.length - 1].focus();
+                        } else {
+                            var prevHeader = prevPack.querySelector('.pack-header');
+                            if (prevHeader) prevHeader.focus();
+                        }
+                    } else {
+                        var prevHeader = prevPack.querySelector('.pack-header');
+                        if (prevHeader) prevHeader.focus();
+                    }
+                }
+            }
         });
 
         packWrapper.appendChild(packHeader);
@@ -198,6 +357,29 @@ var PackContents = (function () {
             var groupRecords = OptionsManager.getOption('groupDataRecords');
             var itemsToRender = [];
 
+            // Calculate child counts for Data Files (Type 1)
+            var childCounts = {};
+            var fileIds = {};
+
+            // 1. Map Data Files
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].type === 1 && items[i].data && items[i].data.length > 10) {
+                    var id = items[i].data[10] & 0x7f;
+                    fileIds[id] = i;
+                    childCounts[i] = 0;
+                }
+            }
+
+            // 2. Count Children
+            for (var i = 0; i < items.length; i++) {
+                if (items[i].type === 1) continue;
+                // Check if this item's type matches a known File ID
+                if (fileIds.hasOwnProperty(items[i].type)) {
+                    var parentIndex = fileIds[items[i].type];
+                    childCounts[parentIndex]++;
+                }
+            }
+
             if (groupRecords) {
                 // Pre-calculation pass: Map Data Files to their children
                 var dataFileChildren = {}; // Map<FileID, Array<Index>>
@@ -207,7 +389,9 @@ var PackContents = (function () {
                 var dataFiles = [];
                 for (var i = 0; i < items.length; i++) {
                     if (items[i].type === 1) {
-                        dataFiles.push({ index: i, id: items[i].data[10] & 0x7f });
+                        // Safely access data
+                        var id = (items[i].data && items[i].data.length > 10) ? (items[i].data[10] & 0x7f) : -1;
+                        if (id >= 0) dataFiles.push({ index: i, id: id });
                     }
                 }
 
@@ -239,6 +423,11 @@ var PackContents = (function () {
 
                     // If this is a Data File, check if it has children to render
                     if (item.type === 1 && dataFileChildren[i]) {
+                        // Apply default collapse setting if not already set
+                        if (typeof item.collapsed === 'undefined') {
+                            item.collapsed = !!OptionsManager.getOption('collapseDataFiles');
+                        }
+
                         // Check collapsed state
                         if (!item.collapsed) {
                             var children = dataFileChildren[i];
@@ -257,12 +446,7 @@ var PackContents = (function () {
                 }
             }
 
-            var pl = Math.max(4, pack.getLength().toString(16).length);
-            var ix = 0; // Address calculation needs to follow LINEAR order, not grouped order?
-            // Wait, address is based on file position. Grouping is purely visual.
-            // So we must calculate addresses based on original order, but render in grouped order.
-            // We need a map of addresses.
-
+            // Calculate addresses based on original order
             var addressMap = [];
             var currentAddr = 0;
             for (var i = 0; i < items.length; i++) {
@@ -275,8 +459,12 @@ var PackContents = (function () {
                 var item = renderItem.item;
                 var originalIndex = renderItem.index;
                 var address = addressMap[originalIndex];
+                var count = (childCounts[originalIndex] !== undefined) ? childCounts[originalIndex] : 0;
 
-                var itemRow = createItemRow(item, pIdx, originalIndex, address, pl, renderItem.indent);
+                var itemRow = this.createItemRow(item, pIdx, originalIndex, address, pl, renderItem.indent, count);
+                // Add tracking data
+                itemRow.setAttribute('data-pack-idx', pIdx);
+                itemRow.setAttribute('data-item-idx', originalIndex);
                 packContents.appendChild(itemRow);
             }
 
@@ -286,16 +474,16 @@ var PackContents = (function () {
         return packWrapper;
     }
 
-    function createItemRow(item, packIndex, itemIndex, address, addrLen, indent) {
+    createItemRow(item, packIndex, itemIndex, address, addrLen, indent, childCount) {
         var row = document.createElement('li');
         row.className = 'pack-item-row';
         if (currentItem === item) {
             row.classList.add('selected');
         }
 
-        // Deleted Item Style
+        // Apply deleted style
         if (item.deleted) {
-            row.classList.add('deleted');
+            row.classList.add('deleted-item');
         }
 
         // Item Icon
@@ -307,22 +495,22 @@ var PackContents = (function () {
                 row.classList.add('subordinate-last');
             }
         }
-        var iconClass = getItemIcon(item);
+        var iconClass = getItemIcon(item); // Global function
         itemIcon.innerHTML = `<i class="${iconClass}"></i>`;
 
         // Feature: Collapse/Expand Data Files
         if (item.type === 1) {
             itemIcon.style.cursor = "pointer";
-            itemIcon.title = item.collapsed ? "Click to expand records" : "Click to collapse records";
-            // Optional: visual cue for collapse state (maybe rotate icon or add small chevron?)
-            // For now, relies on the fact that children disappear.
+            var countStr = (childCount !== undefined) ? " (" + childCount + " records)" : "";
+            itemIcon.title = (item.collapsed ? "Click to expand records" : "Click to collapse records") + countStr;
 
+            var self = this;
             itemIcon.addEventListener('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 // Toggle state
                 item.collapsed = !item.collapsed;
-                render();
+                self.render();
             });
         }
 
@@ -331,25 +519,26 @@ var PackContents = (function () {
         // Detailed Tooltip
         itemIcon.addEventListener('mouseenter', function (e) {
             var rect = e.target.getBoundingClientRect();
-            TooltipManager.show(rect.left, rect.bottom, generateItemTooltip(item, address));
-        });
+            TooltipManager.show(rect.left, rect.bottom, this.generateItemTooltip(item, address, childCount));
+        }.bind(this));
         itemIcon.addEventListener('mouseleave', function () {
             TooltipManager.hide();
         });
 
         // Item Description
-        var descText = getItemDescription(item);
+        var descText = getItemDescription(item); // Global function
 
-        // Feature: Click Icon to view Code Visualization (Source Trail style)
+        // Feature: Click Icon to view Code Visualization
         if (item.type === 3 && (descText === "OPL Procedure" || descText === "OPL Object")) {
             itemIcon.style.cursor = "pointer";
-            itemIcon.title = "Click to view Code Visualization";
+            itemIcon.title = "Click to view Code Visualization"; // Native title
             itemIcon.addEventListener('click', function (e) {
+
                 e.stopPropagation();
-                // CodeVisualizer.show is not currently implemented.
-                // Fallback to System Map or alert?
                 if (typeof CodeVisualizer !== 'undefined') {
-                    CodeVisualizer.showSystemMap(packs); // Show full map for now
+                    CodeVisualizer.showSystemMap(packs);
+                } else {
+                    console.error("Visualizer: CodeVisualizer is UNDEFINED"); // DEBUG LOG
                 }
             });
         }
@@ -369,36 +558,28 @@ var PackContents = (function () {
         // Item Description
         var itemDesc = document.createElement('span');
         itemDesc.className = 'item-desc';
-
         itemDesc.innerText = descText;
 
-        // Feature: Click "OPL Procedure" or "OPL Object" to view Object Code in Hex Viewer
         if (item.type === 3 && (descText === "OPL Procedure" || descText === "OPL Object")) {
             itemDesc.style.cursor = "pointer";
-            itemDesc.style.textDecoration = "none"; // User requested no underline
+            itemDesc.style.textDecoration = "none";
             itemDesc.title = "Click to view Translated Q-Code (Hex)";
 
             itemDesc.addEventListener('click', function (e) {
-                e.stopPropagation(); // Prevent row selection
-
-                // Extract Object Code
-                // Structure: Header -> Block (child) -> Data (child)
-                if (item.child && item.child.child && item.child.child.data) {
+                e.stopPropagation();
+                if (item.getFullData) {
+                    var data = item.getFullData();
+                    if (data && data.length > 0) {
+                        if (typeof HexViewer !== 'undefined') HexViewer.show(data, "OPL Procedure Record: " + item.name);
+                    } else {
+                        alert("No Data found.");
+                    }
+                } else if (item.child && item.child.child && item.child.child.data) {
                     var data = item.child.child.data;
-                    if (data.length >= 2) {
-                        var obLen = (data[0] << 8) | data[1];
-                        if (obLen > 0 && data.length >= 2 + obLen) {
-                            var objCode = data.slice(2, 2 + obLen);
-
-                            // User wants "all the binary data", so we show the full Object Code (including OPL Header).
-                            // Previously we stripped the header to show only Q-Code, but that hid important data.
-
-                            if (typeof HexViewer !== 'undefined') {
-                                HexViewer.show(objCode, "OPL Object: " + item.name);
-                            }
-                        } else {
-                            alert("No Object Code found or invalid length.");
-                        }
+                    if (data && data.length > 0) {
+                        if (typeof HexViewer !== 'undefined') HexViewer.show(data, "OPL Procedure Record: " + item.name);
+                    } else {
+                        alert("No Data found.");
                     }
                 }
             });
@@ -409,31 +590,71 @@ var PackContents = (function () {
         // Click Event
         row.addEventListener('click', function (e) {
             e.stopPropagation();
-            itemSelected(packIndex, itemIndex);
+            itemSelected(packIndex, itemIndex); // Global function
         });
 
-        // KEYBOARD SUPPORT: Ensure this logic is maintained
-        // Make item focusable
+        // Keyboard Support
         row.setAttribute('tabindex', '0');
+        row.addEventListener('focus', function () {
+            // Sync selection state on focus
+            if (currentItem !== item) {
+                // selectItem(packIndex, itemIndex) avoids full re-render if optimized
+                selectItem(packIndex, itemIndex);
+            }
+        });
 
-        // Keyboard Event Listener
         row.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 itemSelected(packIndex, itemIndex);
+            } else if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                // Ensure this item is selected before erasing
+                selectItem(packIndex, itemIndex);
+                if (typeof eraseItem === 'function') {
+                    eraseItem();
+                } else {
+                    // Fallback if global not found
+                    if (confirm("Are you sure you want to delete '" + item.name + "'?")) {
+                        // remove from array? Or mark deleted?
+                        // "Deletes" usually implies removal from the list unless "Recycle" toggles deleted status.
+                        // Psion approach: Delete = Remove? Or Mark?
+                        // User said "Recycle ... toggles ... deleted status".
+                        // And "DELETE key deletes".
+                        // Usually "Delete" in UI = Remove.
+                        // Let's assume eraseItem() does the right thing.
+                        console.warn("eraseItem global not found.");
+                    }
+                }
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 var next = row.nextElementSibling;
-                if (next) next.focus();
+                if (next) {
+                    next.focus();
+                } else {
+                    // Move to next pack header
+                    var packWrapper = row.closest('.pack-wrapper');
+                    var nextPack = packWrapper ? packWrapper.nextElementSibling : null;
+                    if (nextPack) {
+                        var nextHeader = nextPack.querySelector('.pack-header');
+                        if (nextHeader) nextHeader.focus();
+                    }
+                }
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 var prev = row.previousElementSibling;
-                if (prev) prev.focus();
+                if (prev) {
+                    prev.focus();
+                } else {
+                    // Move back to this pack's header
+                    var packWrapper = row.closest('.pack-wrapper');
+                    var header = packWrapper ? packWrapper.querySelector('.pack-header') : null;
+                    if (header) header.focus();
+                }
             }
         });
 
         // Drag and Drop Logic
-        // Constraint: No dragging Header (index 0) or MAIN
         var isHeader = (itemIndex === 0);
         var isMain = (item.name === "MAIN");
         var isEOP = (item.type === 255);
@@ -441,97 +662,126 @@ var PackContents = (function () {
         if (!isHeader && !isMain && !isEOP) {
             row.draggable = true;
             row.addEventListener('dragstart', function (e) {
-                handleDragStart(e, packIndex, itemIndex);
-            });
+                this.handleDragStart(e, packIndex, itemIndex);
+            }.bind(this));
         } else {
             row.draggable = false;
         }
 
-        row.addEventListener('dragover', handleDragOver);
+        row.addEventListener('dragover', this.handleDragOver);
         row.addEventListener('drop', function (e) {
-            // Constraint: Prevent dropping onto Header (index 0)
-            // If dropping on Header, it effectively tries to put it BEFORE header, which is invalid.
-            // If dropping on MAIN, it puts it BEFORE MAIN? No, drop usually inserts BEFORE.
-            // Wait, standard behavior: insertBefore(dragged, target).
-            // So dropping on MAIN inserts BEFORE MAIN. We want to prevent that.
-            // Dropping on item AFTER MAIN inserts before that item (i.e. after MAIN). That is OK.
-
-            // If target is Header (0), prevent.
             if (itemIndex === 0) return;
-
-            // If target is MAIN, prevent (because that would insert before MAIN).
-            // Unless we are dragging MAIN itself? But MAIN is not draggable.
             if (item.name === "MAIN") return;
-
-            handleDrop(e, packIndex, itemIndex);
-        });
-        row.addEventListener('dragenter', handleDragEnter);
-        row.addEventListener('dragleave', handleDragLeave);
-        row.addEventListener('dragend', handleDragEnd);
+            this.handleDrop(e, packIndex, itemIndex);
+        }.bind(this));
+        row.addEventListener('dragenter', this.handleDragEnter);
+        row.addEventListener('dragleave', this.handleDragLeave);
+        row.addEventListener('dragend', this.handleDragEnd);
 
         return row;
     }
 
-    function generateItemTooltip(item, address) {
+    generatePackTooltip(pack) {
+        return "<h4>" + (pack.filename || "Untitled Pack") + "</h4>" +
+            "<div>Items: " + pack.items.length + "</div>" +
+            "<div>Size: " + pack.getLength() + " bytes</div>";
+    }
+
+    generateItemTooltip(item, address, childCount) {
         var html = "<h4>" + (item.name || "Item") + "</h4>";
         html += "<div class='tooltip-row'><span class='tooltip-label'>Type:</span><span class='tooltip-value'>" + getItemDescription(item) + " (" + item.type + ")</span></div>";
         html += "<div class='tooltip-row'><span class='tooltip-label'>Address:</span><span class='tooltip-value'>0x" + address.toString(16).toUpperCase() + "</span></div>";
         html += "<div class='tooltip-row'><span class='tooltip-label'>Length:</span><span class='tooltip-value'>" + item.getLength() + " bytes</span></div>";
+        // Show Record Count for Data Files
+        if (item.type === 1 && childCount !== undefined) {
+            html += "<div class='tooltip-row'><span class='tooltip-label'>Records:</span><span class='tooltip-value'>" + childCount + "</span></div>";
+        }
         html += "<div class='tooltip-row'><span class='tooltip-label'>Status:</span><span class='tooltip-value'>" + (item.deleted ? "Deleted" : "Active") + "</span></div>";
         return html;
     }
 
     // Drag and Drop Handlers
-    var dragSrcInfo = null;
-
-    function handleDragStart(e, packIndex, itemIndex) {
-        dragSrcInfo = { packIndex: packIndex, itemIndex: itemIndex };
+    handleDragStart(e, packIndex, itemIndex) {
+        e.stopPropagation();
+        this.dragSrcInfo = { packIndex: packIndex, itemIndex: itemIndex };
         e.dataTransfer.effectAllowed = 'copyMove';
         e.dataTransfer.setData('text/html', e.currentTarget.outerHTML);
         e.currentTarget.classList.add('dragElem');
     }
 
-    function handleDragOver(e) {
-        if (!dragSrcInfo) return;
+    handleDragOver(e) {
+        if (!this.dragSrcInfo) return;
         if (e.preventDefault) e.preventDefault();
         e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
-        this.classList.add('over');
+        e.currentTarget.classList.add('over');
         return false;
     }
 
-    function handleDragEnter(e) {
-        if (!dragSrcInfo) return;
-        this.classList.add('over');
+    handleDragEnter(e) {
+        if (!this.dragSrcInfo) return;
+        e.currentTarget.classList.add('over');
     }
 
-    function handleDragLeave(e) {
-        this.classList.remove('over');
+    handleDragLeave(e) {
+        e.currentTarget.classList.remove('over');
     }
 
-    function handleDrop(e, toPackIndex, toItemIndex) {
-        if (!dragSrcInfo) return;
+    handleDrop(e, toPackIndex, toItemIndex) {
+        if (!this.dragSrcInfo) return;
         if (e.stopPropagation) e.stopPropagation();
 
-        if (dragSrcInfo) {
+        if (this.dragSrcInfo) {
             // Call global itemMoved function
             if (typeof itemMoved === 'function') {
-                itemMoved(dragSrcInfo.packIndex, dragSrcInfo.itemIndex, toPackIndex, toItemIndex, e.ctrlKey);
+                itemMoved(this.dragSrcInfo.packIndex, this.dragSrcInfo.itemIndex, toPackIndex, toItemIndex, e.ctrlKey);
             }
         }
-
         return false;
     }
 
-    function handleDragEnd(e) {
-        var cols = document.querySelectorAll('#pack-list li');
+    handleDragEnd(e) {
+        if (!this.container) return;
+        var cols = this.container.querySelectorAll('li'); // Scope to container
         [].forEach.call(cols, function (col) {
             col.classList.remove('over');
             col.classList.remove('dragElem');
         });
-        dragSrcInfo = null;
+        this.dragSrcInfo = null;
     }
 
-    return {
-        render: render
-    };
-})();
+    // Public API Methods matching old interface
+    selectItem(packIndex, itemIndex) {
+        if (!this.container) return;
+        var headers = this.container.querySelectorAll('.pack-header');
+        headers.forEach(function (h) { h.classList.remove('selected'); });
+
+        var items = this.container.querySelectorAll('.pack-item-row');
+        items.forEach(function (i) { i.classList.remove('selected'); });
+
+        // Select the specific row
+        var target = this.container.querySelector('.pack-item-row[data-pack-idx="' + packIndex + '"][data-item-idx="' + itemIndex + '"]');
+        if (target) {
+            target.classList.add('selected');
+            target.focus();
+            target.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+        }
+    }
+
+    selectPack(packIndex) {
+        if (!this.container) return;
+        var headers = this.container.querySelectorAll('.pack-header');
+        headers.forEach(function (h) { h.classList.remove('selected'); });
+        var items = this.container.querySelectorAll('.pack-item-row');
+        items.forEach(function (i) { i.classList.remove('selected'); });
+
+        var target = this.container.querySelector('.pack-header[data-pack-idx="' + packIndex + '"]');
+        if (target) {
+            target.classList.add('selected');
+            target.focus();
+        }
+    }
+}
+
+// Shim for backward compatibility
+// Initialize with the standard DOM element
+var PackContents = new PackContentsView(document.getElementById("pack-list"));

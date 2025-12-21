@@ -22,8 +22,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Psion OPK Editor v3.0.3</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    <title>Psion OPK Editor v3.0.4</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
         id="font-awesome-css">
     <link rel="stylesheet" href="styles/base.css">
     <link rel="stylesheet" href="styles/layout.css">
@@ -38,27 +38,53 @@
     <div id="app">
         <!-- Toolbar -->
         <div id="toolbar">
-            <button class="tool-btn" id="btn-new-pack" title="New Pack">
-                <i class="fas fa-file"></i> New
-            </button>
-            <button class="tool-btn" id="btn-open-pack" title="Open Pack">
-                <i class="fas fa-folder-open"></i> Open
-            </button>
-            <button class="tool-btn" id="btn-save-pack" title="Save Pack">
-                <i class="fas fa-save"></i> Save
-            </button>
-            <button class="tool-btn" id="btn-export-hex" title="Export Intel HEX">
-                <i class="fas fa-share-from-square"></i> Export Hex
-            </button>
+            <!-- File Dropdown (Consolidated) -->
+            <div class="dropdown">
+                <button class="tool-btn dropbtn" id="btn-file-menu" title="File Menu">
+                    <i class="fas fa-bars"></i> File <i class="fas fa-angle-down"
+                        style="font-size: 0.8em; margin-left: 3px;"></i>
+                </button>
+                <div class="dropdown-content" id="file-dropdown"
+                    style="min-width: 220px; left: 0; right: auto; max-height: 80vh; overflow-y: auto;">
+                    <!-- New Items -->
+                    <a href="#" id="menu-new-pack"><i class="fas fa-box" style="width: 20px;"></i> New Pack</a>
+                    <a href="#" id="menu-new-proc"><i class="fas fa-file-code" style="width: 20px;"></i> New OPL
+                        Procedure</a>
+                    <a href="#" id="menu-new-notepad"><i class="fas fa-sticky-note" style="width: 20px;"></i> New
+                        Notepad Entry</a>
+                    <a href="#" id="menu-new-datafile"><i class="fas fa-database" style="width: 20px;"></i> New Data
+                        File</a>
+
+                    <div id="new-dynamic-separator" style="display:none;">
+                        <hr style="margin: 5px 0; border: 0; border-top: 1px dashed var(--border-color); opacity: 0.5;">
+                    </div>
+                    <div id="new-dynamic-container"></div>
+
+                    <hr style="margin: 5px 0; border: 0; border-top: 1px solid var(--border-color);">
+
+                    <!-- Open Items -->
+                    <a href="#" id="menu-open-pack"><i class="fas fa-folder-open" style="width: 20px;"></i> Open
+                        Pack</a>
+                    <a href="#" id="menu-import-item" class="disabled"><i class="fas fa-file-import"
+                            style="width: 20px;"></i> Open Item (Import)</a>
+
+                    <hr style="margin: 5px 0; border: 0; border-top: 1px solid var(--border-color);">
+
+                    <!-- Save Items -->
+                    <a href="#" id="menu-save-pack" class="disabled"><i class="fas fa-save" style="width: 20px;"></i>
+                        Save Pack (.opk)</a>
+                    <a href="#" id="menu-export-hex" class="disabled"><i class="fas fa-file-code"
+                            style="width: 20px;"></i> Save Pack (.hex)</a>
+                    <a href="#" id="menu-export-item" class="disabled"><i class="fas fa-file-export"
+                            style="width: 20px;"></i> Save Item (Export)</a>
+                </div>
+            </div>
+
+            <!-- Legacy Button Placeholders (Hidden/Removed) for JS compat if needed, or fully cleaned -->
+            <!-- Removing btn-open-pack, btn-save-pack, btn-export-hex, btn-add-item, btn-import-item -->
 
             <div class="tool-separator"></div>
 
-            <button class="tool-btn" id="btn-add-item" title="Add New Item">
-                <i class="fas fa-square-plus"></i> Add Item
-            </button>
-            <button class="tool-btn" id="btn-import-item" title="Import Item">
-                <i class="fas fa-file-import"></i> Import Item
-            </button>
             <button class="tool-btn" id="btn-delete-item" title="Delete Item">
                 <i class="fas fa-trash-can"></i> Delete
             </button>
@@ -72,7 +98,8 @@
                 <i class="fas fa-circle-arrow-left"></i> Discard
             </button>
 
-            <div class="tool-separator"></div>
+            <!-- Spacer to push options/help right -->
+            <div style="flex: 1;"></div>
 
             <button class="tool-btn" id="btn-options" title="Options">
                 <i class="fas fa-sliders"></i> Options
@@ -93,14 +120,16 @@
             </div>
         </div>
 
+        <!-- Icon Toolbar (New) -->
+        <div id="icon-toolbar" class="icon-toolbar">
+            <!-- Populated via script -->
+        </div>
+
         <!-- Main Content -->
         <div id="main-content">
             <!-- Sidebar -->
             <div id="sidebar">
-                <div id="sidebar-header">
-                    <span>Pack Contents</span>
-                    <i id="btn-toggle-delete" class="fas fa-recycle header-icon" title="Toggle Delete"></i>
-                </div>
+                <div id="sidebar-header">Pack Contents</div>
                 <div id="pack-list">
                     <!-- Items will be populated here -->
                 </div>
@@ -135,45 +164,59 @@
     <!-- Scripts -->
     <!-- Logic Scripts -->
     <script src="src/core/Constants.js"></script>
+    <script src="src/core/AppStore.js"></script>
     <script src="src/logic/binaryfile.js"></script>
     <script src="src/logic/checksums.js"></script>
     <script src="src/logic/intelhex.js"></script>
-    <script src="src/logic/packimage.js"></script>
-    <script src="src/logic/decompiler/constants.js"></script>
+    <script src="src/logic/packimage.js?v=type_fix_1"></script>
+    <script src="src/logic/decompiler/constants.js?v=fix_conv_2"></script>
     <script src="src/logic/decompiler/system_constants.js"></script>
     <script src="src/logic/decompiler/stack.js"></script>
-    <script src="src/logic/decompiler/instruction_handler.js"></script>
-    <script src="src/logic/decompiler/source_generator.js"></script>
-    <script src="src/logic/decompiler/main.js"></script>
-    <script src="src/ui/editors/BaseEditor.js"></script>
-    <script src="src/ui/editors/HexEditor.js"></script>
-    <script src="src/ui/editors/BlockFileEditor.js"></script>
-    <script src="src/ui/editors/HeaderEditor.js"></script>
-    <script src="src/ui/editors/HeaderlessFileEditor.js"></script>
-    <script src="src/ui/editors/DataFileEditor.js"></script>
-    <script src="src/ui/editors/ProcedureFileEditor.js"></script>
-    <script src="src/ui/editors/NotePadFileEditor.js"></script>
-    <script src="src/ui/editors/RecordEditor.js"></script>
-    <script src="src/ui/editors/MemoryMapEditor.js"></script>
+    <script src="src/logic/decompiler/disassembler.js"></script>
+    <script src="src/logic/decompiler/instruction_handler.js?v=fix_pon_1"></script>
+    <script src="src/logic/decompiler/source_generator.js?v=rem_ext_fix"></script>
+    <script src="src/logic/compiler/Compiler.js?v=fix_rem_1"></script>
+
+    <script src="src/logic/decompiler/main.js?v=fix_pon_1"></script>
+    <script src="src/ui/editors/BaseEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/HexEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/BlockFileEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/HeaderEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/HeaderlessFileEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/DataFileEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/CommsSetupEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/ProcedureFileEditor.js?v=translate_fix_2"></script>
+    <script src="src/ui/utils/NotepadUtils.js?v=cb1"></script>
+    <script src="src/ui/editors/LZNotepadFileEditor.js?v=cb7"></script>
+    <script src="src/ui/editors/SpreadsheetFormulaDecoder.js?v=cb1"></script>
+    <script src="src/ui/editors/SpreadsheetFileEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/PagerSetupFileEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/DiaryFileEditor.js?v=cb1"></script>
+
+    <script src="src/ui/editors/RecordEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/MemoryMapEditor.js?v=cb1"></script>
     <script src="src/ui/managers/optionsmanager.js"></script>
     <script src="src/ui/managers/thememanager.js"></script>
     <script src="src/ui/managers/tooltipmanager.js"></script>
 
     <!-- Controller -->
-    <script src="src/ui/utils/EditorUtils.js"></script>
+    <script src="src/ui/utils/EditorUtils.js?v=type_fix_2"></script>
     <script src="src/ui/components/syntaxhighlighter.js"></script>
     <script src="src/ui/components/codeeditor.js"></script>
     <script src="src/ui/components/modal.js"></script>
     <script src="src/ui/components/dragdroplist.js"></script>
     <script src="src/ui/components/MemoryMap.js"></script>
     <script src="src/ui/components/HexViewer.js"></script>
-    <script src="src/ui/components/CodeVisualizer.js"></script>
-    <script src="src/ui/components/PackContents.js"></script>
+    <script src="src/ui/components/CodeVisualizer.js?v=debug37"></script>
+    <script src="src/ui/components/PackContents.js?v=type_fix_1"></script>
     <script src="src/ui/components/OPLCommandData.js"></script>
+    <script src="src/ui/components/DecompilerLogWindow.js?v=logfix1"></script>
+    <script src="src/ui/components/SpreadsheetDebugWindow.js"></script>
     <script src="src/ui/components/OPLCommandReference.js"></script>
+    <script src="src/ui/managers/LayoutManager.js"></script>
     <script src="src/ui/controllers/opkedit.js"></script>
     <script>
-        // Initialize App
+        // pp
         // Controller will handle initialization
     </script>
 </body>

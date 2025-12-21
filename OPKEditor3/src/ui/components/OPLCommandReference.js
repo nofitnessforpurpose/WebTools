@@ -11,8 +11,8 @@ class OPLCommandReference {
     }
 
     open() {
-        const width = 440;
-        const height = 600;
+        const width = 583;
+        const height = 700;
         const left = (screen.width - width) / 2;
         const top = (screen.height - height) / 2;
 
@@ -137,6 +137,27 @@ class OPLCommandReference {
                         <tbody id="table-body">
                         </tbody>
                     </table>
+                    
+                    <h2>Key</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr><td>&lt;exp&gt;</td><td>Numeric Expression (Integer or Floating Point)</td></tr>
+                            <tr><td>&lt;str$&gt; / &lt;exp$&gt;</td><td>String Expression</td></tr>
+                            <tr><td>&lt;var&gt;</td><td>Variable Name</td></tr>
+                            <tr><td>&lt;addr&gt;</td><td>Memory Address (Integer)</td></tr>
+                            <tr><td>&lt;file$&gt;</td><td>File Name or Path</td></tr>
+                            <tr><td>&lt;log&gt;</td><td>Logical File Name (A, B, C, D)</td></tr>
+                            <tr><td>&lt;cond&gt;</td><td>Logical Condition</td></tr>
+                            <tr><td>&lt;d&gt;, &lt;m&gt;, &lt;y&gt;</td><td>Day, Month, Year (Integers)</td></tr>
+                        </tbody>
+                    </table>
+
                     <div class="spacer"></div>
                 </div>
                 <script>

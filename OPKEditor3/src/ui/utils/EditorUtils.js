@@ -11,6 +11,10 @@ function arraysAreEqual(arr1, arr2) {
 
 function initialiseForm(id, val, self, handler) {
     var elemnt = document.getElementById(id);
+    if (!elemnt) {
+        console.warn("initialiseForm: Element not found:", id);
+        return;
+    }
     var evttp = "change";
     if (elemnt.nodeName.toLowerCase() == "select") {
         elemnt.selectedIndex = val;
@@ -46,25 +50,25 @@ function getItemIcon(item) {
     var type = item.type;
     if (type === 1) return prefix + " fa-table"; // Data File
     if (type >= 0x90 && type < 0xff) return prefix + " fa-file-lines"; // Record
-    if (type === 3) { // Procedure
-        // Check if it has source code
-        // Structure: Header -> Block (child) -> Data (child)
+    if (type === 3) { // Procedure (Can be Text or Compiled)
+        // Check for QCode Structure (Type 80 Child -> Payload)
+        // Note: item.child is the Type 0 (0x80) Data Block.
         if (item.child && item.child.child && item.child.child.data) {
             var data = item.child.child.data;
             if (data.length >= 4) {
                 var obLen = (data[0] << 8) | data[1];
-                var srcLenOffset = 2 + obLen;
-                if (srcLenOffset + 1 < data.length) {
-                    var srcLen = (data[srcLenOffset] << 8) | data[srcLenOffset + 1];
-                    if (srcLen > 0) return "fa-regular fa-file-code"; // OPL Source (Always regular/outlined for code)
-                }
+                if (obLen > 0) return prefix + " fa-microchip"; // Proven QCode -> Procedure
             }
         }
-        return prefix + " fa-credit-card"; // Binary/Compiled Procedure
+        // Fallback: No QCode -> OPL Text
+        return "fa-regular fa-file-code";
     }
-    if (type === 2) return prefix + " fa-image"; // OPL Image
-    if (type === 7) return prefix + " fa-sticky-note"; // Notepad
-    if (type === 255) return prefix + " fa-map"; // End Of Pack / Memory Map
+    if (type === 2) return prefix + " fa-book"; // Diary (XP/CM)
+    if (type === 5) return prefix + " fa-table-cells"; // Spreadsheet
+    if (type === 6) return prefix + " fa-phone"; // Pager Setup
+    if (type === 7) return prefix + " fa-note-sticky"; // Notepad
+    if (type === -1) return prefix + " fa-receipt"; // Pack Header
+    if (type === 255) return prefix + " fa-rectangle-xmark"; // End Of Pack
     return prefix + " fa-circle-question"; // Default / Unknown
 }
 
@@ -72,24 +76,26 @@ function getItemIcon(item) {
 function getItemDescription(item) {
     var type = item.type;
     if (type === 1) return "Data File";
-    if (type >= 0x90 && type < 0xff) return "Record";
+    if (type >= 16 && type <= 126) return "Record " + String.fromCharCode(64 + (type - 15));
+
+    if (type === 2) return "OPL Image";
     if (type === 3) {
+        // Check for QCode
         if (item.child && item.child.child && item.child.child.data) {
             var data = item.child.child.data;
             if (data.length >= 4) {
                 var obLen = (data[0] << 8) | data[1];
-                var srcLenOffset = 2 + obLen;
-                if (srcLenOffset + 1 < data.length) {
-                    var srcLen = (data[srcLenOffset] << 8) | data[srcLenOffset + 1];
-                    if (srcLen > 0) return "OPL Procedure";
-                }
+                if (obLen > 0) return "OPL Procedure";
             }
         }
-        return "OPL Object";
+        return "OPL Text"; // No QCode -> Text
     }
-    if (type === 2) return "OPL Image";
-    if (type === 7) return "Notepad Entry";
-    if (type === 0 || type === -1) return "Pack Header";
+    if (type === 4) return "Comms Link Setup";
+    if (type === 5) return "Spreadsheet";
+    if (type === 6) return "Pager Setup";
+    if (type === 7) return "LZ Notepad Entry";
+    if (type === 0) return "Long Record";
+    if (type === -1) return "Pack Header";
     if (type === 255) return "End Of Pack";
     return "Unknown Type (" + type + ")";
 }

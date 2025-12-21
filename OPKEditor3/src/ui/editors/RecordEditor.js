@@ -12,6 +12,7 @@ RecordEditor.prototype.acceptsType = function (tp) {
 RecordEditor.prototype.initialise = function (item) {
     if (!this.myelement) {
         this.myelement = document.createElement('div');
+        this.myelement.className = 'legacy-editor-container';
         this.myelement.innerHTML =
             "<form action='#'><fieldset><legend>Record</legend>" +
             "<div>File id: <span id='fileid'></span></div>" +

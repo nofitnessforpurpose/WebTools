@@ -16,9 +16,11 @@
  */
 var CodeVisualizer = (function () {
 
+
     // --- Data Extraction ---
 
     function extractSystemData(packs) {
+
         var system = {
             packs: [],
             nodes: {}, // Map of name -> { type, packIndex, ... }
@@ -33,9 +35,73 @@ var CodeVisualizer = (function () {
                 name: pack.filename || "Pack " + (pIdx + 1),
                 index: pIdx,
                 procedures: [],
-                globals: []
+                procedures: [],
+                globals: [],
+                dataFiles: [], // Names of Data Files
+                fileIdMap: {}  // ID -> Name Mapping
             };
 
+            // Pre-scan for Data Files to map IDs
+            pack.items.forEach(function (item) {
+                if (!item.deleted && item.type === 1) {
+                    var fileId = item.data[10] & 0x7f;
+                    packData.fileIdMap[fileId] = item.name.toUpperCase();
+                }
+            });
+
+            // 2. Data Files Pass (Create Parents First)
+            pack.items.forEach(function (item) {
+                if (item.deleted) return;
+                if (item.type === 1) {
+                    var nodeName = item.name.toUpperCase();
+                    system.nodes[nodeName] = {
+                        type: 'DATA_FILE',
+                        packIndex: pIdx,
+                        name: item.name,
+                        label: item.name,
+                        id: item.data[10] & 0x7f,
+                        records: [],
+                        degree: 0
+                    };
+                    packData.dataFiles.push(item.name);
+                }
+            });
+
+            // 3. Records Pass (Link to Parents)
+            pack.items.forEach(function (item, idx) {
+                if (item.deleted) return;
+                // Data Records (Type matches File ID)
+                if (packData.fileIdMap[item.type]) {
+                    var parentName = packData.fileIdMap[item.type];
+                    var uniqueId = item.name.toUpperCase() + "_REC_" + idx;
+
+                    if (!system.nodes[uniqueId]) {
+                        system.nodes[uniqueId] = {
+                            type: 'DATA_RECORD',
+                            packIndex: pIdx,
+                            name: item.name,
+                            label: item.name,
+                            parent: parentName,
+                            degree: 0
+                        };
+
+                        // Link to Parent (Guaranteed to exist if file is present)
+                        if (system.nodes[parentName]) {
+                            system.nodes[parentName].records.push(uniqueId);
+                        }
+
+                        // Add OWNERSHIP Link
+                        system.links.push({
+                            from: parentName,
+                            to: uniqueId,
+                            type: 'OWNERSHIP',
+                            tooltip: parentName + " owns " + item.name
+                        });
+                    }
+                }
+            });
+
+            // 4. Procedures Pass (Logic)
             pack.items.forEach(function (item) {
                 if (item.deleted) return;
 
@@ -45,6 +111,7 @@ var CodeVisualizer = (function () {
                         type: 'PROC',
                         packIndex: pIdx,
                         name: item.name,
+                        label: item.name,
                         params: [],
                         locals: [],
                         globals: [], // Track used globals
@@ -65,15 +132,32 @@ var CodeVisualizer = (function () {
                                     if (typeof OPLDecompiler !== 'undefined') {
                                         var decompiler = new OPLDecompiler();
                                         var header = decompiler.parseHeader(objCode, 0);
+                                        // Run variable scan to populate inferred dimensions/lengths
+                                        decompiler.scanVariables(objCode, header);
+
                                         if (header && header.globals) {
                                             var procNode = system.nodes[item.name.toUpperCase()];
                                             header.globals.forEach(function (g) {
                                                 var gName = g.name.toUpperCase();
 
+                                                // Construct Display Name (Dimensions)
+                                                var displayName = g.name;
+                                                if (g.arrayLen) {
+                                                    if (g.name.endsWith('$') && g.maxLen) {
+                                                        displayName += "(" + g.arrayLen + "," + g.maxLen + ")";
+                                                    } else {
+                                                        displayName += "(" + g.arrayLen + ")";
+                                                    }
+                                                } else {
+                                                    if (g.name.endsWith('$') && g.maxLen) {
+                                                        displayName += "(" + g.maxLen + ")";
+                                                    }
+                                                }
+
                                                 // 1. Register Global Node
                                                 if (!system.nodes[gName]) {
-                                                    console.log(`[Visualizer] Registered Global: ${gName}`);
-                                                    system.nodes[gName] = { type: 'GLOBAL', packIndex: pIdx, name: g.name, degree: 0, addr: g.addr };
+
+                                                    system.nodes[gName] = { type: 'GLOBAL', packIndex: pIdx, name: g.name, label: displayName, degree: 0, addr: g.addr };
                                                 }
                                                 // Always associate with pack (dedupe locally)
                                                 if (packData.globals.indexOf(g.name) === -1) {
@@ -114,6 +198,7 @@ var CodeVisualizer = (function () {
             pack.items.forEach(function (item) {
                 if (item.deleted || item.type !== 3) return;
 
+                var instructions = []; // Ensure defined
                 if (item.child && item.child.child && item.child.child.data) {
                     var data = item.child.child.data;
                     var obLen = (data[0] << 8) | data[1];
@@ -125,7 +210,7 @@ var CodeVisualizer = (function () {
 
                                 // 1. Get Control Flow for Links (Calls/Access)
                                 var result = decompiler.getControlFlow(objCode, item.name);
-                                var instructions = result.instructions;
+                                var instructions = result.instructions || []; // Safe access
                                 var variableMap = result.varMap;
 
                                 // 2. Get Full Source for Code Viewer & Regex Extraction
@@ -183,24 +268,25 @@ var CodeVisualizer = (function () {
                                         // Robustness: Strip REM comments and spaces
                                         var content = localMatch[1].replace(/REM\s+.*/i, "");
                                         var locals = content.split(',').map(s => s.trim()).filter(s => s);
-                                        // Cleaner locals: strip dimensions
-                                        locals = locals.map(l => {
-                                            if (l.indexOf('(') !== -1) return l.substring(0, l.indexOf('('));
-                                            return l;
-                                        });
+                                        // Keep dimensions for display
                                         node.locals = node.locals.concat(locals);
                                     }
                                 }
 
                                 instructions.forEach(function (inst) {
                                     // Find all calls in the instruction text (including within expressions)
-                                    var callRegex = /([A-Z0-9_$]+):/gi;
+                                    // Find all calls in the instruction text (including within expressions)
+                                    // Modified: Capture identifier, handle optional colon manually.
+                                    var callRegex = /([A-Z0-9_$]+)/gi;
                                     var match;
                                     while ((match = callRegex.exec(inst.text)) !== null) {
                                         var target = match[1].toUpperCase();
 
-                                        // Ignore labels (ending with ::)
-                                        if (inst.text[match.index + match[0].length] === ':') continue;
+                                        // Check following characters for Labels (::)
+                                        var idxAfter = match.index + match[0].length;
+                                        if (inst.text[idxAfter] === ':' && inst.text[idxAfter + 1] === ':') {
+                                            continue; // Ignore Labels (e.g. LABEL::)
+                                        }
 
                                         if (system.nodes[target] && system.nodes[target].type === 'PROC') {
                                             // Try to extract args for label
@@ -230,38 +316,78 @@ var CodeVisualizer = (function () {
 
                                 });
 
-                                // 3. Global Access (Refactored)
-                                if (variableMap) {
-                                    Object.keys(variableMap).forEach(function (addr) {
-                                        var v = variableMap[addr];
+                                // 3. Consolidated Global Usage Logic
+                                // STAGE 1: Explicit Externals from Header (The Truth)
+                                // We rely SOLELY on the OPL Header Externals for this feature as requested.
 
-                                        // Resolution: Check against known System Globals by address
-                                        if (globalAddrMap[addr]) {
-                                            v.isGlobal = true;
-                                            v.name = globalAddrMap[addr];
-                                            // Ensure accessed flag is honored (it should be set by Decompiler if touched)
+                                var headerUsage = decompiler.parseHeader(objCode, 0);
+
+
+                                if (headerUsage && headerUsage.externals) {
+                                    // DEBUG: Log externals found
+
+
+                                    headerUsage.externals.forEach(function (ext) {
+                                        var target = ext.name.toUpperCase();
+                                        var procName = item.name.toUpperCase();
+
+                                        // 1. Ensure Global Node Exists
+                                        if (!system.nodes[target]) {
+                                            system.nodes[target] = {
+                                                type: 'GLOBAL',
+                                                packIndex: pIdx,
+                                                name: ext.name,
+                                                degree: 0,
+                                                isImplicit: true
+                                            };
+                                            // Add to Pack's Global Pool if missing
+                                            if (system.packs[pIdx] && system.packs[pIdx].globals.indexOf(ext.name) === -1) {
+                                                system.packs[pIdx].globals.push(ext.name);
+                                            }
                                         }
 
-                                        if ((v.isGlobal || v.isExternal) && v.accessed) {
-                                            var target = v.name.toUpperCase();
+                                        // 2. Create GLOBAL_USAGE Link
+                                        var linkExists = system.links.some(l => l.from === target && l.to === procName && l.type === 'GLOBAL_USAGE');
+
+                                        if (!linkExists) {
                                             var type = 'Float';
                                             if (target.endsWith('$')) type = 'String';
                                             else if (target.endsWith('%')) type = 'Integer';
 
-                                            var tooltip = item.name.toUpperCase() + " - " + target;
-                                            system.links.push({ from: item.name.toUpperCase(), to: target, type: 'ACCESS', dataType: type, tooltip: tooltip });
+
+
+                                            system.links.push({
+                                                from: target,
+                                                to: procName,
+                                                type: 'GLOBAL_USAGE',
+                                                dataType: type,
+                                                tooltip: "Global " + target + " used by " + procName,
+                                                isImplicit: true
+                                            });
+
+                                            // Increment degrees
                                             if (system.nodes[target]) system.nodes[target].degree++;
+                                            if (system.nodes[procName]) system.nodes[procName].degree++;
                                         }
                                     });
                                 }
+
+                                // STAGE 2: Variable Map - Removed for Links
+                                if (variableMap) {
+                                    // No-op
+                                }
                             }
-                        } catch (e) { /* Ignore */ }
+                        } catch (e) { console.error("Visualizer Error:", e); }
                     }
                 }
             });
         });
 
         // 3. Post-Process: Sync Links and List
+        // 3. Post-Process: Sync Links and List
+        // REMOVED: Do not auto-add implicit globals to procedure's global list. 
+        // We want to distinguish them visually via the new link type.
+        /*
         system.links.forEach(function (link) {
             if (link.type === 'ACCESS') {
                 var procNode = system.nodes[link.from];
@@ -272,6 +398,7 @@ var CodeVisualizer = (function () {
                 }
             }
         });
+        */
 
         // Ensure reverse sync (List -> Link)
         Object.values(system.nodes).forEach(function (node) {
@@ -296,15 +423,19 @@ var CodeVisualizer = (function () {
     // --- Layout Engine ---
 
     function calculateLayout(data, collapsedState, sectionState, containerState) {
+
         var packMargin = 50;
         var nodeWidth = 187;
         var nodeHeightExpanded = 160;
         var nodeHeightCollapsed = 32;
         var rankGap = 80;
         var nodeGap = 20;
-        var cardPadding = 40;
+        var cardPadding = 20;
+        var innerCardPadding = 30;
         var innerCardPadding = 30;
         var globalPoolHeight = 80;
+        var dataFileWidth = 187;
+        var dataRecordHeight = 32;
 
         var currentY = packMargin;
         var layout = { nodes: {}, packs: [], innerCards: [], pools: [] };
@@ -387,7 +518,7 @@ var CodeVisualizer = (function () {
             function getNodeHeight(nodeName, isCollapsed) {
                 if (isCollapsed) return nodeHeightCollapsed;
 
-                var h = 35; // Header + Base Padding
+                var h = 32; // Header + Base Padding (Revised to 32 to match min height)
                 var nodeData = data.nodes[nodeName.toUpperCase()];
                 var sState = sectionState[nodeName.toUpperCase()] || { params: true, locals: false, globals: false }; // Default: Params Open, Locals/Globals Closed
 
@@ -397,7 +528,7 @@ var CodeVisualizer = (function () {
                         h += 20; // Title
                         if (sState.params) {
                             h += nodeData.params.length * 14; // Items
-                            h += 15; // Scrollbar & Padding Buffer
+                            h += 25; // Scrollbar & Padding Buffer
                         } else {
                             h += 5; // Padding when collapsed
                         }
@@ -408,7 +539,7 @@ var CodeVisualizer = (function () {
                         h += 20; // Title
                         if (sState.locals) {
                             h += nodeData.locals.length * 14;
-                            h += 15; // Scrollbar & Padding Buffer
+                            h += 25; // Scrollbar & Padding Buffer
                         } else {
                             h += 5; // Padding when collapsed
                         }
@@ -419,14 +550,17 @@ var CodeVisualizer = (function () {
                         h += 20; // Title
                         if (sState.globals) {
                             h += nodeData.globals.length * 14;
-                            h += 15; // Scrollbar & Padding Buffer
+                            h += 25; // Scrollbar & Padding Buffer
                         } else {
                             h += 5; // Padding when collapsed
                         }
                     }
                 }
 
-                return Math.max(h, 40); // Min height reduced from 100
+                if (!isCollapsed && h > 32) {
+                    h += 7; // Top+Bottom Padding (5+2)
+                }
+                return Math.max(h, 32); // Min height reduced from 40 to 32 (consistent with collapsed)
             }
 
             // First pass: Calculate height of each rank based on collapsed state
@@ -472,12 +606,14 @@ var CodeVisualizer = (function () {
                             w: nodeWidth,
                             h: h,
                             type: 'PROC',
+                            id: node.name.toUpperCase(),
                             label: node.name,
+                            packName: pack.name, // Added for collapse filtering
                             code: nodeData ? nodeData.code : null,
                             params: nodeData ? nodeData.params : [],
                             locals: nodeData ? nodeData.locals : [],
                             globals: nodeData ? nodeData.globals : [],
-                            // _debug: console.log(`Layout Node ${node.name}: Globals=${nodeData ? nodeData.globals.length : 0}`),
+
                             collapsed: isCollapsed,
                             rank: node.rank,
                             packName: pack.name
@@ -496,7 +632,7 @@ var CodeVisualizer = (function () {
             if (globalsCols < 1) globalsCols = 1;
             var globalsRows = Math.ceil(pack.globals.length / globalsCols);
 
-            var globalNodeHeight = 40; // Reduced from 60 to match Procedure default
+            var globalNodeHeight = 32; // Reduced from 40 to match Header height (no body content)
             var poolH = globalsRows * (globalNodeHeight + 20) + 70; // +70 for header/padding (increased from 40)
 
             // Global Pool Collapse
@@ -511,21 +647,164 @@ var CodeVisualizer = (function () {
                 pack.globals.forEach((gName, gIdx) => {
                     var gCol = gIdx % globalsCols;
                     var gRow = Math.floor(gIdx / globalsCols);
+                    var nodeData = data.nodes[gName.toUpperCase()];
+                    var isCollapsed = collapsedState[gName.toUpperCase()];
+                    var h = isCollapsed ? nodeHeightCollapsed : globalNodeHeight;
+
                     layout.nodes[gName.toUpperCase()] = {
                         x: innerX + 30 + gCol * (nodeWidth + 80), // Aligned with Procedures (innerCardPadding = 30)
                         y: poolY + 60 + gRow * (globalNodeHeight + 20), // Increased Padding (was +35)
                         w: nodeWidth, // Full Width
-                        h: globalNodeHeight,
+                        h: h,
                         type: 'GLOBAL',
-                        label: gName,
+                        id: gName.toUpperCase(),
+                        label: nodeData ? nodeData.label : gName,
                         code: null,
-                        collapsed: false
+                        packName: pack.name, // Added for collapse filtering
+                        collapsed: isCollapsed
                     };
                 });
             }
 
             var packW = innerW + cardPadding * 2;
             var packH = (poolY + poolH) - currentY + cardPadding;
+
+            // Data Space Layout
+            var dataY = poolY + poolH + 20;
+            var dataH = 0;
+            var dataFiles = pack.dataFiles || [];
+
+            if (dataFiles.length > 0) {
+                // Calculate Height
+                var maxDataH = 0;
+                var dataCols = Math.floor((innerW - 20) / (dataFileWidth + 80));
+                if (dataCols < 1) dataCols = 1;
+
+                dataFiles.forEach((dfName, i) => {
+                    var fileNode = data.nodes[dfName.toUpperCase()];
+                    var records = fileNode.records || [];
+
+                    var isCollapsed = collapsedState[dfName.toUpperCase()];
+                    if (isCollapsed === undefined) {
+                        isCollapsed = true;
+                        collapsedState[dfName.toUpperCase()] = true;
+                    }
+
+                    var h = nodeHeightCollapsed; // Header
+                    if (!isCollapsed) {
+                        h += 10; // Padding
+                        if (records.length > 0) {
+                            h += records.length * (dataRecordHeight + 10);
+                        } else {
+                            h += 30; // "No Records" placeholder space
+                        }
+                    }
+                    // Set height on node for calculation
+                    fileNode._calcHeight = h;
+                });
+
+                var rows = Math.ceil(dataFiles.length / dataCols);
+
+                // Calculate total height based on max height in each row? 
+                // Or simplified: Just stack them if needed, or grid.
+                // Let's find max height per row.
+                var rowHeights = [];
+                for (var r = 0; r < rows; r++) {
+                    var maxH = 0;
+                    for (var c = 0; c < dataCols; c++) {
+                        var idx = r * dataCols + c;
+                        if (idx < dataFiles.length) {
+                            var dfName = dataFiles[idx];
+                            var h = data.nodes[dfName.toUpperCase()]._calcHeight;
+                            if (h > maxH) maxH = h;
+                        }
+                    }
+                    rowHeights[r] = maxH;
+                }
+
+                dataH = rowHeights.reduce((a, b) => a + b, 0) + (rows * 20) + 50; // +Header
+            }
+
+            // Data Space Collapse
+            var dataCollapsed = containerState && containerState[pack.name] && containerState[pack.name].data;
+            if (dataCollapsed) {
+                dataH = 30;
+            }
+
+            if (dataFiles.length > 0) {
+                layout.pools.push({
+                    x: innerX,
+                    y: dataY,
+                    w: innerW,
+                    h: dataH,
+                    label: "Data Space",
+                    packName: pack.name,
+                    type: 'data',
+                    collapsed: dataCollapsed
+                });
+
+                if (!dataCollapsed) {
+                    var currentDataRowY = dataY + 50;
+                    var dataCols = Math.floor((innerW - 20) / (dataFileWidth + 80));
+                    if (dataCols < 1) dataCols = 1;
+
+                    var rowH = 0;
+                    var rowNodes = [];
+
+                    dataFiles.forEach((dfName, i) => {
+                        var col = i % dataCols;
+                        if (col === 0 && i > 0) {
+                            // New Row
+                            currentDataRowY += rowH + 20;
+                            rowH = 0;
+                        }
+
+                        var fileNode = data.nodes[dfName.toUpperCase()];
+                        var h = fileNode._calcHeight;
+                        if (h > rowH) rowH = h;
+
+                        var x = innerX + 30 + col * (dataFileWidth + 80);
+                        var y = currentDataRowY;
+
+                        // Layout Data File
+                        layout.nodes[dfName.toUpperCase()] = {
+                            x: x, y: y, w: dataFileWidth, h: h,
+                            type: 'DATA_FILE',
+                            id: dfName.toUpperCase(),
+                            label: fileNode.label,
+                            packName: pack.name, // Added for collapse filtering
+                            collapsed: collapsedState[dfName.toUpperCase()]
+                        };
+
+                        // Layout Records (Inside the File Card visually)
+                        if (!collapsedState[dfName.toUpperCase()]) {
+                            var records = fileNode.records;
+                            records.forEach((recName, rIdx) => {
+                                layout.nodes[recName] = {
+                                    x: x + 20, // Indented
+                                    y: y + 40 + rIdx * (dataRecordHeight + 10),
+                                    w: dataFileWidth - 40,
+                                    h: dataRecordHeight,
+                                    type: 'DATA_RECORD',
+                                    id: recName,
+                                    label: data.nodes[recName].label,
+                                    parent: dfName.toUpperCase(),
+                                    packName: pack.name, // Added for collapse filtering
+                                    rank: 999 // Ensure it passes any logic filtering
+                                };
+                            });
+                        }
+                    });
+                }
+            } else {
+                dataH = 0; // No data space if no files
+            }
+
+            var packW = innerW + cardPadding * 2;
+            var packH = (dataY + (dataFiles.length > 0 ? dataH : 0)) - currentY + cardPadding;
+
+            // Adjust if logic/globals were essentially empty/collapsed but data is there
+            if (packH < 100) packH = 100;
 
             // Pack Collapse
             var packCollapsed = containerState && containerState[pack.name] && containerState[pack.name].pack;
@@ -554,18 +833,30 @@ var CodeVisualizer = (function () {
             // REFACTOR: Pack Collapse Check at Start
             // Since we can't easily refactor the whole loop in one go with replace, let's handle it by
             // filtering layout.nodes at the end or just hiding them in draw.
-            // Actually, let's just use the height.
+            // For now, let's just PUSH THE PACK so validation works.
+            layout.packs.push({
+                x: packMargin,
+                y: currentY,
+                w: packW,
+                h: packH,
+                label: pack.name,
+                packName: pack.name, // CRITICAL: Required for toggleContainer
+                type: 'pack',
+                collapsed: packCollapsed
+            });
 
-            layout.packs.push({ name: pack.name, x: packMargin, y: currentY, w: packW, h: packH, packName: pack.name, type: 'pack', collapsed: packCollapsed });
             currentY += packH + packMargin;
         });
+
 
         return layout;
     }
 
+
     // --- Window Management ---
 
     function openWindow() {
+
         var width = 1400;
         var height = 900;
         var left = (screen.width - width) / 2;
@@ -640,27 +931,54 @@ var CodeVisualizer = (function () {
                         
                         --link-color: var(--text-color);
                     }
+                    /* Data File Styling */
+                    .node.data_file .node-header { 
+                        background-color: var(--node-header-bg); 
+                        color: var(--text-color); 
+                    }
+                    .node.data_file .node-type {
+                        /* Restore standard centered positioning */
+                        color: var(--text-color); 
+                        opacity: 0.6;
+                    }
+                    .node.data_record .node-card { 
+                        border-left: 4px solid #4CAF50; 
+                    }
+                    .node.data_record .node-header {
+                        background-color: var(--node-header-bg);
+                    }
                     body {
                         background-color: var(--bg-color);
                         color: var(--text-color);
                         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                         margin: 0;
                         padding: 0;
-                        overflow: auto;
+                        overflow: hidden; /* Prevent body scroll, handle in panes */
                         display: flex;
+                        flex-direction: column; /* Stack Toolbar and Main */
                         height: 100vh;
                     }
                     #main-container {
                         display: flex;
                         width: 100%;
-                        height: 100%;
+                        flex: 1; /* Fill remaining height */
+                        overflow: hidden;
                     }
                     #graph-pane {
                         flex: 1;
                         position: relative;
-                        overflow: auto;
+                        overflow: hidden; /* Wrapper for overlay */
                         background: var(--bg-color);
-                        min-width: 200px; /* Prevent collapse */
+                        min-width: 200px;
+                        display: flex;
+                        flex-direction: column;
+                    }
+                    #graph-scroll {
+                        flex: 1;
+                        overflow: auto; /* Enable Scrollbars */
+                        position: relative;
+                        width: 100%;
+                        height: 100%;
                     }
                     #resizer {
                         width: 5px;
@@ -681,15 +999,20 @@ var CodeVisualizer = (function () {
                         box-shadow: -2px 0 5px rgba(0,0,0,0.05);
                         z-index: 10;
                         min-width: 200px; /* Prevent collapse */
+                        display: none; /* Hidden by default */
                     }
 
                     #controls {
-                        position: absolute;
-                        top: 20px;
-                        right: 20px;
-                        z-index: 100;
+                        width: 100%;
+                        height: 40px;
+                        border-bottom: 1px solid var(--border-color);
+                        background: var(--container-header-bg); /* Use Header BG for Toolbar */
                         display: flex;
+                        align-items: center;
+                        padding: 0 10px;
+                        box-sizing: border-box;
                         gap: 10px;
+                        z-index: 100;
                     }
                     #controls button {
                         padding: 5px;
@@ -739,6 +1062,7 @@ var CodeVisualizer = (function () {
                     }
                     .section-list {
                         padding: 5px;
+                        padding: 5px;
                         font-family: 'Consolas', monospace;
                         font-size: 11px;
                         color: var(--text-color);
@@ -754,6 +1078,15 @@ var CodeVisualizer = (function () {
                     }
                     
                     /* Node HTML Styles (ForeignObject) */
+                    #code-content {
+                        white-space: pre; 
+                        font-family: 'Consolas', 'Courier New', monospace;
+                        overflow: auto;
+                        font-size: 11px;
+                        flex: 1;
+                        padding: 10px;
+                    }
+
                     .node-card {
                         width: 100%;
                         height: 100%;
@@ -770,13 +1103,16 @@ var CodeVisualizer = (function () {
 
                     .node-header {
                         background: var(--node-header-bg);
-                        padding: 5px 8px;
+                        color: var(--text-color);
+                        padding: 4px 8px;
                         font-weight: bold;
                         border-bottom: 1px solid var(--node-border);
                         display: flex;
                         align-items: center;
                         position: relative;
-                        height: 22px;
+                        height: 32px; /* Fixed Height matching Node Card */
+                        box-sizing: border-box; /* Include padding/border in height */
+                        text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8); /* increased contrast */
                     }
                     .node-title {
                         flex: 1;
@@ -804,30 +1140,42 @@ var CodeVisualizer = (function () {
                         border: 1px solid var(--border-color);
                         border-radius: 2px;
                         background: var(--bg-color);
-                        margin-left: 5px;
+                        margin-left: auto; /* Push to right */
                     }
                     .node-body {
                         flex: 1;
-                        padding: 5px;
+                        padding: 5px 5px 2px 5px;
                         overflow-y: auto;
                         display: block;
                     }
                     .node-card.collapsed .node-body {
                         display: none;
                     }
+                    .node-card.collapsed .node-header,
+                    .node-card.global .node-header,
+                    .node-card.empty .node-header {
+                        flex: 1; /* Fill the card height */
+                        height: 100%; /* Force fill */
+                        border-bottom: none; /* Remove separator */
+                    }
+                        flex: 1; /* Fill the card height */
+                        border-bottom: none; /* Remove separator */
+                    }
+
                     
                     .node-card:hover { border-color: var(--text-color); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
                     .node-card.active { border-color: var(--syntax-keyword); border-width: 2px; }
 
                     /* Link Styles */
+                    /* Link Styles */
                     .link {
                         stroke: var(--link-color);
                         stroke-width: 1.5;
                         fill: none;
-                        opacity: 0.7;
-                        marker-end: url(#arrowhead);
+                        stroke-opacity: 0.7;
                     }
-                    .link.access { stroke-dasharray: 3,3; opacity: 0.5; marker-end: none; }
+                    .link.access { stroke-dasharray: 3,3; stroke-opacity: 0.5; }
+                    .link.global_usage { stroke-dasharray: 3,3; stroke-opacity: 0.5; }
                     
                     .link-label {
                         fill: var(--text-color);
@@ -855,7 +1203,7 @@ var CodeVisualizer = (function () {
                     }
 
                     /* Lighter background for inner cards and global pool */
-                    .card-inner .container-rect, .global-pool .container-rect {
+                    .card-inner .container-rect, .global-pool .container-rect, .data-pool .container-rect {
                         fill: var(--container-header-bg); /* Use header bg for contrast */
                         opacity: 0.5; /* Lighter/Transparent */
                     }
@@ -868,6 +1216,62 @@ var CodeVisualizer = (function () {
                         text-anchor: start; 
                         dominant-baseline: middle;
                     }
+
+                    /* Legend Window */
+                    #legend-window {
+                        position: absolute; /* Relative to #graph-pane */
+                        top: 10px;
+                        right: 20px; /* Offset from scrollbar/edge */
+                        width: 200px;
+                        background: var(--bg-color);
+                        border: 1px solid var(--border-color);
+                        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+                        z-index: 1000;
+                        padding: 10px;
+                        border-radius: 4px;
+                        display: block; /* Visible by default */
+                        font-family: 'Segoe UI', sans-serif;
+                        font-size: 11px;
+                    }
+                    #legend-header {
+                        font-weight: bold;
+                        border-bottom: 1px solid var(--border-color);
+                        padding-bottom: 5px;
+                        margin-bottom: 5px;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                    }
+                    .legend-close { cursor: pointer; opacity: 0.6; font-size: 14px; }
+                    .legend-close:hover { opacity: 1; }
+                    .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+                    .legend-line { width: 30px; height: 2px; margin-right: 8px; border-radius: 1px; }
+                    .legend-label { flex: 1; color: var(--text-color); }
+                    
+                    /* Legend Colors */
+                    .bg-int { background-color: #00AA00; }
+                    .bg-str { background-color: #AA00AA; }
+                    .bg-float { background-color: #FF8800; }
+                    .bg-long { background-color: #0000AA; }
+                    .bg-void { background-color: #888888; }
+                    .bg-solid { border-bottom: 2px solid; } /* Helper */
+                    .bg-dashed { border-bottom: 2px dashed; background: none !important; } /* Helper for dashed */
+
+                    /* Legend Tabs */
+                    .legend-tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 10px; }
+                    .legend-tab { 
+                        flex: 1; 
+                        text-align: center; 
+                        padding: 5px; 
+                        cursor: pointer; 
+                        font-size: 10px; 
+                        opacity: 0.7;
+                        border-bottom: 2px solid transparent;
+                    }
+                    .legend-tab:hover { opacity: 1; background: var(--list-hover-bg); }
+                    .legend-tab.active { opacity: 1; border-bottom-color: var(--syntax-keyword); font-weight: bold; }
+                    .legend-panel { display: none; }
+                    .legend-panel.active { display: block; }
                 </style>
                 <script>
                     var CodeEditor = window.opener.CodeEditor;
@@ -939,18 +1343,107 @@ var CodeVisualizer = (function () {
                                 document.body.style.cursor = 'default';
                             }
                         });
+
+                        // Legend Toggle
+                        var btnLegend = document.getElementById('btn-legend');
+                        var legendWin = document.getElementById('legend-window');
+                        var btnCloseLegend = document.getElementById('btn-close-legend');
+
+                        if (btnLegend && legendWin) {
+                            btnLegend.addEventListener('click', function() {
+                                var currentDisplay = window.getComputedStyle(legendWin).display;
+                                var isHidden = currentDisplay === 'none';
+                                legendWin.style.display = isHidden ? 'block' : 'none';
+                            });
+                        }
+                        if (btnCloseLegend && legendWin) {
+                            btnCloseLegend.addEventListener('click', function() {
+                                legendWin.style.display = 'none';
+                            });
+                        }
                     });
                 </script>
             </head>
             <body class="${bodyClass}"> <!-- Apply Body Class -->
+                <div id="controls">
+                            <button id="btn-toggle-calls" title="Toggle Procedure Call Links (Proc -> Proc)" style="margin-right: 5px;">
+                                <svg style="width:14px;height:14px" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M17,16V14H15V16H17M19,16C19,14.89 18.1,14 17,14H19V12H3V14H5C3.89,14 3,14.89 3,16V20H5V16H9V20H11V16H13V20H15V16H17V20H19V16M11,10H13V8H11V10M11,6H13V4H11V6M11,2V4H13V2H11Z" />
+                                </svg>
+                            </button>
+                            <button id="btn-toggle-access" title="Toggle Global Access Links (Proc -> Global)" style="margin-right: 5px;">
+                                <svg style="width:14px;height:14px" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M17,16V14H15V16H17M19,16C19,14.89 18.1,14 17,14H19V12H3V14H5C3.89,14 3,14.89 3,16V20H5V16H9V20H11V16H13V20H15V16H17V20H19V16M11,10H13V8H11V10M11,6H13V4H11V6M11,2V4H13V2H11Z" />
+                                </svg>
+                            </button>
+                            <button id="btn-toggle-links" title="Toggle Global Usage Links (Global -> Proc)" style="margin-right: 5px;">
+                                <svg style="width:14px;height:14px" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M17,16V14H15V16H17M19,16C19,14.89 18.1,14 17,14H19V12H3V14H5C3.89,14 3,14.89 3,16V20H5V16H9V20H11V16H13V20H15V16H17V20H19V16M11,10H13V8H11V10M11,6H13V4H11V6M11,2V4H13V2H11Z" />
+                                </svg>
+                            </button>
+                            <button id="btn-collapse-all" title="Collapse All Procedures" style="margin-left: 10px; margin-right: 5px;">
+                                <svg style="width:14px;height:14px" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M19,13H5V11H19V13Z" />
+                                </svg>
+                            </button>
+                            <button id="btn-expand-all" title="Expand All Procedures" style="margin-right: 5px;">
+                                <svg style="width:14px;height:14px" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
+                                </svg>
+                            </button>
+                    <div style="width:1px; height: 20px; background:var(--border-color); margin:0 5px;"></div>
+                    <button id="btn-zoom-in">+</button>
+                    <button id="btn-zoom-out">-</button>
+                    <button id="btn-fit">Fit</button>
+                    <button id="btn-toggle-code" title="Toggle Procedure View">Code</button>
+                    
+                    <button id="btn-legend" title="Link Key / Legend">Key</button>
+                </div>
+                
                 <div id="main-container">
                     <div id="graph-pane">
-                        <div id="controls">
-                            <button id="btn-zoom-in">+</button>
-                            <button id="btn-zoom-out">-</button>
-                            <button id="btn-fit">Fit</button>
+                        <div id="legend-window">
+                    <div id="legend-header">
+                        <span>Link Key</span>
+                        <span id="btn-close-legend" class="legend-close">&times;</span>
+                    </div>
+                    
+                    <div class="legend-tabs">
+                        <div class="legend-tab active" data-tab="tab-calls" title="Procedure Parameters (Proc -> Proc)">Calls</div>
+                        <div class="legend-tab" data-tab="tab-usage" title="Global Definitions (Global -> Proc)">Defs</div>
+                        <div class="legend-tab" data-tab="tab-access" title="Global Use (Proc -> Global)">Access</div>
+                    </div>
+
+                    <div id="tab-calls" class="legend-panel active">
+                        <div style="font-size:10px; margin-bottom:5px; opacity:0.7">Procedure Parameters</div>
+                        <div class="legend-item"><input type="checkbox" id="chk-calls-int" checked style="margin-right:5px"><div class="legend-line bg-int"></div><span class="legend-label">Integer</span></div>
+                        <div class="legend-item"><input type="checkbox" id="chk-calls-str" checked style="margin-right:5px"><div class="legend-line bg-str"></div><span class="legend-label">String</span></div>
+                        <div class="legend-item"><input type="checkbox" id="chk-calls-float" checked style="margin-right:5px"><div class="legend-line bg-float"></div><span class="legend-label">Float</span></div>
+                    </div>
+
+                    <div id="tab-usage" class="legend-panel">
+                        <div style="font-size:10px; margin-bottom:5px; opacity:0.7">Global Use</div>
+                        <div class="legend-item"><input type="checkbox" id="chk-access-int" checked style="margin-right:5px"><div class="legend-line bg-int"></div><span class="legend-label">Integer</span></div>
+                        <div class="legend-item"><input type="checkbox" id="chk-access-str" checked style="margin-right:5px"><div class="legend-line bg-str"></div><span class="legend-label">String</span></div>
+                        <div class="legend-item"><input type="checkbox" id="chk-access-float" checked style="margin-right:5px"><div class="legend-line bg-float"></div><span class="legend-label">Float</span></div>
+                    </div>
+
+                    <div id="tab-access" class="legend-panel">
+                        <div style="font-size:10px; margin-bottom:5px; opacity:0.7">Global Definitions</div>
+                        <div class="legend-item"><input type="checkbox" id="chk-usage-int" checked style="margin-right:5px"><div class="legend-line bg-int"></div><span class="legend-label">Integer</span></div>
+                        <div class="legend-item"><input type="checkbox" id="chk-usage-str" checked style="margin-right:5px"><div class="legend-line bg-str"></div><span class="legend-label">String</span></div>
+                        <div class="legend-item"><input type="checkbox" id="chk-usage-float" checked style="margin-right:5px"><div class="legend-line bg-float"></div><span class="legend-label">Float</span></div>
+                    </div>
+
+                    <!-- Static Line Type Key -->
+                    <div style="height:1px; background:var(--border-color); margin:5px 0;"></div>
+                    <div class="legend-item"><div class="legend-line bg-void" style="background:currentColor"></div><span class="legend-label">Procedure Call (Solid)</span></div>
+                    <div class="legend-item"><div class="legend-line" style="border-top:2px dashed currentColor; background:none; height:0;"></div><span class="legend-label">Global Access (Dashed)</span></div>
+
+                </div>
+                        <div id="graph-scroll">
+                            <div id="graph-container"></div>
                         </div>
-                        <div id="graph-container"></div>
                     </div>
                     <div id="resizer"></div> <!-- Resizer Handle -->
                     <div id="code-pane">
@@ -969,8 +1462,14 @@ var CodeVisualizer = (function () {
     // --- Rendering ---
 
     function renderSystemMap(data, win) {
+
         var doc = win.document;
         var container = doc.getElementById('graph-container');
+
+        // Scope Variables
+        var svg, gMain;
+        var scale = 1, tx = 0, ty = 0;
+        var isDragging = false, startX, startY;
 
         // Initial State: Isolated nodes collapsed
         var collapsedState = {};
@@ -1118,305 +1617,450 @@ var CodeVisualizer = (function () {
             return node.y + node.h / 2;
         }
 
+        var layout = null;
+        var selectedNodeName = null; // Track selection
+
+        function showCode(nodeName) {
+            selectedNodeName = nodeName;
+            var node = data.nodes[nodeName];
+            var codePane = doc.getElementById('code-pane');
+            var codeContent = doc.getElementById('code-content');
+            var codeHeader = doc.getElementById('code-header');
+
+            if (codePane && codeContent && node && node.code) {
+                codePane.style.display = 'flex'; // Ensure visible
+                isCodePaneVisible = true;
+                codeHeader.textContent = "Procedure: " + node.label;
+                if (typeof SyntaxHighlighter !== 'undefined') {
+                    codeContent.innerHTML = SyntaxHighlighter.highlight(node.code);
+                } else {
+                    codeContent.innerText = node.code;
+                }
+
+                // Ensure button state updates
+                updateCodeButtonState();
+            }
+        }
+
         function draw() {
-            container.innerHTML = ''; // Clear
-            var layout = calculateLayout(data, collapsedState, sectionState, containerState);
+            try {
 
-            // Adjust SVG size to fit content
-            var maxX = 0, maxY = 0;
-            layout.packs.forEach(p => {
-                if (p.x + p.w > maxX) maxX = p.x + p.w;
-                if (p.y + p.h > maxY) maxY = p.y + p.h;
-            });
+                container.innerHTML = ''; // Clear
 
-            var svgNS = "http://www.w3.org/2000/svg";
-            var svg = doc.createElementNS(svgNS, "svg");
-            svg.setAttribute("width", Math.max(maxX + 100, 2000));
-            svg.setAttribute("height", Math.max(maxY + 100, 2000));
+                // Determine Collapsed State (Load from persistence if needed, here memory)
+                // Recalculate Layout on every draw to reflect state changes
+                layout = calculateLayout(data, collapsedState, sectionState, containerState);
 
-            var defs = doc.createElementNS(svgNS, "defs");
-            var marker = doc.createElementNS(svgNS, "marker");
-            marker.setAttribute("id", "arrowhead");
-            marker.setAttribute("markerWidth", "4"); // Shorter (was 6)
-            marker.setAttribute("markerHeight", "4"); // Shorter (was 6)
-            marker.setAttribute("refX", "4"); // Adjust refX (was 6)
-            marker.setAttribute("refY", "2"); // Adjust refY (was 3)
-            marker.setAttribute("orient", "auto");
-            var polygon = doc.createElementNS(svgNS, "polygon");
-            polygon.setAttribute("points", "0 0, 4 2, 0 4"); // Shorter points (was 0 0, 6 3, 0 6)
-            polygon.setAttribute("fill", "var(--text-color)");
-            marker.appendChild(polygon);
-            defs.appendChild(marker);
 
-            var filter = doc.createElementNS(svgNS, "filter");
-            filter.setAttribute("id", "text-bg");
-            filter.setAttribute("x", "-0.1");
-            filter.setAttribute("y", "-0.1");
-            filter.setAttribute("width", "1.2");
-            filter.setAttribute("height", "1.2");
-            var feFlood = doc.createElementNS(svgNS, "feFlood");
-            feFlood.setAttribute("flood-color", "var(--bg-color)");
-            feFlood.setAttribute("result", "bg");
-            var feMerge = doc.createElementNS(svgNS, "feMerge");
-            var feMergeNode1 = doc.createElementNS(svgNS, "feMergeNode");
-            feMergeNode1.setAttribute("in", "bg");
-            var feMergeNode2 = doc.createElementNS(svgNS, "feMergeNode");
-            feMergeNode2.setAttribute("in", "SourceGraphic");
-            feMerge.appendChild(feMergeNode1);
-            feMerge.appendChild(feMergeNode2);
-            svg.appendChild(defs);
-
-            var gMain = doc.createElementNS(svgNS, "g");
-            gMain.id = "main-group";
-            svg.appendChild(gMain);
-
-            // Helper to draw container
-            function drawContainer(x, y, w, h, label, className, onToggle, isCollapsed) {
-                var g = doc.createElementNS(svgNS, "g");
-                g.setAttribute("class", className);
-
-                var rect = doc.createElementNS(svgNS, "rect");
-                rect.setAttribute("x", x);
-                rect.setAttribute("y", y);
-                rect.setAttribute("width", w);
-                rect.setAttribute("height", h);
-                rect.setAttribute("rx", "12"); // Explicit Rounded Corners
-                rect.setAttribute("ry", "12"); // Explicit Rounded Corners
-                rect.setAttribute("class", "container-rect");
-                g.appendChild(rect);
-
-                var headerH = 30;
-                var line = doc.createElementNS(svgNS, "line");
-                line.setAttribute("x1", x);
-                line.setAttribute("y1", y + headerH);
-                line.setAttribute("x2", x + w);
-                line.setAttribute("y2", y + headerH);
-                line.setAttribute("stroke", "var(--container-border)");
-                g.appendChild(line);
-
-                // Title Left
-                var text = doc.createElementNS(svgNS, "text");
-                text.setAttribute("x", x + 10);
-                text.setAttribute("y", y + headerH / 2 + 1);
-                text.setAttribute("class", "container-title");
-                text.textContent = label;
-                g.appendChild(text);
-
-                // Min/Max Icon (Top Right)
-                var iconG = doc.createElementNS(svgNS, "g");
-                iconG.setAttribute("transform", `translate(${x + w - 25}, ${y + 5})`);
-                iconG.style.cursor = "pointer";
-                iconG.onclick = function (e) {
-                    e.stopPropagation();
-                    if (onToggle) onToggle();
-                };
-
-                var iconRect = doc.createElementNS(svgNS, "rect");
-                iconRect.setAttribute("width", "20");
-                iconRect.setAttribute("height", "20");
-                iconRect.setAttribute("fill", "transparent");
-                iconG.appendChild(iconRect);
-
-                var iconText = doc.createElementNS(svgNS, "text");
-                iconText.setAttribute("x", "10");
-                iconText.setAttribute("y", "15");
-                iconText.setAttribute("text-anchor", "middle");
-                iconText.setAttribute("fill", "var(--text-color)");
-                iconText.setAttribute("font-weight", "bold");
-                iconText.textContent = isCollapsed ? "+" : "-";
-                iconG.appendChild(iconText);
-
-                g.appendChild(iconG);
-                return g;
-            }
-
-            function toggleContainer(packName, type) {
-                if (containerState[packName]) {
-                    containerState[packName][type] = !containerState[packName][type];
-                    draw();
+                if (layout.packs.length === 0) {
+                    console.error("Visualizer: NO PACKS IN LAYOUT!");
+                    container.innerHTML = '<div style="padding:20px; color:red;">No Packs Found in Layout. Check Logs.</div>';
+                    return;
                 }
-            }
 
-            layout.packs.forEach(p => {
-                var g = drawContainer(p.x, p.y, p.w, p.h, p.name, "card-main", () => toggleContainer(p.packName, 'pack'), p.collapsed);
-                gMain.appendChild(g);
-                // If collapsed, we shouldn't render children. 
-                // But layout.innerCards/pools might still be there if we didn't filter them in calculateLayout.
-                // We did filter logic/globals content, but the containers themselves?
-                // In calculateLayout, we pushed them.
-                // Let's rely on calculateLayout to handle structure.
-                // Wait, if pack is collapsed, we shouldn't see Logic/Global containers.
-                // In calculateLayout replacement above, I didn't fully implement removing them.
-                // Let's fix it here: if p.collapsed, don't render children.
-                // But the children are in layout.innerCards...
-                // We need to filter layout.innerCards based on pack state.
-            });
+                // Adjust SVG size to fit content
+                var maxX = 0, maxY = 0;
+                layout.packs.forEach(p => {
+                    if (isNaN(p.x) || isNaN(p.y) || isNaN(p.w) || isNaN(p.h)) {
+                        console.error("Visualizer: INVALID PACK GEOMETRY", p);
+                    }
+                    if (p.x + p.w > maxX) maxX = p.x + p.w;
+                    if (p.y + p.h > maxY) maxY = p.y + p.h;
+                });
 
-            layout.innerCards.forEach(c => {
-                // Check if parent pack is collapsed
-                var packState = containerState[c.packName];
-                if (packState && packState.pack) return; // Don't render if pack collapsed
+                var svgNS = "http://www.w3.org/2000/svg";
+                svg = doc.createElementNS(svgNS, "svg");
+                svg.setAttribute("width", Math.max(maxX + 100, 2000));
+                svg.setAttribute("height", Math.max(maxY + 100, 2000));
 
-                gMain.appendChild(drawContainer(c.x, c.y, c.w, c.h, c.label, "card-inner", () => toggleContainer(c.packName, 'logic'), c.collapsed));
-            });
+                var defs = doc.createElementNS(svgNS, "defs");
+                // Define Markers for each color (Unrolled for safety)
+                var marker = doc.createElementNS(svgNS, "marker");
+                marker.setAttribute("id", "arrowhead");
+                marker.setAttribute("markerWidth", "4");
+                marker.setAttribute("markerHeight", "4");
+                marker.setAttribute("refX", "4");
+                marker.setAttribute("refY", "2");
+                marker.setAttribute("orient", "auto");
 
-            layout.pools.forEach(p => {
-                var packState = containerState[p.packName];
-                if (packState && packState.pack) return;
+                var p = doc.createElementNS(svgNS, "polygon");
+                p.setAttribute("points", "0 0, 4 2, 0 4");
+                p.setAttribute("fill", "#AAAAAA"); // Dimmed Grey Arrowhead
+                marker.appendChild(p);
+                defs.appendChild(marker);
 
-                gMain.appendChild(drawContainer(p.x, p.y, p.w, p.h, p.label, "global-pool", () => toggleContainer(p.packName, 'globals'), p.collapsed));
-            });
+                var filter = doc.createElementNS(svgNS, "filter");
+                filter.setAttribute("id", "text-bg");
+                filter.setAttribute("x", "-0.1");
+                filter.setAttribute("y", "-0.1");
+                filter.setAttribute("width", "1.2");
+                filter.setAttribute("height", "1.2");
+                var feFlood = doc.createElementNS(svgNS, "feFlood");
+                feFlood.setAttribute("flood-color", "var(--bg-color)");
+                feFlood.setAttribute("result", "bg");
+                var feMerge = doc.createElementNS(svgNS, "feMerge");
+                var feMergeNode1 = doc.createElementNS(svgNS, "feMergeNode");
+                feMergeNode1.setAttribute("in", "bg");
+                var feMergeNode2 = doc.createElementNS(svgNS, "feMergeNode");
+                feMergeNode2.setAttribute("in", "SourceGraphic");
+                feMerge.appendChild(feMergeNode1);
+                feMerge.appendChild(feMergeNode2);
 
-            // Links
-            var drawnLinks = {};
-            data.links.forEach(function (link) {
-                var src = layout.nodes[link.from];
-                var dst = layout.nodes[link.to];
-                var linkId = link.from + "-" + link.to + "-" + link.type;
+                filter.appendChild(feFlood);
+                filter.appendChild(feMerge);
+                defs.appendChild(filter);
 
-                if (src && dst && !drawnLinks[linkId]) {
-                    drawnLinks[linkId] = true;
-                    var gLink = doc.createElementNS(svgNS, "g");
-                    var path = doc.createElementNS(svgNS, "path");
+                svg.appendChild(defs);
 
-                    // Tooltip (Robust)
-                    var title = doc.createElementNS(svgNS, "title");
-                    // Prioritize dedicated tooltip, fallback to debug string
-                    title.textContent = link.tooltip ? link.tooltip : (link.from + " -> " + link.to + " (" + link.type + ")");
-                    path.appendChild(title);
+                gMain = doc.createElementNS(svgNS, "g");
+                gMain.id = "main-group";
+                svg.appendChild(gMain);
 
-                    // 1. Calculate Anchors
-                    var x1 = src.x + src.w;
-                    var y1 = src.y + 20; // Default
+                // Helper to draw container
+                function drawContainer(x, y, w, h, label, className, onToggle, isCollapsed) {
+                    var g = doc.createElementNS(svgNS, "g");
+                    g.setAttribute("class", className);
 
-                    // Precise Section Anchoring
-                    if (link.type === 'CALL') {
-                        y1 = getSectionCenterY(src, 'locals');
-                    } else if (link.type === 'ACCESS') {
-                        y1 = getSectionCenterY(src, 'globals');
+                    var rect = doc.createElementNS(svgNS, "rect");
+                    rect.setAttribute("x", x);
+                    rect.setAttribute("y", y);
+                    rect.setAttribute("width", w);
+                    rect.setAttribute("height", h);
+                    rect.setAttribute("rx", "12"); // Explicit Rounded Corners
+                    rect.setAttribute("ry", "12"); // Explicit Rounded Corners
+                    rect.setAttribute("class", "container-rect");
+                    g.appendChild(rect);
+
+                    if (className === 'card-main' && typeof label === 'string' && !label.startsWith('Pack: ')) {
+                        label = "Pack: " + label;
                     }
 
-                    var x2 = dst.x;
-                    var y2 = dst.y + 16; // Center of Node Header (32px / 2 = 16)
-                    if (link.type === 'ACCESS') y2 = dst.y + dst.h / 2; // Middle of Global Node
+                    var headerH = 30;
+                    if (!isCollapsed) {
+                        var line = doc.createElementNS(svgNS, "line");
+                        line.setAttribute("x1", x);
+                        line.setAttribute("y1", y + headerH);
+                        line.setAttribute("x2", x + w);
+                        line.setAttribute("y2", y + headerH);
+                        line.setAttribute("stroke", "var(--container-border)");
+                        g.appendChild(line);
+                    }
 
-                    // 2. Routing Points
-                    var points = [];
-                    points.push({ x: x1, y: y1 }); // Start
+                    // Title Left (Adjusted 5% indent)
+                    var text = doc.createElementNS(svgNS, "text");
+                    text.setAttribute("x", x + (w * 0.05));
+                    text.setAttribute("y", y + headerH / 2 + 1);
+                    text.setAttribute("class", "container-title");
+                    text.textContent = label;
+                    g.appendChild(text);
 
-                    if (link.type === 'CALL') {
-                        var rankDiff = dst.rank - src.rank;
-                        if (x2 > x1 && rankDiff > 1) {
-                            // Smart Step-Over
-                            var safeY = findHorizontalGap(layout, y1, src.rank + 1, dst.rank - 1, src.packName);
-                            var midX1 = x1 + 20; // Step out
-                            var midX2 = x2 - 20; // Step in
+                    // Min/Max Icon (Top Right)
+                    var iconG = doc.createElementNS(svgNS, "g");
+                    iconG.setAttribute("transform", `translate(${x + w - 25}, ${y + 5})`);
+                    iconG.style.cursor = "pointer";
+                    iconG.onclick = function (e) {
+                        e.stopPropagation();
+                        if (onToggle) onToggle();
+                    };
 
-                            points.push({ x: midX1, y: y1 });
-                            points.push({ x: midX1, y: safeY });
-                            points.push({ x: midX2, y: safeY });
-                            points.push({ x: midX2, y: y2 });
+                    var iconRect = doc.createElementNS(svgNS, "rect");
+                    iconRect.setAttribute("width", "20");
+                    iconRect.setAttribute("height", "20");
+                    iconRect.setAttribute("fill", "transparent");
+                    iconG.appendChild(iconRect);
 
-                        } else if (x2 > x1) {
-                            // Direct forward
-                            var midX = (x1 + x2) / 2;
-                            points.push({ x: midX, y: y1 });
-                            points.push({ x: midX, y: y2 });
-                        } else {
-                            // Backwards (Cycle)
-                            var midX = x1 + 20;
-                            var loopY = y1 + 100;
-                            points.push({ x: midX, y: y1 });
-                            points.push({ x: midX, y: loopY });
-                            points.push({ x: x2 - 20, y: loopY });
+                    var iconText = doc.createElementNS(svgNS, "text");
+                    iconText.setAttribute("x", "10");
+                    iconText.setAttribute("y", "15");
+                    iconText.setAttribute("text-anchor", "middle");
+                    iconText.setAttribute("fill", "var(--text-color)");
+                    iconText.setAttribute("font-weight", "bold");
+                    iconText.textContent = isCollapsed ? "+" : "-";
+                    iconG.appendChild(iconText);
+
+                    g.appendChild(iconG);
+                    return g;
+                }
+
+                function toggleContainer(packName, type) {
+                    if (containerState[packName]) {
+                        containerState[packName][type] = !containerState[packName][type];
+                        draw();
+                    }
+                }
+
+                layout.packs.forEach(p => {
+                    var g = drawContainer(p.x, p.y, p.w, p.h, p.label, "card-main", () => toggleContainer(p.packName, 'pack'), p.collapsed);
+                    gMain.appendChild(g);
+                    // If collapsed, we shouldn't render children. 
+                    // But layout.innerCards/pools might still be there if we didn't filter them in calculateLayout.
+                    // We did filter logic/globals content, but the containers themselves?
+                    // In calculateLayout replacement above, I didn't fully implement removing them.
+                    // Let's fix it here: if p.collapsed, don't render children.
+                    // But the children are in layout.innerCards...
+                    // We need to filter layout.innerCards based on pack state.
+                });
+
+                layout.innerCards.forEach(c => {
+                    // Check if parent pack is collapsed
+                    var packState = containerState[c.packName];
+                    if (packState && packState.pack) return; // Don't render if pack collapsed
+
+                    gMain.appendChild(drawContainer(c.x, c.y, c.w, c.h, c.label, "card-inner", () => toggleContainer(c.packName, 'logic'), c.collapsed));
+                });
+
+                layout.pools.forEach(p => {
+                    var packState = containerState[p.packName];
+                    if (packState && packState.pack) return;
+
+                    var type = p.type; // 'globals' or 'data'
+                    gMain.appendChild(drawContainer(p.x, p.y, p.w, p.h, p.label, p.type === 'data' ? "data-pool" : "global-pool", () => toggleContainer(p.packName, type), p.collapsed));
+                });
+
+                // Links
+                var drawnLinks = {};
+                data.links.forEach(function (link) {
+                    var src = layout.nodes[link.from];
+                    var dst = layout.nodes[link.to];
+                    var linkId = link.from + "-" + link.to + "-" + link.type;
+
+
+
+                    // Filter Implicit Links
+                    if (link.type === 'GLOBAL_USAGE' && !showGlobalLinks) return;
+                    if (link.type === 'ACCESS' && !showGlobalAccessLinks) return;
+                    if (link.type === 'CALL' && !showProcedureLinks) return;
+
+                    // Filter by Data Type (Granular per Link Type)
+                    var dType = link.dataType || 'Float';
+                    if (showDataTypes[link.type] && !showDataTypes[link.type][dType]) return;
+
+                    if (src && dst && !drawnLinks[linkId]) {
+                        // Visibility Check: Source or Dest Pack Collapsed?
+                        if (src.packName && containerState[src.packName] && containerState[src.packName].pack) return;
+                        if (dst.packName && containerState[dst.packName] && containerState[dst.packName].pack) return;
+
+                        drawnLinks[linkId] = true;
+                        var gLink = doc.createElementNS(svgNS, "g");
+                        var path = doc.createElementNS(svgNS, "path");
+
+                        // Tooltip (Robust)
+                        var title = doc.createElementNS(svgNS, "title");
+                        // Prioritize dedicated tooltip, fallback to debug string
+                        title.textContent = link.tooltip ? link.tooltip : (link.from + " -> " + link.to + " (" + link.type + ")");
+                        path.appendChild(title);
+
+                        // 1. Calculate Anchors
+                        var x1 = src.x + src.w;
+                        var y1 = src.y + 20; // Default
+
+                        // Precise Section Anchoring
+                        if (link.type === 'CALL') {
+                            y1 = getSectionCenterY(src, 'locals');
+                        } else if (link.type === 'ACCESS') {
+                            y1 = getSectionCenterY(src, 'globals');
+                        }
+
+                        var x2 = dst.x;
+                        var y2 = dst.y + 16; // Center of Node Header (32px / 2 = 16)
+
+                        if (link.type === 'ACCESS') y2 = dst.y + dst.h / 2; // Middle of Global Node
+
+                        if (link.type === 'GLOBAL_USAGE') {
+                            x1 = src.x + src.w; // Right of Global
+                            y1 = src.y + (src.h / 2); // Middle of Global
+                            x2 = dst.x; // Left of Procedure
+                            y2 = dst.y + 16; // Header Center (Aligned with Procedure Links)
+                        }
+
+                        // 2. Routing Points
+                        var points = [];
+                        points.push({ x: x1, y: y1 }); // Start
+
+                        if (link.type === 'CALL') {
+                            var rankDiff = dst.rank - src.rank;
+                            if (x2 > x1 && rankDiff > 1) {
+                                // Smart Step-Over
+                                var safeY = findHorizontalGap(layout, y1, src.rank + 1, dst.rank - 1, src.packName);
+                                var midX1 = x1 + 20; // Step out
+                                var midX2 = x2 - 20; // Step in
+
+                                points.push({ x: midX1, y: y1 });
+                                points.push({ x: midX1, y: safeY });
+                                points.push({ x: midX2, y: safeY });
+                                points.push({ x: midX2, y: y2 });
+
+                            } else if (x2 > x1) {
+                                // Direct forward
+                                var midX = (x1 + x2) / 2;
+                                points.push({ x: midX, y: y1 });
+                                points.push({ x: midX, y: y2 });
+                            } else {
+                                // Backwards (Cycle)
+                                var midX = x1 + 20;
+                                var loopY = y1 + 100;
+                                points.push({ x: midX, y: y1 });
+                                points.push({ x: midX, y: loopY });
+                                points.push({ x: x2 - 20, y: loopY });
+                                points.push({ x: x2 - 20, y: y2 });
+                            }
                             points.push({ x: x2 - 20, y: y2 });
+                        } else if (link.type === 'ACCESS') {
+                            // ACCESS (Global) - Left Entry Strategy
+                            var logicCard = layout.innerCards.find(c => c.packName === src.packName && c.type === 'logic');
+                            var globalPool = layout.pools.find(p => p.packName === src.packName);
+
+                            // Determine Bus Y
+                            var busY = y1 + 50;
+                            if (logicCard && globalPool) {
+                                busY = (logicCard.y + logicCard.h + globalPool.y) / 2;
+                            }
+
+                            var targetEntryX = x2 - 20;
+
+                            points.push({ x: x1 + 15, y: y1 });      // Out
+                            points.push({ x: x1 + 15, y: busY });    // Down to Bus
+                            points.push({ x: targetEntryX, y: busY }); // Along Bus
+                            points.push({ x: targetEntryX, y: y2 });   // Align Y
+
+                            points.push({ x: x2, y: y2 });             // Enter
+                        } else if (link.type === 'GLOBAL_USAGE') {
+                            // Link: Global (Right) -> Procedure (Left)
+                            // Route: Out Right -> Vertical -> Bus Left -> Vertical -> In Left
+
+                            var logicCard = layout.innerCards.find(c => c.packName === src.packName && c.type === 'logic');
+                            var globalPool = layout.pools.find(p => p.packName === src.packName);
+
+                            // Determine Bus Y (Between Logic and Globals)
+                            var busY = y1 - 40;
+                            if (logicCard && globalPool) {
+                                busY = (logicCard.y + logicCard.h + globalPool.y) / 2;
+                            }
+
+                            var leftGutterX = x2 - 25; // 25px into margin
+                            var rightExitX = leftGutterX; // Align perfectly
+
+                            points = [];
+                            points.push({ x: x1, y: y1 });             // Start (Global Right)
+                            points.push({ x: rightExitX, y: y1 });     // Out Right
+                            points.push({ x: rightExitX, y: busY });   // Vertical to Bus
+                            points.push({ x: leftGutterX, y: busY });  // Horizontal to Left Gutter (Redundant if aligned)
+                            points.push({ x: leftGutterX, y: y2 });    // Vertical to Proc Y
+                            points.push({ x: x2, y: y2 });             // In Right to Proc Left
+
+                            // Filter duplicate points to prevent zero-length segments causing NaN in drawOrthogonalPath
+                            points = points.filter(function (p, i, a) {
+                                return i === 0 || !(Math.abs(p.x - a[i - 1].x) < 0.1 && Math.abs(p.y - a[i - 1].y) < 0.1);
+                            });
                         }
-                    } else {
-                        // ACCESS (Global) - Left Entry Strategy
-                        var logicCard = layout.innerCards.find(c => c.packName === src.packName && c.type === 'logic');
-                        var globalPool = layout.pools.find(p => p.packName === src.packName);
 
-                        // Determine Bus Y
-                        var busY = y1 + 50;
-                        if (logicCard && globalPool) {
-                            busY = (logicCard.y + logicCard.h + globalPool.y) / 2;
+
+
+                        if (link.type === 'CALL') {
+                            points.push({ x: x2, y: y2 });
                         }
 
-                        var targetEntryX = x2 - 20;
+                        var d = drawOrthogonalPath(points, 10);
 
-                        points.push({ x: x1 + 15, y: y1 });      // Out
-                        points.push({ x: x1 + 15, y: busY });    // Down to Bus
-                        points.push({ x: targetEntryX, y: busY }); // Along Bus
-                        points.push({ x: targetEntryX, y: y2 });   // Align Y
-                        points.push({ x: x2, y: y2 });             // Enter
+                        // Color Coding
+                        var strokeColor = "var(--link-color)";
+
+                        if (link.dataType === 'Integer') strokeColor = "#4CAF50";
+                        else if (link.dataType === 'String') strokeColor = "#E040FB";
+                        else strokeColor = "#FF9800";
+
+                        path.setAttribute("class", "link " + link.type.toLowerCase());
+                        path.style.stroke = strokeColor;
+                        path.setAttribute("stroke-width", "1.5");
+                        path.setAttribute("d", d);
+                        path.setAttribute("fill", "none");
+                        path.setAttribute("marker-end", "url(#arrowhead)");
+
+                        // Hit Area
+                        var pathHit = doc.createElementNS(svgNS, "path");
+                        pathHit.setAttribute("d", d);
+                        pathHit.setAttribute("stroke", "transparent");
+                        pathHit.setAttribute("stroke-width", "10");
+                        pathHit.setAttribute("fill", "none");
+                        pathHit.style.cursor = "pointer";
+                        var title = doc.createElementNS(svgNS, "title");
+                        title.textContent = link.to + ":(" + (link.label || "") + ")";
+                        pathHit.appendChild(title);
+
+                        gLink.appendChild(path);
+                        gLink.appendChild(pathHit);
+                        gMain.appendChild(gLink);
+                    }
+                });
+
+                // Nodes
+                // FIX: Z-Index sorting. Draw DATA_FILE before DATA_RECORD.
+                // Draw Global/Procs mixed? Procedure with logic should be on top.
+                // Simple sort: DATA_FILE (1), DATA_RECORD (2), Others (0)
+                // Actually, render order: Default -> Data File -> Data Record.
+                var nodeKeys = Object.keys(layout.nodes).sort((a, b) => {
+                    var nA = layout.nodes[a];
+                    var nB = layout.nodes[b];
+                    // Priority: Data File < Data Record (Record on top)
+                    var pA = nA.type === 'DATA_FILE' ? 1 : (nA.type === 'DATA_RECORD' ? 2 : 0);
+                    var pB = nB.type === 'DATA_FILE' ? 1 : (nB.type === 'DATA_RECORD' ? 2 : 0);
+                    return pA - pB;
+                });
+
+                nodeKeys.forEach(function (key) {
+                    var n = layout.nodes[key];
+                    // Visibility Check: Pack Collapsed
+                    if (n.packName) {
+                        var packState = containerState[n.packName];
+                        if (packState && packState.pack) return;
                     }
 
-                    if (link.type === 'CALL') {
-                        points.push({ x: x2, y: y2 });
+                    var g = doc.createElementNS(svgNS, "g");
+                    g.setAttribute("class", "node " + n.type.toLowerCase());
+                    g.setAttribute("transform", `translate(${n.x}, ${n.y})`);
+
+                    var fo = doc.createElementNS(svgNS, "foreignObject");
+                    fo.setAttribute("width", n.w);
+                    fo.setAttribute("height", n.h);
+
+                    var div = doc.createElement("div");
+                    var isEmpty = (!n.params || n.params.length === 0) && (!n.locals || n.locals.length === 0) && (!n.globals || n.globals.length === 0);
+                    if (n.type === 'DATA_FILE') {
+                        var fileNode = data.nodes[n.id]; // n is layout node, id matches map key
+                        // Wait, n.id is UPPERCASE Name.
+                        // data.nodes uses UPPERCASE Name.
+                        var originalNode = data.nodes[n.label.toUpperCase()]; // label is name
+                        // n.records ?
+                        // calculateLayout populates records? No, extractSystemData does.
+                        // layout.nodes copied it?
+                        // Let's check calculateLayout.
+                        // layout.nodes copies: params, locals, globals.
+                        // It does NOT copy records explicitly in my previous edit?
+                        // Wait, I added it to layout.nodes[dfName].records?
+                        // No, I think I missed copying 'records' to layout node properties if I need to check length here.
+                        // BUT, I can check data.nodes directly if I have the name.
+                        isEmpty = (!data.nodes[n.label.toUpperCase()].records || data.nodes[n.label.toUpperCase()].records.length === 0);
                     }
 
-                    var d = drawOrthogonalPath(points, 10);
+                    div.className = "node-card " + (n.type === 'GLOBAL' ? 'global' : '') + (n.collapsed ? ' collapsed' : '') + (isEmpty ? ' empty' : '') + (n.type === 'DATA_FILE' ? ' data_file' : '') + (n.type === 'DATA_RECORD' ? ' data_record' : '');
 
-                    // Color Coding
-                    var strokeColor = "var(--link-color)";
-                    if (link.dataType === 'Integer') strokeColor = "#4CAF50";
-                    else if (link.dataType === 'String') strokeColor = "#E040FB";
-                    else strokeColor = "#FF9800";
-
-                    path.setAttribute("class", "link " + link.type.toLowerCase());
-                    path.style.stroke = strokeColor;
-                    path.setAttribute("stroke-width", "1.5");
-                    path.setAttribute("d", d);
-                    path.setAttribute("fill", "none");
-
-                    // Hit Area
-                    var pathHit = doc.createElementNS(svgNS, "path");
-                    pathHit.setAttribute("d", d);
-                    pathHit.setAttribute("stroke", "transparent");
-                    pathHit.setAttribute("stroke-width", "10");
-                    pathHit.setAttribute("fill", "none");
-                    pathHit.style.cursor = "pointer";
-                    var title = doc.createElementNS(svgNS, "title");
-                    title.textContent = link.to + ":(" + (link.label || "") + ")";
-                    pathHit.appendChild(title);
-
-                    gLink.appendChild(path);
-                    gLink.appendChild(pathHit);
-                    gMain.appendChild(gLink);
-                }
-            });
-
-            // Nodes
-            for (var key in layout.nodes) {
-                var n = layout.nodes[key];
-                var g = doc.createElementNS(svgNS, "g");
-                g.setAttribute("class", "node " + n.type.toLowerCase());
-                g.setAttribute("transform", `translate(${n.x}, ${n.y})`);
-
-                var fo = doc.createElementNS(svgNS, "foreignObject");
-                fo.setAttribute("width", n.w);
-                fo.setAttribute("height", n.h);
-
-                var div = doc.createElement("div");
-                div.className = "node-card " + (n.type === 'GLOBAL' ? 'global' : '') + (n.collapsed ? ' collapsed' : '');
-
-                var iconChar = n.collapsed ? '+' : '-';
-                var html = `<div class="node-header">
+                    var iconChar = n.collapsed ? '+' : '-';
+                    var html = `<div class="node-header">
                                 <span class="node-title">${n.label}</span>
                                 <span class="node-type">${n.type}</span>
                                 <span class="node-icon">${iconChar}</span>
                             </div>`;
 
-                if (n.type === 'PROC') {
-                    html += `<div class="node-body">`;
+                    if (n.type === 'PROC' && !n.collapsed && !isEmpty) {
+                        html += `<div class="node-body">`;
 
-                    // Params Container
-                    if (n.params && n.params.length > 0) {
-                        var isExpanded = sectionState[n.label.toUpperCase()].params;
-                        var displayStyle = isExpanded ? 'flex' : 'none';
-                        var icon = isExpanded ? '&#9660;' : '&#9654;'; // Down or Right arrow
+                        // Params Container
+                        if (n.params && n.params.length > 0) {
+                            var isExpanded = sectionState[n.label.toUpperCase()].params;
+                            var displayStyle = isExpanded ? 'flex' : 'none';
+                            var icon = isExpanded ? '&#9660;' : '&#9654;'; // Down or Right arrow
 
-                        html += `<div class="inner-container">
+                            html += `<div class="inner-container">
                                     <div class="section-title section-toggle" data-node="${n.label.toUpperCase()}" data-section="params">
                                         ${icon} Params
                                     </div>
@@ -1424,31 +2068,35 @@ var CodeVisualizer = (function () {
                                         ${n.params.map(p => `<div class="item"><span style="font-weight:bold">${p.name}</span> <span style="opacity:0.7; font-size:90%">(${p.type})</span></div>`).join('')}
                                     </div>
                                  </div>`;
-                    }
+                        }
 
-                    // Globals Container (First)
-                    if (n.globals && n.globals.length > 0) {
-                        var isExpanded = sectionState[n.label.toUpperCase()].globals;
-                        var displayStyle = isExpanded ? 'flex' : 'none';
-                        var icon = isExpanded ? '&#9660;' : '&#9654;';
+                        // Globals Container (First)
+                        if (n.globals && n.globals.length > 0) {
+                            var isExpanded = sectionState[n.label.toUpperCase()].globals;
+                            var displayStyle = isExpanded ? 'flex' : 'none';
+                            var icon = isExpanded ? '&#9660;' : '&#9654;';
 
-                        html += `<div class="inner-container">
+                            html += `<div class="inner-container">
                                     <div class="section-title section-toggle" data-node="${n.label.toUpperCase()}" data-section="globals">
                                         ${icon} Globals (${n.globals.length})
                                     </div>
                                     <div class="section-list" style="display: ${displayStyle};">
-                                        ${n.globals.map(g => `<div class="item">${g}</div>`).join('')}
+                                        ${n.globals.map(g => {
+                                var gNode = layout.nodes[g.toUpperCase()];
+                                var lbl = gNode ? gNode.label : g;
+                                return `<div class="item">${lbl}</div>`;
+                            }).join('')}
                                     </div>
                                  </div>`;
-                    }
+                        }
 
-                    // Locals Container (Second)
-                    if (n.locals && n.locals.length > 0) {
-                        var isExpanded = sectionState[n.label.toUpperCase()].locals;
-                        var displayStyle = isExpanded ? 'flex' : 'none';
-                        var icon = isExpanded ? '&#9660;' : '&#9654;';
+                        // Locals Container (Second)
+                        if (n.locals && n.locals.length > 0) {
+                            var isExpanded = sectionState[n.label.toUpperCase()].locals;
+                            var displayStyle = isExpanded ? 'flex' : 'none';
+                            var icon = isExpanded ? '&#9660;' : '&#9654;';
 
-                        html += `<div class="inner-container">
+                            html += `<div class="inner-container">
                                     <div class="section-title section-toggle" data-node="${n.label.toUpperCase()}" data-section="locals">
                                         ${icon} Locals (${n.locals.length})
                                     </div>
@@ -1456,103 +2104,305 @@ var CodeVisualizer = (function () {
                                         ${n.locals.map(l => `<div class="item">${l}</div>`).join('')}
                                     </div>
                                  </div>`;
+                        }
+
+
+                        html += `</div>`;
                     }
 
+                    div.innerHTML = html;
+                    fo.appendChild(div);
+                    g.appendChild(fo);
 
-                    html += `</div>`;
-                }
+                    // Click Logic: Separate PROC (Collapse/Select) vs Global (Select)
+                    if (n.type === 'PROC') {
+                        // Collapse Logic OR Select Logic
+                        div.onclick = function (id, nodeData) {
+                            return function (e) {
+                                e.stopPropagation();
+                                if (e.target.classList.contains('node-icon')) {
+                                    // Collapse
+                                    collapsedState[id] = !collapsedState[id];
+                                    draw();
+                                } else {
+                                    // Select
+                                    showCode(nodeData.label.toUpperCase());
 
-                div.innerHTML = html;
-                fo.appendChild(div);
-                g.appendChild(fo);
+                                    var allNodes = doc.querySelectorAll('.node-card');
+                                    allNodes.forEach(el => el.classList.remove('active'));
+                                    this.classList.add('active');
+                                }
+                            };
+                        }(n.id, n);
+                    } else if (n.type === 'DATA_FILE') {
+                        // Data File Click Logic (Collapsible)
+                        div.onclick = function (id, nodeData) {
+                            return function (e) {
+                                e.stopPropagation();
+                                if (e.target.classList.contains('node-icon') || e.target.closest('.node-header')) {
+                                    // Collapse
+                                    collapsedState[id] = !collapsedState[id];
+                                    draw();
+                                }
+                            };
+                        }(n.id, n);
+                    } else {
+                        // Non-Interactive or Simple Select (Global, Record)
+                        g.onclick = function (nodeData) {
+                            return function (e) {
+                                e.stopPropagation();
+                                // Select
+                                // showCode(nodeData.label.toUpperCase()); // No Code for Globals/Records really
 
-                // Click to Show Code
-                g.onclick = function (nodeData) {
-                    return function (e) {
-                        e.stopPropagation();
-                        var code = nodeData.code || "// No code available";
-                        win.showCode(code, nodeData.type + ": " + nodeData.label);
+                                var allNodes = doc.querySelectorAll('.node-card');
+                                allNodes.forEach(el => el.classList.remove('active'));
+                                this.querySelector('.node-card').classList.add('active');
+                            };
+                        }(n);
+                    }
 
-                        var allNodes = doc.querySelectorAll('.node-card');
-                        allNodes.forEach(el => el.classList.remove('active'));
-                        this.querySelector('.node-card').classList.add('active');
-                    };
-                }(n);
-
-                // Toggle Collapse
-                var icon = div.querySelector('.node-icon');
-                if (icon) {
-                    icon.onclick = function (nodeName) {
-                        return function (e) {
+                    // Section Toggle Logic
+                    var toggles = div.querySelectorAll('.section-toggle');
+                    toggles.forEach(t => {
+                        t.onclick = function (e) {
                             e.stopPropagation();
-                            collapsedState[nodeName] = !collapsedState[nodeName];
-                            draw(); // Re-render with new state
+                            var nodeName = this.getAttribute('data-node');
+                            var section = this.getAttribute('data-section');
+                            sectionState[nodeName][section] = !sectionState[nodeName][section];
+                            draw(); // Re-render
                         };
-                    }(n.label.toUpperCase());
-                }
+                    });
 
-                // Section Toggle Logic
-                var toggles = div.querySelectorAll('.section-toggle');
-                toggles.forEach(t => {
-                    t.onclick = function (e) {
-                        e.stopPropagation();
-                        var nodeName = this.getAttribute('data-node');
-                        var section = this.getAttribute('data-section');
-                        sectionState[nodeName][section] = !sectionState[nodeName][section];
-                        draw(); // Re-render
-                    };
+                    gMain.appendChild(g);
                 });
 
-                gMain.appendChild(g);
-            }
-
-            container.appendChild(svg);
-
-            // Zoom/Pan
-            var scale = 1;
-            var tx = 0, ty = 0;
-            var isDragging = false;
-            var startX, startY;
-
-            function updateTransform() {
                 gMain.setAttribute("transform", `translate(${tx}, ${ty}) scale(${scale})`);
+
+                container.appendChild(svg);
+
+                // Attach SVG Listeners (Must be done every draw/re-creation)
+                svg.addEventListener('mousedown', function (e) {
+                    if (e.target.tagName === 'svg' || e.target.id === 'graph-container') {
+                        isDragging = true;
+                        startX = e.clientX - tx;
+                        startY = e.clientY - ty;
+                    }
+                });
+
+                svg.addEventListener('wheel', function (e) {
+                    if (e.ctrlKey) {
+                        e.preventDefault();
+                        var s = Math.exp(-e.deltaY * 0.001);
+                        scale *= s;
+                        gMain.setAttribute("transform", `translate(${tx}, ${ty}) scale(${scale})`);
+                    }
+                });
+
+            } catch (e) {
+                console.error("Visualizer: draw() CRASHED", e);
+                container.innerHTML = `<div style="padding: 20px; color: red; font-family: monospace;">
+                    <h3>Visualizer Error</h3>
+                    <p>${e.message}</p>
+                    <pre>${e.stack}</pre>
+                </div>`;
+            }
+        }
+
+        function updateTransform() {
+            if (gMain) gMain.setAttribute("transform", `translate(${tx}, ${ty}) scale(${scale})`);
+        }
+
+        win.addEventListener('mousemove', function (e) {
+            if (isDragging) {
+                tx = e.clientX - startX;
+                ty = e.clientY - startY;
+                updateTransform();
+            }
+        });
+
+        win.addEventListener('mouseup', function () {
+            isDragging = false;
+        });
+
+        var btnLinks = doc.getElementById('btn-toggle-links');
+        var btnAccess = doc.getElementById('btn-toggle-access');
+        var btnCalls = doc.getElementById('btn-toggle-calls');
+
+        // Default to TRUE if undefined
+        var opt = OptionsManager.getOption('showGlobalUsageLinks');
+        var showGlobalLinks = (opt === undefined || opt === null) ? true : opt;
+
+        var optAccess = OptionsManager.getOption('showGlobalAccessLinks');
+        var showGlobalAccessLinks = (optAccess === undefined || optAccess === null) ? true : optAccess;
+
+        var optCalls = OptionsManager.getOption('showProcedureLinks');
+        var showProcedureLinks = (optCalls === undefined || optCalls === null) ? true : optCalls;
+
+        // Restore Code Button Logic
+        var btnCode = doc.getElementById('btn-toggle-code');
+
+        // Determine initial state based on global var or option (default hidden as per task)
+        var codePane = doc.getElementById('code-pane');
+        // Fix: style.display only reads inline styles. Default CSS is hidden.
+        // We know it starts hidden, so initial state is false.
+        var isCodePaneVisible = false;
+
+        function updateCodeButtonState() {
+            if (isCodePaneVisible) {
+                btnCode.style.background = "var(--list-hover-bg)";
+                btnCode.style.border = "1px solid var(--text-color)";
+            } else {
+                btnCode.style.background = "";
+                btnCode.style.border = "";
+            }
+        }
+
+        if (btnCode) {
+            btnCode.onclick = function () {
+                isCodePaneVisible = !isCodePaneVisible;
+                if (codePane) {
+                    codePane.style.display = isCodePaneVisible ? 'flex' : 'none';
+                    // Layout might need adjustment if it overlays? No, it's absolute/sidebar.
+                }
+                updateCodeButtonState();
+            };
+            updateCodeButtonState();
+        }
+
+        function updateLinkButtons() {
+            if (showGlobalLinks) {
+                btnLinks.style.background = "var(--list-hover-bg)";
+                btnLinks.style.border = "1px solid var(--text-color)";
+            } else {
+                btnLinks.style.background = "";
+                btnLinks.style.border = "";
             }
 
-            svg.addEventListener('mousedown', function (e) {
-                if (e.target.tagName === 'svg' || e.target.id === 'graph-container') {
-                    isDragging = true;
-                    startX = e.clientX - tx;
-                    startY = e.clientY - ty;
-                }
-            });
+            if (showGlobalAccessLinks) {
+                btnAccess.style.background = "var(--list-hover-bg)";
+                btnAccess.style.border = "1px solid var(--text-color)";
+            } else {
+                btnAccess.style.background = "";
+                btnAccess.style.border = "";
+            }
 
-            win.addEventListener('mousemove', function (e) {
-                if (isDragging) {
-                    tx = e.clientX - startX;
-                    ty = e.clientY - startY;
-                    updateTransform();
-                }
-            });
+            if (showProcedureLinks) {
+                btnCalls.style.background = "var(--list-hover-bg)";
+                btnCalls.style.border = "1px solid var(--text-color)";
+            } else {
+                btnCalls.style.background = "";
+                btnCalls.style.border = "";
+            }
+        }
+        updateLinkButtons();
 
-            win.addEventListener('mouseup', function () {
-                isDragging = false;
-            });
+        btnLinks.onclick = function () {
+            showGlobalLinks = !showGlobalLinks;
+            OptionsManager.setOption('showGlobalUsageLinks', showGlobalLinks);
+            updateLinkButtons();
+            draw();
+        };
 
-            svg.addEventListener('wheel', function (e) {
-                if (e.ctrlKey) {
-                    e.preventDefault();
-                    var s = Math.exp(-e.deltaY * 0.001);
-                    scale *= s;
-                    updateTransform();
-                }
-            });
+        btnAccess.onclick = function () {
+            showGlobalAccessLinks = !showGlobalAccessLinks;
+            OptionsManager.setOption('showGlobalAccessLinks', showGlobalAccessLinks);
+            updateLinkButtons();
+            draw();
+        };
 
-            doc.getElementById('btn-zoom-in').onclick = function () { scale *= 1.2; updateTransform(); };
-            doc.getElementById('btn-zoom-out').onclick = function () { scale /= 1.2; updateTransform(); };
-            doc.getElementById('btn-fit').onclick = function () {
-                scale = 1; tx = 0; ty = 0; updateTransform();
+        btnCalls.onclick = function () {
+            showProcedureLinks = !showProcedureLinks;
+            OptionsManager.setOption('showProcedureLinks', showProcedureLinks);
+            updateLinkButtons();
+            draw();
+        };
+
+        // Data Type Toggles (Nested)
+        var showDataTypes = {
+            GLOBAL_USAGE: { Integer: true, String: true, Float: true },
+            ACCESS: { Integer: true, String: true, Float: true },
+            CALL: { Integer: true, String: true, Float: true }
+        };
+
+        // Load Options
+        var optTypes = OptionsManager.getOption('showDataTypesV2'); // V2 for structure change
+        if (optTypes) showDataTypes = optTypes;
+
+        function setupTypeToggle(id, category, type) {
+            var chk = doc.getElementById(id);
+            if (!chk) return;
+            chk.checked = showDataTypes[category][type];
+            chk.onchange = function () {
+                showDataTypes[category][type] = chk.checked;
+                OptionsManager.setOption('showDataTypesV2', showDataTypes);
+                draw();
             };
         }
+
+        // Setup Tabs
+        var tabs = doc.querySelectorAll('.legend-tab');
+        tabs.forEach(t => {
+            t.onclick = function () {
+                // Deactivate all
+                tabs.forEach(tb => tb.classList.remove('active'));
+                doc.querySelectorAll('.legend-panel').forEach(p => p.classList.remove('active'));
+
+                // Activate clicked
+                this.classList.add('active');
+                var panelId = this.getAttribute('data-tab');
+                doc.getElementById(panelId).classList.add('active');
+            };
+        });
+
+        // Setup Checkboxes (Granular)
+        setupTypeToggle('chk-usage-int', 'GLOBAL_USAGE', 'Integer');
+        setupTypeToggle('chk-usage-str', 'GLOBAL_USAGE', 'String');
+        setupTypeToggle('chk-usage-float', 'GLOBAL_USAGE', 'Float');
+
+        setupTypeToggle('chk-access-int', 'ACCESS', 'Integer');
+        setupTypeToggle('chk-access-str', 'ACCESS', 'String');
+        setupTypeToggle('chk-access-float', 'ACCESS', 'Float');
+
+        setupTypeToggle('chk-calls-int', 'CALL', 'Integer');
+        setupTypeToggle('chk-calls-str', 'CALL', 'String');
+        setupTypeToggle('chk-calls-float', 'CALL', 'Float');
+
+        doc.getElementById('btn-zoom-in').onclick = function () { scale *= 1.2; updateTransform(); };
+        doc.getElementById('btn-zoom-out').onclick = function () { scale /= 1.2; updateTransform(); };
+        doc.getElementById('btn-fit').onclick = function () {
+            scale = 1; tx = 0, ty = 0; updateTransform();
+        };
+
+        // Collapse/Expand All Logic
+        var btnExpandAll = doc.getElementById('btn-expand-all');
+        if (btnExpandAll) {
+            btnExpandAll.onclick = function () {
+                // Expand all Procedures
+                Object.keys(data.nodes).forEach(function (key) {
+                    if (data.nodes[key].type === 'PROC') {
+                        collapsedState[key] = false;
+                    }
+                });
+                draw();
+            };
+        }
+
+        var btnCollapseAll = doc.getElementById('btn-collapse-all');
+        if (btnCollapseAll) {
+            btnCollapseAll.onclick = function () {
+                // Collapse all Procedures
+                Object.keys(data.nodes).forEach(function (key) {
+                    if (data.nodes[key].type === 'PROC') {
+                        collapsedState[key] = true;
+                    }
+                });
+                draw();
+            };
+        }
+
+
+
+
 
         draw();
     }
@@ -1560,12 +2410,22 @@ var CodeVisualizer = (function () {
     // --- Public API ---
 
     function showSystemMap(packs) {
+
         var data = extractSystemData(packs);
+
         var win = openWindow();
         if (win) {
+
             setTimeout(function () {
-                renderSystemMap(data, win);
+
+                try {
+                    renderSystemMap(data, win);
+                } catch (e) {
+                    console.error("Visualizer: renderSystemMap Crashed", e);
+                }
             }, 100);
+        } else {
+            console.error("Visualizer: Window FAILED to open"); // DEBUG LOG
         }
     }
 

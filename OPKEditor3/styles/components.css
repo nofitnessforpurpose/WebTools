@@ -31,6 +31,21 @@
     border-top: 2px solid var(--status-bar-bg);
 }
 
+/* Deleted Items Style */
+#pack-list li.pack-item-row.deleted-item {
+    opacity: 0.6;
+}
+
+#pack-list li.pack-item-row.deleted-item .item-name,
+#pack-list li.pack-item-row.deleted-item .item-desc,
+#pack-list li.pack-item-row.deleted-item .item-addr {
+    text-decoration: line-through;
+}
+
+#pack-list li.pack-item-row.deleted-item .item-icon {
+    opacity: 0.7;
+}
+
 /* Tree View Implementation */
 #pack-list .pack-contents {
     margin-left: 2px;
@@ -39,7 +54,7 @@
     position: relative;
     border-left: none;
     margin-top: 0;
-    margin-bottom: 0;
+    margin-bottom: 15px;
 }
 
 #pack-list .pack-contents li {
@@ -79,7 +94,7 @@
     z-index: 1;
 }
 
-/* Stop vertical line at the last item (half height) */
+/* Stop vertical line for the last item (half height) */
 #pack-list .pack-contents li:last-child::before {
     height: 51%;
     top: 0;
@@ -163,7 +178,6 @@
 /* Pack Header */
 .pack-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
     padding: 2px 5px;
     background-color: transparent;
@@ -172,19 +186,6 @@
     font-size: 13px;
     font-weight: bold;
     margin-bottom: 0;
-}
-
-.header-icon {
-    cursor: pointer;
-    opacity: 0.7;
-    transition: opacity 0.2s;
-    font-size: 14px;
-    padding: 2px;
-}
-
-.header-icon:hover {
-    opacity: 1;
-    color: var(--highlight-color);
 }
 
 .pack-header.selected {
@@ -245,18 +246,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex-grow: 1;
-}
-
-/* Deleted Items */
-#pack-list li.pack-item-row.deleted .item-name,
-#pack-list li.pack-item-row.deleted .item-desc {
-    text-decoration: line-through;
-    opacity: 0.6;
-}
-
-#pack-list li.pack-item-row.deleted .item-icon {
-    opacity: 0.5;
-    filter: grayscale(100%);
 }
 
 /* Modal Styles */

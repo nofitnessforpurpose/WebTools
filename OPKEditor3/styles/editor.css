@@ -22,6 +22,22 @@
     overflow: hidden;
 }
 
+#editor-container.watermark::before {
+    content: 'EXPERIMENTAL';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-30deg);
+    font-size: 80px;
+    font-weight: bold;
+    color: rgba(128, 128, 128, 0.1);
+    pointer-events: none;
+    z-index: 0;
+    user-select: none;
+    white-space: nowrap;
+    font-family: 'Consolas', 'Courier New', monospace;
+}
+
 /* Legacy Editor Container (for non-Code editors) */
 #legacy-editor {
     padding: 20px;
@@ -32,6 +48,36 @@
     opacity: 1 !important;
     height: 100%;
     box-sizing: border-box;
+}
+
+.legacy-editor-container fieldset {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+.legacy-editor-container legend {
+    color: var(--text-color);
+    padding: 0 5px;
+    font-weight: bold;
+}
+
+.legacy-editor-container label {
+    color: var(--text-color);
+}
+
+.legacy-editor-container input[type='text'],
+.legacy-editor-container textarea {
+    background-color: var(--editor-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text-color);
+    padding: 4px;
+    border-radius: 2px;
+}
+
+.legacy-editor-container input[type='checkbox'] {
+    accent-color: var(--status-bar-bg);
 }
 
 .code-render-container {
@@ -77,7 +123,8 @@
 
 .code-gutter {
     width: 50px;
-    background-color: var(--editor-gutter-bg);
+    background-color: var(--bg-color);
+    filter: brightness(0.92);
     color: var(--editor-gutter-text);
     text-align: right;
     padding-right: 5px;
@@ -138,7 +185,6 @@
     width: 100%;
     height: 100%;
     border: none;
-    background: transparent !important;
     background-color: transparent !important;
     color: transparent !important;
     -webkit-text-fill-color: transparent !important;
@@ -221,4 +267,60 @@
     height: 12px;
     margin-right: 5px;
     border-radius: 2px;
+}
+
+/* Memory Map Container Styles */
+.memory-map-editor {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.memory-map-container {
+    height: 100%;
+    /* Ensure it fills parent */
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.memory-map-bar {
+    flex: 1;
+    /* Take remaining space */
+    min-height: 0;
+    /* Allow shrinking */
+    width: 100%;
+    position: relative;
+    /* overflow: auto handled in JS */
+}
+
+.memory-map-title {
+    padding: 4px 10px;
+    /* Reduced vertical padding */
+    font-size: 11px;
+    /* Slightly smaller font to match "less high" intent */
+    font-weight: bold;
+    border-bottom: 1px solid var(--border-color);
+    background-color: var(--bg-color);
+    flex-shrink: 0;
+}
+
+/* Fallback for fieldset theming if not covered by variables */
+.themed-fieldset {
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 5px;
+    background-color: rgba(128, 128, 128, 0.1) !important;
+    /* Force visibility in both light/dark */
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
+}
+
+.themed-input-no-padding {
+    background-color: var(--editor-bg);
+    border: 1px solid var(--input-border);
+    border-radius: 2px;
+    color: var(--text-color);
 }
