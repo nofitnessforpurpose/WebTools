@@ -142,6 +142,21 @@ class SourceGenerator {
         const loopStack = [];
 
         const endPC = qcodeStart + qcodeSize;
+
+        // Log LZ "Stop Sign" Signature if present and skipped
+        if (isLZ && pc >= 2 && codeBlock[pc - 2] === 0x59 && codeBlock[pc - 1] === 0xB2) {
+            if (options.logCallback) {
+                // Calculate relative PC for previous 2 bytes
+                const relPC = (pc - 2) - (options.oplBase || 0);
+                options.logCallback({
+                    pc: relPC.toString(16).toUpperCase().padStart(4, '0'),
+                    bytes: "59B2",
+                    opName: "LZ Procedure Header (STOP + SIN)",
+                    comment: "Skipped (LZ Marker)"
+                });
+            }
+        }
+
         while (pc < endPC) {
             let op = codeBlock[pc];
 

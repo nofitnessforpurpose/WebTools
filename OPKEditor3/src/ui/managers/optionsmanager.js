@@ -41,6 +41,7 @@ var OptionsManager = {
         stickyProcedureHeader: false,
         showGlobalUsageLinks: true,
         spreadsheetMode: 'legacy', // 'legacy' (Hex/ASCII) or 'enhanced' (Grid Stub)
+        targetSystem: 'Standard', // 'Standard' (CM/XP/LA) or 'LZ' (Model LZ)
     },
 
     init: function () {

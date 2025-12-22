@@ -16,7 +16,7 @@
 // Button Helper Class
 function Button(id, clickcallback, inputId, filecallback) {
    var _element = document.getElementById(id);
-   if (!_element) {
+   if (!_element) {// 
       console.warn("Button not found: " + id);
       return;
    }
@@ -381,6 +381,7 @@ function showOptionsDialog() {
          "<div class='tabs'>" +
          // Tab Order: General -> Themes -> Code Renderer -> Memory Map -> Icons
          "<button class='tab-btn active' data-tab='tab-general'>General</button>" +
+         "<button class='tab-btn' data-tab='tab-target'>Target System</button>" +
          "<button class='tab-btn' data-tab='tab-visuals'>Visuals</button>" +
          "<button class='tab-btn' data-tab='tab-themes'>Theme Selection</button>" +
          "<button class='tab-btn' data-tab='tab-theme-editor'>Theme Editor</button>" +
@@ -419,6 +420,13 @@ function showOptionsDialog() {
          "</div>" +
          "</div>" +
          "<hr style='margin: 10px 0; border: 0; border-top: 1px solid var(--border-color);'>" +
+         "</div>" +
+
+         "<div id='tab-target' class='tab-content'>" +
+         "<h4>Translation Target</h4>" +
+         "<div style='margin-bottom: 15px; font-size: 13px; color: var(--text-color);'>Select the target device family for the OPL Translator. This determines which Opcodes are valid and how headers are generated.</div>" +
+         "<div style='margin-bottom: 10px;'><label style='cursor: pointer;'><input type='radio' name='opt-target' value='Standard' style='margin-right: 8px;'><b>Standard (CM / XP / LA)</b><br><span style='font-size: 11px; margin-left: 25px; opacity: 0.8;'>Compatible with Series 3 Classic and early models.</span></label></div>" +
+         "<div style='margin-bottom: 10px;'><label style='cursor: pointer;'><input type='radio' name='opt-target' value='LZ' style='margin-right: 8px;'><b>LZ (Model LZ)</b><br><span style='font-size: 11px; margin-left: 25px; opacity: 0.8;'>Supports LZ-specific commands (DAYS, MONTH$, etc.) and Extended Opcodes.</span></label></div>" +
          "</div>" +
 
          "<div id='tab-visuals' class='tab-content'>" +
@@ -726,10 +734,18 @@ function showOptionsDialog() {
       element.querySelector('#opt-show-toolbar').checked = OptionsManager.getOption('showIconToolbar') !== false;
       element.querySelector('#opt-show-menubar').checked = OptionsManager.getOption('showMenuBar') !== false;
       element.querySelector('#opt-stickyproc').checked = OptionsManager.getOption('stickyProcedureHeader') !== false;
-      element.querySelector('#opt-grouprecords').checked = OptionsManager.getOption('groupDataRecords') === true;
-      element.querySelector('#opt-collapsefiles').checked = OptionsManager.getOption('collapseDataFiles') === true;
-      element.querySelector('#opt-hexbytes').value = OptionsManager.getOption('hexBytesPerRow') || 16;
-      element.querySelector('#opt-sheetmode').value = OptionsManager.getOption('spreadsheetMode') || 'legacy';
+      // Initialize Target Options
+      var currentTarget = OptionsManager.getOption('targetSystem') || 'Standard';
+      // Handle legacy/alternate values if any
+      if (currentTarget !== 'LZ' && currentTarget !== 'Standard') currentTarget = 'Standard';
+
+      var targetRadios = element.querySelectorAll("input[name='opt-target']");
+      targetRadios.forEach(function (r) {
+         if (r.value === currentTarget) r.checked = true;
+         r.addEventListener('change', function () {
+            if (this.checked) OptionsManager.setOption('targetSystem', this.value);
+         });
+      });
 
       // Initialize Visuals Options
       var decompilerLogCheckbox = element.querySelector('#opt-decompiler-log');
@@ -1136,6 +1152,12 @@ function showAboutDialog(isSplash) {
 
 // Initialization
 function init() {
+   var params = new URLSearchParams(window.location.search);
+   if (params.get('mode') === 'child') {
+      initChildMode(params.get('feature'));
+      return;
+   }
+
    initIconToolbar();
    decompilerLogWindow = new DecompilerLogWindow();
    updateInventory();
@@ -1175,7 +1197,7 @@ function init() {
 
             }
             localStorage.removeItem('opkedit_cached_pack');
-         } catch (e) {
+         } catch (e) {// 
             console.warn("Restore Packs: Legacy migration failed", e);
          }
       }
@@ -1801,7 +1823,7 @@ function itemSelected(packIndex, itemIndex) {
       // var startAddr = getItemAddres(pack, itemIndex) + 6;
       var startAddr = 0;
       currentEditor.initialise(currentItem, startAddr);
-   } else {
+   } else {// 
       console.warn("No editor found for type " + tp);
    }
 
@@ -1886,7 +1908,7 @@ function loadPackFromFiles(files) {
                   openPacks.push(path);
                   localStorage.setItem('opkedit_open_packs', JSON.stringify(openPacks));
                }
-            } else {
+            } else {// 
                console.warn("Restore Packs: Cannot determine full path for file. Browser security may prevent this.");
                setStatus("Warning: Cannot save pack path for restore (Browser restriction).");
             }
@@ -1922,7 +1944,7 @@ function loadPackFromFiles(files) {
 
                      localStorage.setItem('opkedit_cached_packs', JSON.stringify(cachedPacks));
 
-                  } catch (e) {
+                  } catch (e) {// 
                      console.warn("Auto-Load: Failed to save pack content.", e);
                   }
                }
@@ -1978,7 +2000,7 @@ function eraseItem() {
                      }
                   } catch (e) { console.error("File parse error:", e); }
                }
-            } catch (e) {
+            } catch (e) {// 
                console.warn("Auto-Load: Failed to check cache on delete", e);
             }
 
@@ -2127,7 +2149,7 @@ function saveSession() {
          });
       }
       localStorage.setItem('opkedit_cached_packs', JSON.stringify(sessionPacks));
-   } catch (e) {
+   } catch (e) {// 
       console.warn("Session Save Failed (Quota?):", e);
    }
 }
@@ -2663,3 +2685,21 @@ function navigateMenu(dropdown, direction) {
 setupKeyboardShortcuts();
 init();
 document.title = "Psion OPK Editor v" + APP_VERSION;
+
+function initChildMode(feature) {
+   document.body.classList.add('child-window');
+
+   // Hide standard app elements
+   var app = document.getElementById('app');
+   if (app) app.style.display = 'none';
+
+   if (feature === 'visualizer') {
+      document.title = "Code Visualizer";// 
+      console.log("Child Mode: Visualizer initialized");
+
+      // Notify opener that we are ready
+      if (window.opener && window.opener.CodeVisualizer && window.opener.CodeVisualizer.childWindowReady) {
+         window.opener.CodeVisualizer.childWindowReady(window);
+      }
+   }
+}

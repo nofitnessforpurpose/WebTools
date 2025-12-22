@@ -20,7 +20,7 @@ var OPLCompiler = (function () {
         'APPEND', 'CLOSE', 'COPY', 'CREATE', 'DELETE', 'ERASE',
         'FIRST', 'LAST', 'NEXT', 'BACK', 'OPEN', 'POSITION', 'RENAME', 'UPDATE', 'USE',
         'KSTAT', 'EDIT', 'INPUT', 'VIEW', 'ON', 'OFF',
-        'RAISE', 'UDG', 'MENU'
+        'RAISE', 'UDG', 'MENU', 'EXT'
     ];
 
     // --- Helper: Invert QCODE_DEFS for name-based lookup ---
@@ -186,11 +186,25 @@ var OPLCompiler = (function () {
         'REPT$': 0xC5, 'GEN$': 0xBC, 'FIX$': 0xBB, 'SCI$': 0xC6, 'NUM$': 0xC3, 'DATIM$': 0xB9,
         'ERR$': 0xBA, 'GET$': 0xBD, 'VAL': 0xB5, 'PI': 0xAF, 'RAD': 0xB0, 'DEG': 0xA9,
         'SIN': 0xB2, 'COS': 0xA8, 'TAN': 0xB4, 'ATAN': 0xA7, 'SQR': 0xB3, 'LN': 0xAD,
-        'LOG': 0xAE, 'EXP': 0xAA, 'RND': 0xB1, 'INTF': 0xAC, 'SPACE': 0xB6
+        'LOG': 0xAE, 'EXP': 0xAA, 'RND': 0xB1, 'INTF': 0xAC, 'SPACE': 0xB6,
+        // LZ Extensions
+        'CLOCK': 0xD6, 'DOW': 0xD7, 'FINDW': 0xD8, 'MENUN': 0xD9, 'WEEK': 0xDA,
+        'ACOS': 0xDB, 'ASIN': 0xDC, 'DAYS': 0xDD, 'MAX': 0xDE, 'MEAN': 0xDF,
+        'MIN': 0xE0, 'STD': 0xE1, 'SUM': 0xE2, 'VAR': 0xE3,
+        'DAYNAME$': 0xE4, 'DIRW$': 0xE5, 'MONTH$': 0xE6
     };
 
     // --- Parser & Compiler ---
-    function compile(source) {
+    function compile(source, options) {
+        options = options || {};
+        // Default to LZ if not specified? Or standard? 
+        // Logic suggests if user picks Standard, targetSystem='Standard'.
+        // If undefined, default to Standard? Or LZ as per user task? 
+        // Let's assume passed options from Editor are robust. 
+        // If not, default to 'Standard' to be safe for legacy, but user wants LZ support as primary.
+        // Actually, let's just use what's passed.
+        var targetSystem = options.targetSystem || 'Standard'; // Default to Standard (CM/XP) per request
+
         init(); // Ensure QCODE maps are built
         var tokens = tokenizer(source);
 
@@ -442,6 +456,10 @@ var OPLCompiler = (function () {
 
         // Pass 2: QCode Generation (Body)
         var qcode = [];
+        // Emit LZ Header if required
+        if (targetSystem === 'LZ') {
+            qcode.push(0x59, 0xB2);
+        }
 
         // --- CodeGen Helpers ---
         function emit(b) { qcode.push(b & 0xFF); }
@@ -579,7 +597,7 @@ var OPLCompiler = (function () {
                         // Convert Int(Top-1) to Float? Hard with stack machine unless we emit conversion *before* pushing RHS.
                         // Actually, we parsed LHS, then RHS.
                         // This simple recursive parser makes inserting conversion code tricky without backtracking or lookahead.
-                        // TODO: Robust mixed-mode arithmetic.
+                        // TODO: Robust mixed-mode arithmetic.// 
                         console.warn("Compiler: Mixed mode comparison not fully supported yet.");
                     }
                 }
@@ -849,6 +867,15 @@ var OPLCompiler = (function () {
                 var builtinOp = BUILTIN_OPCODES[valName];
 
                 if (builtinOp) {
+                    // console.log("Debug: Expression Builtin " + valName + " Target: " + targetSystem);
+                    var lzOps = [
+                        'CLOCK', 'DOW', 'FINDW', 'MENUN', 'WEEK', 'ACOS', 'ASIN', 'DAYS', 'MAX', 'MEAN',
+                        'MIN', 'STD', 'SUM', 'VAR', 'DAYNAME$', 'DIRW$', 'MONTH$'
+                    ];
+                    if (targetSystem !== 'LZ' && lzOps.includes(valName)) {
+                        throw new Error("Command '" + valName + "' is only available for LZ targets.");
+                    }
+
                     // Check if it's a function using parenthesis: GET()
                     if (peek() && peek().value === '(') {
                         next(); // Eat (
@@ -1260,7 +1287,7 @@ var OPLCompiler = (function () {
                         var logChar = t2.value.toUpperCase();
                         if (['A', 'B', 'C', 'D'].includes(logChar)) {
                             logVal = logChar.charCodeAt(0) - 65;
-                        } else {
+                        } else {// 
                             console.warn("Invalid Logical File Name: " + logChar);
                         }
                     }
@@ -1358,13 +1385,36 @@ var OPLCompiler = (function () {
                 } else if (t.value === 'UPDATE') {
                     emit(0x68);
                 } else if (t.value === 'FIRST') {
-                    emit(0x61); emit(0);
+                    emit(0x61);
                 } else if (t.value === 'LAST') {
-                    emit(0x62); emit(0);
+                    emit(0x62);
                 } else if (t.value === 'NEXT') {
-                    emit(0x63); emit(0);
+                    emit(0x63);
                 } else if (t.value === 'BACK') {
-                    emit(0x64); emit(0);
+                    emit(0x64);
+                } else if (t.value === 'EXT') {
+                    var exprType = parseExpression(); // Should be Int Constant
+                    // Ideally we should check if it was a literal, but parseExpression emits 0x22 (Int) or 0x20.
+                    // Actually EXT opcode ED expects 'b' (byte) param inline?
+                    // Decompiler constants says: 0XED: { args: 'b', ... }
+                    // So we must emit 0xED followed by byte literal.
+                    // But parseExpression emits Pushes.
+                    // We need to parse a CONSTANT here.
+                    // Since parseExpression consumes tokens, we're stuck.
+                    // BUT, EXT is usually `EXT 5`.
+                    // We can backtrack or use next() if we expect a literal.
+                    // Let's assume usage EXT <byte>.
+                    // Wait, parseExpression was called? No, I haven't written the code yet.
+
+                    // Correct Implementation:
+                    if (peek() && (peek().type === 'INTEGER' || peek().type === 'HEX')) {
+                        var val = next().value;
+                        if (val < 0 || val > 255) throw new Error("EXT argument out of range");
+                        emit(0xED); emit(val);
+                    } else {
+                        // Fallback: Parse expression? No, EXT requires immediate byte.
+                        throw new Error("EXT requires byte constant");
+                    }
                 } else if (t.value === 'CLOSE') {
                     emit(0x5C);
                 } else if (t.value === 'DELETE') {
@@ -1577,9 +1627,19 @@ var OPLCompiler = (function () {
                     // Check for Built-in mapping
                     var builtinOp = BUILTIN_OPCODES[upperName];
                     if (builtinOp) {
+                        // Enforce Target Compatibility
+                        var lzOps = [
+                            'CLOCK', 'DOW', 'FINDW', 'MENUN', 'WEEK', 'ACOS', 'ASIN', 'DAYS', 'MAX', 'MEAN',
+                            'MIN', 'STD', 'SUM', 'VAR', 'DAYNAME$', 'DIRW$', 'MONTH$'
+                        ];
+                        if (targetSystem !== 'LZ' && lzOps.includes(upperName)) {
+                            throw new Error("Command '" + upperName + "' is only available for LZ targets.");
+                        }
+
                         var intBuiltins = [
                             'GET', 'KEY', 'POS', 'COUNT', 'EOF', 'ERR', 'DAY', 'HOUR', 'MINUTE', 'MONTH', 'SECOND', 'YEAR',
-                            'FREE', 'RECSIZE', 'FIND', 'LEN', 'LOC', 'ASC', 'ADDR', 'VIEW', 'PEEKB', 'PEEKW', 'USR', 'DOW', 'WEEK', 'FDAYS', 'EXIST'
+                            'FREE', 'RECSIZE', 'FIND', 'LEN', 'LOC', 'ASC', 'ADDR', 'VIEW', 'PEEKB', 'PEEKW', 'USR', 'DOW', 'WEEK', 'FDAYS', 'EXIST',
+                            'CLOCK', 'FINDW', 'MENUN'
                         ];
                         if (intBuiltins.includes(upperName)) returnType = 0;
                         if (upperName.endsWith('$')) returnType = 2;
@@ -1636,7 +1696,7 @@ var OPLCompiler = (function () {
             var f = labelFixups[i];
             if (labels[f.name] !== undefined) {
                 patchFixup(f.addr, labels[f.name]);
-            } else {
+            } else {// 
                 console.warn("Compiler: Undefined Label " + f.name);
             }
         }

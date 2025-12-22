@@ -239,37 +239,87 @@ var CodeVisualizer = (function () {
                                 if (node) {
                                     node.code = fullCode;
 
-                                    // Extract Params
-                                    var procMatch = fullCode.match(/PROC\s+[A-Z0-9_$]+\s*:\s*\(([^)]*)\)/i);
-                                    if (procMatch && procMatch[1]) {
-                                        var rawParams = procMatch[1].split(',').map(s => s.trim()).filter(s => s);
-                                        node.params = rawParams.map(p => {
-                                            var type = 'Float';
-                                            if (p.endsWith('$')) type = 'String';
-                                            else if (p.endsWith('%')) type = 'Integer';
+                                    var hasSource = (lnsrc > 0 && data.length >= lncode + 4 + lnsrc) || (item.text ? true : false);
 
-                                            // Array Check
-                                            if (p.includes('(')) {
-                                                if (p.includes('$')) type = 'StringArray';
-                                                else if (p.includes('%')) type = 'IntegerArray';
-                                                else type = 'FloatArray';
-                                                // Strip dimensions for name matching
-                                                p = p.substring(0, p.indexOf('('));
+                                    if (!hasSource && variableMap) {
+                                        // Fallback: Use Decompiler Analysis for Params & Locals
+                                        // 1. Params
+                                        var paramsList = [];
+                                        Object.keys(variableMap).forEach(function (off) {
+                                            var v = variableMap[off];
+                                            if (v.isParam) {
+                                                var type = 'Float';
+                                                var isArray = v.arrayLen > 0;
+                                                if (v.type === 2) { type = isArray ? 'StringArray' : 'String'; }
+                                                else if (v.type === 0) { type = isArray ? 'IntegerArray' : 'Integer'; }
+                                                else if (v.type === 1) { type = isArray ? 'FloatArray' : 'Float'; }
+                                                else if (v.type === 3) { type = 'IntegerArray'; }
+                                                else if (v.type === 4) { type = 'FloatArray'; }
+                                                else if (v.type === 5) { type = 'StringArray'; }
+                                                paramsList.push({ name: v.name, type: type });
                                             }
-                                            return { name: p, type: type };
                                         });
-                                    }
+                                        // Sort by P1, P2 etc.
+                                        paramsList.sort(function (a, b) {
+                                            var na = parseInt(a.name.replace(/^[P]/, ''));
+                                            var nb = parseInt(b.name.replace(/^[P]/, ''));
+                                            if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                                            return a.name.localeCompare(b.name);
+                                        });
+                                        node.params = paramsList;
 
-                                    // Extract Locals
-                                    // Fix: Stop capturing at ':', 'REM', or newline to avoid capturing subsequent commands
-                                    var localRegex = /LOCAL\s+([^:\r\n]+)/ig;
-                                    var localMatch;
-                                    while ((localMatch = localRegex.exec(fullCode)) !== null) {
-                                        // Robustness: Strip REM comments and spaces
-                                        var content = localMatch[1].replace(/REM\s+.*/i, "");
-                                        var locals = content.split(',').map(s => s.trim()).filter(s => s);
-                                        // Keep dimensions for display
-                                        node.locals = node.locals.concat(locals);
+                                        // 2. Locals
+                                        var localCount = 0;
+                                        Object.keys(variableMap).forEach(function (off) {
+                                            var v = variableMap[off];
+                                            if (v.isLocal && localCount < 50) {
+                                                var display = v.name;
+                                                if (v.arrayLen) {
+                                                    display += "(" + v.arrayLen;
+                                                    if (v.type === 2 && v.maxLen) display += "," + v.maxLen;
+                                                    display += ")";
+                                                } else if (v.type === 2 && v.maxLen) {
+                                                    display += "(" + v.maxLen + ")";
+                                                }
+                                                node.locals.push(display);
+                                                localCount++;
+                                            }
+                                        });
+
+                                    } else {
+                                        // Legacy: Extract from Text (Source or Decompiled Body)
+                                        // Extract Params
+                                        var procMatch = fullCode.match(/PROC\s+[A-Z0-9_$]+\s*:\s*\(([^)]*)\)/i);
+                                        if (procMatch && procMatch[1]) {
+                                            var rawParams = procMatch[1].split(',').map(s => s.trim()).filter(s => s);
+                                            node.params = rawParams.map(p => {
+                                                var type = 'Float';
+                                                if (p.endsWith('$')) type = 'String';
+                                                else if (p.endsWith('%')) type = 'Integer';
+
+                                                // Array Check
+                                                if (p.includes('(')) {
+                                                    if (p.includes('$')) type = 'StringArray';
+                                                    else if (p.includes('%')) type = 'IntegerArray';
+                                                    else type = 'FloatArray';
+                                                    // Strip dimensions for name matching
+                                                    p = p.substring(0, p.indexOf('('));
+                                                }
+                                                return { name: p, type: type };
+                                            });
+                                        }
+
+                                        // Extract Locals
+                                        // Fix: Stop capturing at ':', 'REM', or newline to avoid capturing subsequent commands
+                                        var localRegex = /LOCAL\s+([^:\r\n]+)/ig;
+                                        var localMatch;
+                                        while ((localMatch = localRegex.exec(fullCode)) !== null) {
+                                            // Robustness: Strip REM comments and spaces
+                                            var content = localMatch[1].replace(/REM\s+.*/i, "");
+                                            var locals = content.split(',').map(s => s.trim()).filter(s => s);
+                                            // Keep dimensions for display
+                                            node.locals = node.locals.concat(locals);
+                                        }
                                     }
                                 }
 
@@ -855,71 +905,81 @@ var CodeVisualizer = (function () {
 
     // --- Window Management ---
 
-    function openWindow() {
+    var childWindow = null;
+    var lastData = null; // Store data for delayed render
 
+    function handleChildReady(win) {// 
+        console.log("Visualizer: Child Ready Handshake received");
+        childWindow = win;
+        setupChildWindow(win);
+        if (lastData) {
+            // Delay slightly to ensure DOM is digested
+            setTimeout(function () {
+                renderSystemMap(lastData, win);
+            }, 100);
+        }
+    }
+
+    function openWindow() {
         var width = 1400;
         var height = 900;
         var left = (screen.width - width) / 2;
         var top = (screen.height - height) / 2;
 
-        var win = window.open("", "OPKSystemMap", `width=${width},height=${height},top=${top},left=${left}`);
+        if (childWindow && !childWindow.closed) {
+            childWindow.focus();
+            return childWindow; // Might be ready or not
+        }
+
+        // Use index.html with child mode
+        var win = window.open("index.html?mode=child&feature=visualizer", "OPKSystemMap", `width=${width},height=${height},top=${top},left=${left}`);
 
         if (!win) {
-            alert("Please allow popups for this site to view the System Map.");
+            alert("Please allow popups to view the System Map.");
             return null;
         }
 
-        // Inject Styles using ThemeManager
+        childWindow = win;
+        return win;
+    }
+
+    function setupChildWindow(win) {
+        if (!win || !win.document) return;
+
+        // 1. Calculate Theme Vars
         var cssVars = "";
         var bodyClass = "";
-        var currentTheme = ''; // No default
-        var baseHref = "";
-
-        // Calculate Base URL for Base Tag
-        baseHref = window.location.href;
+        var currentTheme = '';
+        var baseHref = window.location.href;
 
         if (typeof ThemeManager !== 'undefined') {
             currentTheme = ThemeManager.currentTheme;
             var defs = ThemeManager.getThemeDefinition(currentTheme);
-
-            // Construct CSS Variables
             for (var key in defs) {
                 cssVars += `${key}: ${defs[key]};\n`;
             }
-
-            // Capture Body Classes
             bodyClass = document.body.className;
         }
 
-        // Check if window is already initialized
-        if (win.document && win.document.getElementById('graph-container')) {
-            // Update Theme
-            var html = win.document.documentElement;
-            if (html) {
-                html.style.cssText = cssVars;
-                html.setAttribute('data-theme', currentTheme);
-            }
-            if (win.document.body) win.document.body.className = bodyClass;
+        // 2. Inject Styles and Content
+        var doc = win.document;
 
-            return win;
+        // Ensure <base> tag is present (for relative links if needed, though we use index.html now)
+        // Actually index.html will have correct base if loaded from same dir.
+        // But we want to enforce styles.
+
+        // Apply Theme Vars to HTML/Body
+        var html = doc.documentElement;
+        if (html) {
+            html.style.cssText = cssVars;
+            html.setAttribute('data-theme', currentTheme);
         }
+        if (doc.body) doc.body.className = bodyClass;
 
-        // NO FALLBACKS: Rely on base.css and data-theme if ThemeManager data is missing.
-
-        win.document.open();
-        win.document.write(`
-            <!DOCTYPE html>
-            <html data-theme="${currentTheme}" style="${cssVars}"> <!-- Inline Styles for Highest Specificity -->
-            <head>
-                <base href="${baseHref}"> <!-- Base Tag for Relative Paths -->
-                <title>OPK System Map</title>
-                <!-- Inject Stylesheets from Main App -->
-                <link rel="stylesheet" href="styles/base.css">
-                <link rel="stylesheet" href="styles/editor.css">
-                <link rel="stylesheet" href="styles/syntax.css">
-                <style>
+        // Custom Visualizer Styles
+        var style = doc.createElement('style');
+        style.textContent = `
                     :root {
-                        /* Derived Colors - No Defaults, rely on injected vars or base.css */
                         --container-bg: var(--bg-color);
                         --container-border: var(--border-color);
                         --container-header-bg: var(--sidebar-header-bg);
@@ -937,7 +997,6 @@ var CodeVisualizer = (function () {
                         color: var(--text-color); 
                     }
                     .node.data_file .node-type {
-                        /* Restore standard centered positioning */
                         color: var(--text-color); 
                         opacity: 0.6;
                     }
@@ -953,21 +1012,21 @@ var CodeVisualizer = (function () {
                         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                         margin: 0;
                         padding: 0;
-                        overflow: hidden; /* Prevent body scroll, handle in panes */
+                        overflow: hidden; /* Prevent body scroll */
                         display: flex;
-                        flex-direction: column; /* Stack Toolbar and Main */
+                        flex-direction: column; 
                         height: 100vh;
                     }
                     #main-container {
                         display: flex;
                         width: 100%;
-                        flex: 1; /* Fill remaining height */
+                        flex: 1; 
                         overflow: hidden;
                     }
                     #graph-pane {
                         flex: 1;
                         position: relative;
-                        overflow: hidden; /* Wrapper for overlay */
+                        overflow: hidden; 
                         background: var(--bg-color);
                         min-width: 200px;
                         display: flex;
@@ -975,7 +1034,7 @@ var CodeVisualizer = (function () {
                     }
                     #graph-scroll {
                         flex: 1;
-                        overflow: auto; /* Enable Scrollbars */
+                        overflow: auto; 
                         position: relative;
                         width: 100%;
                         height: 100%;
@@ -988,25 +1047,24 @@ var CodeVisualizer = (function () {
                         transition: background 0.2s;
                     }
                     #resizer:hover, #resizer.active {
-                        background: var(--syntax-keyword); /* Highlight on hover/active */
+                        background: var(--syntax-keyword); 
                     }
                     #code-pane {
                         width: 450px;
                         background: var(--bg-color);
-                        /* border-left removed, handled by resizer */
                         display: flex;
                         flex-direction: column;
                         box-shadow: -2px 0 5px rgba(0,0,0,0.05);
                         z-index: 10;
-                        min-width: 200px; /* Prevent collapse */
-                        display: none; /* Hidden by default */
+                        min-width: 200px; 
+                        display: none; 
                     }
 
                     #controls {
                         width: 100%;
                         height: 40px;
                         border-bottom: 1px solid var(--border-color);
-                        background: var(--container-header-bg); /* Use Header BG for Toolbar */
+                        background: var(--container-header-bg); 
                         display: flex;
                         align-items: center;
                         padding: 0 10px;
@@ -1023,26 +1081,26 @@ var CodeVisualizer = (function () {
                         border-radius: 4px;
                         font-family: inherit;
                         font-weight: bold;
-                        min-width: 28px; /* Fixed Minimum Width */
-                        height: 28px; /* Square Aspect Ratio */
+                        min-width: 28px; 
+                        height: 28px; 
                         text-align: center;
                         display: flex;
                         align-items: center;
                         justify-content: center;
                     }
                     #btn-fit {
-                        min-width: auto; /* Allow Fit button to scale */
-                        padding: 5px 10px; /* More padding for text */
+                        min-width: auto; 
+                        padding: 5px 10px; 
                     }
                     #controls button:hover {
                         background: var(--list-hover-bg);
                     }
                     
-                    /* Inner Containers for Params/Locals */
+                    /* Inner Containers */
                     .inner-container {
                         border: 1px solid var(--border-color);
-                        border-radius: 6px; /* Rounded Inner */
-                        background: var(--container-header-bg); /* Slight tint */
+                        border-radius: 6px; 
+                        background: var(--container-header-bg); 
                         margin-bottom: 5px;
                         overflow: hidden;
                     }
@@ -1062,22 +1120,21 @@ var CodeVisualizer = (function () {
                     }
                     .section-list {
                         padding: 5px;
-                        padding: 5px;
                         font-family: 'Consolas', monospace;
                         font-size: 11px;
                         color: var(--text-color);
                         background: var(--bg-color);
                         display: flex;
-                        flex-direction: column; /* Vertical Stack */
-                        overflow-x: auto; /* Enable horizontal scroll */
+                        flex-direction: column; 
+                        overflow-x: auto; 
                     }
                     .item { 
                         margin-bottom: 2px; 
                         display: block;
-                        white-space: nowrap; /* Prevent wrapping */
+                        white-space: nowrap; 
                     }
                     
-                    /* Node HTML Styles (ForeignObject) */
+                    /* Node Styles */
                     #code-content {
                         white-space: pre; 
                         font-family: 'Consolas', 'Courier New', monospace;
@@ -1110,9 +1167,9 @@ var CodeVisualizer = (function () {
                         display: flex;
                         align-items: center;
                         position: relative;
-                        height: 32px; /* Fixed Height matching Node Card */
-                        box-sizing: border-box; /* Include padding/border in height */
-                        text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8); /* increased contrast */
+                        height: 32px; 
+                        box-sizing: border-box; 
+                        text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8); 
                     }
                     .node-title {
                         flex: 1;
@@ -1122,12 +1179,12 @@ var CodeVisualizer = (function () {
                         text-overflow: ellipsis;
                     }
                     .node-type {
-                        position: absolute;
-                        left: 50%;
-                        transform: translateX(-50%);
                         font-size: 9px;
                         color: var(--text-color);
                         opacity: 0.6;
+                        margin-left: auto; 
+                        padding-left: 5px;
+                        padding-right: 5px;
                         text-transform: uppercase;
                     }
                     .node-icon {
@@ -1140,7 +1197,7 @@ var CodeVisualizer = (function () {
                         border: 1px solid var(--border-color);
                         border-radius: 2px;
                         background: var(--bg-color);
-                        margin-left: auto; /* Push to right */
+                        margin-left: 5px; 
                     }
                     .node-body {
                         flex: 1;
@@ -1154,19 +1211,13 @@ var CodeVisualizer = (function () {
                     .node-card.collapsed .node-header,
                     .node-card.global .node-header,
                     .node-card.empty .node-header {
-                        flex: 1; /* Fill the card height */
-                        height: 100%; /* Force fill */
-                        border-bottom: none; /* Remove separator */
+                        flex: 1; 
+                        height: 100%; 
+                        border-bottom: none; 
                     }
-                        flex: 1; /* Fill the card height */
-                        border-bottom: none; /* Remove separator */
-                    }
-
-                    
                     .node-card:hover { border-color: var(--text-color); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
                     .node-card.active { border-color: var(--syntax-keyword); border-width: 2px; }
 
-                    /* Link Styles */
                     /* Link Styles */
                     .link {
                         stroke: var(--link-color);
@@ -1190,24 +1241,18 @@ var CodeVisualizer = (function () {
                         fill: var(--container-bg);
                         stroke: var(--container-border);
                         stroke-width: 1;
-                        rx: 12; /* Explicit Rounded Corners */
-                        ry: 12; /* Explicit Rounded Corners */
+                        rx: 12; ry: 12;
                     }
-                    
-                    /* Specific Card Styles */
                     .card-main .container-rect {
-                        stroke: var(--text-color); /* Stronger border for main card */
+                        stroke: var(--text-color); 
                         stroke-width: 2;
-                        fill: var(--bg-color); /* Ensure opaque background */
-                        opacity: 0.8; /* Slight transparency to show grid if any */
+                        fill: var(--bg-color); 
+                        opacity: 0.8; 
                     }
-
-                    /* Lighter background for inner cards and global pool */
                     .card-inner .container-rect, .global-pool .container-rect, .data-pool .container-rect {
-                        fill: var(--container-header-bg); /* Use header bg for contrast */
-                        opacity: 0.5; /* Lighter/Transparent */
+                        fill: var(--container-header-bg); 
+                        opacity: 0.5; 
                     }
-
                     .container-title {
                         fill: var(--text-color);
                         font-size: 14px;
@@ -1219,9 +1264,9 @@ var CodeVisualizer = (function () {
 
                     /* Legend Window */
                     #legend-window {
-                        position: absolute; /* Relative to #graph-pane */
+                        position: absolute; 
                         top: 10px;
-                        right: 20px; /* Offset from scrollbar/edge */
+                        right: 20px; 
                         width: 200px;
                         background: var(--bg-color);
                         border: 1px solid var(--border-color);
@@ -1229,7 +1274,7 @@ var CodeVisualizer = (function () {
                         z-index: 1000;
                         padding: 10px;
                         border-radius: 4px;
-                        display: block; /* Visible by default */
+                        display: block; 
                         font-family: 'Segoe UI', sans-serif;
                         font-size: 11px;
                     }
@@ -1254,8 +1299,8 @@ var CodeVisualizer = (function () {
                     .bg-float { background-color: #FF8800; }
                     .bg-long { background-color: #0000AA; }
                     .bg-void { background-color: #888888; }
-                    .bg-solid { border-bottom: 2px solid; } /* Helper */
-                    .bg-dashed { border-bottom: 2px dashed; background: none !important; } /* Helper for dashed */
+                    .bg-solid { border-bottom: 2px solid; } 
+                    .bg-dashed { border-bottom: 2px dashed; background: none !important; } 
 
                     /* Legend Tabs */
                     .legend-tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 10px; }
@@ -1272,131 +1317,46 @@ var CodeVisualizer = (function () {
                     .legend-tab.active { opacity: 1; border-bottom-color: var(--syntax-keyword); font-weight: bold; }
                     .legend-panel { display: none; }
                     .legend-panel.active { display: block; }
-                </style>
-                <script>
-                    var CodeEditor = window.opener.CodeEditor;
-                    var SyntaxHighlighter = window.opener.SyntaxHighlighter;
-                    var OptionsManager = window.opener.OptionsManager;
-                    
-                    var activeEditor = null;
-                    
-                    function showCode(code, title) {
-                        var header = document.getElementById('code-header');
-                        var content = document.getElementById('code-content');
-                        if (header) header.textContent = title;
-                        
-                        if (content) {
-                            if (activeEditor) {
-                                activeEditor.setValue(code || "");
-                            } else if (CodeEditor) {
-                                content.innerHTML = ''; // Clear plain text
-                                // Initialize CodeEditor
-                                activeEditor = new CodeEditor(content, {
-                                    readOnly: true,
-                                    value: code || "",
-                                    language: 'opl'
-                                });
-                            } else {
-                                // Fallback
-                                content.innerHTML = '';
-                                var pre = document.createElement('pre');
-                                pre.style.margin = "0";
-                                pre.style.padding = "10px";
-                                pre.style.fontFamily = "Consolas, 'Courier New', monospace";
-                                pre.style.fontSize = "12px";
-                                pre.textContent = code;
-                                content.appendChild(pre);
-                            }
-                        }
-                    }
+        `;
+        doc.head.appendChild(style);
 
-                    // Resizer Logic
-                    document.addEventListener('DOMContentLoaded', function() {
-                        var resizer = document.getElementById('resizer');
-                        var codePane = document.getElementById('code-pane');
-                        var graphPane = document.getElementById('graph-pane');
-                        var isResizing = false;
-
-                        resizer.addEventListener('mousedown', function(e) {
-                            isResizing = true;
-                            resizer.classList.add('active');
-                            document.body.style.cursor = 'col-resize';
-                            e.preventDefault(); // Prevent text selection
-                        });
-
-                        document.addEventListener('mousemove', function(e) {
-                            if (!isResizing) return;
-                            var containerWidth = document.body.clientWidth;
-                            var newWidth = containerWidth - e.clientX;
-                            
-                            // Constraints
-                            if (newWidth < 200) newWidth = 200;
-                            if (newWidth > containerWidth - 200) newWidth = containerWidth - 200;
-                            
-                            codePane.style.width = newWidth + 'px';
-                        });
-
-                        document.addEventListener('mouseup', function(e) {
-                            if (isResizing) {
-                                isResizing = false;
-                                resizer.classList.remove('active');
-                                document.body.style.cursor = 'default';
-                            }
-                        });
-
-                        // Legend Toggle
-                        var btnLegend = document.getElementById('btn-legend');
-                        var legendWin = document.getElementById('legend-window');
-                        var btnCloseLegend = document.getElementById('btn-close-legend');
-
-                        if (btnLegend && legendWin) {
-                            btnLegend.addEventListener('click', function() {
-                                var currentDisplay = window.getComputedStyle(legendWin).display;
-                                var isHidden = currentDisplay === 'none';
-                                legendWin.style.display = isHidden ? 'block' : 'none';
-                            });
-                        }
-                        if (btnCloseLegend && legendWin) {
-                            btnCloseLegend.addEventListener('click', function() {
-                                legendWin.style.display = 'none';
-                            });
-                        }
-                    });
-                </script>
-            </head>
-            <body class="${bodyClass}"> <!-- Apply Body Class -->
+        // 3. Inject HTML Body Content (Using innerHTML)
+        doc.body.innerHTML = `
                 <div id="controls">
                             <button id="btn-toggle-calls" title="Toggle Procedure Call Links (Proc -> Proc)" style="margin-right: 5px;">
                                 <svg style="width:14px;height:14px" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M17,16V14H15V16H17M19,16C19,14.89 18.1,14 17,14H19V12H3V14H5C3.89,14 3,14.89 3,16V20H5V16H9V20H11V16H13V20H15V16H17V20H19V16M11,10H13V8H11V10M11,6H13V4H11V6M11,2V4H13V2H11Z" />
+                                    <path fill="currentColor" d="M14,4L20,10L14,16V13H11C8.79,13 7,14.79 7,17V21H5V17A4,4 0 0,1 9,13H14V10L14,4Z" />
                                 </svg>
                             </button>
                             <button id="btn-toggle-access" title="Toggle Global Access Links (Proc -> Global)" style="margin-right: 5px;">
                                 <svg style="width:14px;height:14px" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M17,16V14H15V16H17M19,16C19,14.89 18.1,14 17,14H19V12H3V14H5C3.89,14 3,14.89 3,16V20H5V16H9V20H11V16H13V20H15V16H17V20H19V16M11,10H13V8H11V10M11,6H13V4H11V6M11,2V4H13V2H11Z" />
+                                    <path fill="currentColor" d="M12,3C7.58,3 4,4.79 4,7C4,9.21 7.58,11 12,11C16.42,11 20,9.21 20,7C20,4.79 16.42,3 12,3M4,9V12C4,14.21 7.58,16 12,16C12.5,16 13,15.97 13.5,15.9V13.88C12.96,13.96 12.5,14 12,14C7.58,14 4,12.21 4,10C4,9.73 4.07,9.47 4.21,9.21L4,9M4,14V17C4,19.21 7.58,21 12,21C12.5,21 13,20.97 13.5,20.9V18.88C12.96,18.96 12.5,19 12,19C7.58,19 4,17.21 4,15C4,14.73 4.07,14.47 4.21,14.21L4,14M18,14L22,18L18,22V19H15V17H18V14Z" />
                                 </svg>
                             </button>
                             <button id="btn-toggle-links" title="Toggle Global Usage Links (Global -> Proc)" style="margin-right: 5px;">
                                 <svg style="width:14px;height:14px" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M17,16V14H15V16H17M19,16C19,14.89 18.1,14 17,14H19V12H3V14H5C3.89,14 3,14.89 3,16V20H5V16H9V20H11V16H13V20H15V16H17V20H19V16M11,10H13V8H11V10M11,6H13V4H11V6M11,2V4H13V2H11Z" />
+                                    <path fill="currentColor" d="M17.9,17.39C17.64,16.59 16.89,16 16,16H15V13A1,1 0 0,0 14,12H8V10H10A1,1 0 0,0 11,9V7H13A2,2 0 0,0 15,5V4.59C17.93,5.77 20,8.64 20,12C20,14.08 19.2,15.97 17.9,17.39M11,19.93C7.05,19.44 4,16.08 4,12C4,11.38 4.08,10.78 4.21,10.21L9,15V16A2,2 0 0,0 11,18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
                                 </svg>
                             </button>
-                            <button id="btn-collapse-all" title="Collapse All Procedures" style="margin-left: 10px; margin-right: 5px;">
-                                <svg style="width:14px;height:14px" viewBox="0 0 24 24">
-                                    <path fill="currentColor" d="M19,13H5V11H19V13Z" />
-                                </svg>
-                            </button>
-                            <button id="btn-expand-all" title="Expand All Procedures" style="margin-right: 5px;">
+                            <button id="btn-expand-all" title="Expand All Procedures" style="margin-left: 10px; margin-right: 5px;">
                                 <svg style="width:14px;height:14px" viewBox="0 0 24 24">
                                     <path fill="currentColor" d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
                                 </svg>
                             </button>
+                            <button id="btn-collapse-all" title="Collapse All Procedures" style="margin-right: 5px;">
+                                <svg style="width:14px;height:14px" viewBox="0 0 24 24">
+                                    <path fill="currentColor" d="M19,13H5V11H19V13Z" />
+                                </svg>
+                            </button>
+                    <!-- 5 Buttons moved left -->
                     <div style="width:1px; height: 20px; background:var(--border-color); margin:0 5px;"></div>
+                    <button id="btn-fit">Fit</button>
                     <button id="btn-zoom-in">+</button>
                     <button id="btn-zoom-out">-</button>
-                    <button id="btn-fit">Fit</button>
-                    <button id="btn-toggle-code" title="Toggle Procedure View">Code</button>
                     
+                    <div style="width:1px; height: 20px; background:var(--border-color); margin:0 5px;"></div>
+                    
+                    <button id="btn-toggle-code" title="Toggle Procedure View">Code</button>
                     <button id="btn-legend" title="Link Key / Legend">Key</button>
                 </div>
                 
@@ -1451,12 +1411,84 @@ var CodeVisualizer = (function () {
                         <div id="code-content"></div>
                     </div>
                 </div>
-            </body>
-            </html>
-        `);
-        win.document.close();
+        `;
 
-        return win;
+        // 4. Attach Setup Logic (Replaces the <script>)
+        var activeEditor = null;
+        var CodeEditor = window.CodeEditor; // Assuming loaded via index.html or parent
+
+        // Define win.showCode
+        win.showCode = function (code, title) {
+            var header = doc.getElementById('code-header');
+            var content = doc.getElementById('code-content');
+            if (header) header.textContent = title;
+            if (content) {
+                if (activeEditor) {
+                    activeEditor.setValue(code || "");
+                } else if (CodeEditor) {
+                    content.innerHTML = '';
+                    activeEditor = new CodeEditor(content, {
+                        readOnly: true,
+                        value: code || "",
+                        language: 'opl'
+                    });
+                } else {
+                    content.innerHTML = '';
+                    var pre = doc.createElement('pre');
+                    pre.style.margin = "0"; pre.style.padding = "10px";
+                    pre.style.fontFamily = "Consolas, 'Courier New', monospace";
+                    pre.style.fontSize = "12px";
+                    pre.textContent = code;
+                    content.appendChild(pre);
+                }
+            }
+        };
+
+        // Resizer Logic
+        var resizer = doc.getElementById('resizer');
+        var codePane = doc.getElementById('code-pane');
+        var isResizing = false;
+
+        resizer.addEventListener('mousedown', function (e) {
+            isResizing = true;
+            resizer.classList.add('active');
+            doc.body.style.cursor = 'col-resize';
+            e.preventDefault();
+        });
+
+        doc.addEventListener('mousemove', function (e) {
+            if (!isResizing) return;
+            var containerWidth = doc.body.clientWidth;
+            var newWidth = containerWidth - e.clientX;
+            if (newWidth < 200) newWidth = 200;
+            if (newWidth > containerWidth - 200) newWidth = containerWidth - 200;
+            codePane.style.width = newWidth + 'px';
+        });
+
+        doc.addEventListener('mouseup', function (e) {
+            if (isResizing) {
+                isResizing = false;
+                resizer.classList.remove('active');
+                doc.body.style.cursor = 'default';
+            }
+        });
+
+        // Legend Toggle
+        var btnLegend = doc.getElementById('btn-legend');
+        var legendWin = doc.getElementById('legend-window');
+        var btnCloseLegend = doc.getElementById('btn-close-legend');
+
+        if (btnLegend && legendWin) {
+            btnLegend.addEventListener('click', function () {
+                var currentDisplay = win.getComputedStyle(legendWin).display;
+                legendWin.style.display = (currentDisplay === 'none') ? 'block' : 'none';
+            });
+        }
+        if (btnCloseLegend && legendWin) {
+            btnCloseLegend.addEventListener('click', function () {
+                legendWin.style.display = 'none';
+            });
+        }
     }
 
     // --- Rendering ---
@@ -2412,25 +2444,32 @@ var CodeVisualizer = (function () {
     function showSystemMap(packs) {
 
         var data = extractSystemData(packs);
+        lastData = data; // Store for re-rendering (handshake or reload)
 
         var win = openWindow();
         if (win) {
-
-            setTimeout(function () {
-
+            // Check if window is already fully initialized (e.g. re-using open window)
+            // We check for the container explicitly
+            if (win.document && win.document.getElementById('graph-container')) {
                 try {
                     renderSystemMap(data, win);
                 } catch (e) {
                     console.error("Visualizer: renderSystemMap Crashed", e);
                 }
-            }, 100);
+            } else {// 
+                console.log("Visualizer: Window opened, waiting for handshake...");
+                // Do nothing, wait for childWindowReady
+            }
         } else {
-            console.error("Visualizer: Window FAILED to open"); // DEBUG LOG
+            console.error("Visualizer: Window FAILED to open");
         }
     }
 
     return {
-        showSystemMap: showSystemMap
+        showSystemMap: showSystemMap,
+        childWindowReady: function (win) {
+            handleChildReady(win);
+        }
     };
 
 })();

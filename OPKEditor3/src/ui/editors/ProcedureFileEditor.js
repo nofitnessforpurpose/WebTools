@@ -531,7 +531,11 @@ ProcedureFileEditor.prototype.translateAndSave = function () {
 
     if (window.OPLCompiler) {
         try {
-            var qcode = window.OPLCompiler.compile(source);
+            var options = {};
+            if (typeof OptionsManager !== 'undefined') {
+                options.targetSystem = OptionsManager.getOption('targetSystem');
+            }
+            var qcode = window.OPLCompiler.compile(source, options);
             var saveSource = true;
             if (qcode && qcode.length > 0) {
 

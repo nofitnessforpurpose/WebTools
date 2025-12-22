@@ -506,7 +506,15 @@ function renderMemoryMap(pack) {
         span.className = 'mm-legend-item';
         var swatch = document.createElement('span');
         swatch.className = 'mm-swatch';
-        swatch.style.backgroundColor = colors[colorKey];
+
+        if (colorKey === 'deleted') {
+            swatch.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            // Match canvas hatch: Reddish stripes at 45deg
+            swatch.style.backgroundImage = 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 50, 50, 0.5) 4px, rgba(255, 50, 50, 0.5) 5px)';
+        } else {
+            swatch.style.backgroundColor = colors[colorKey];
+        }
+
         span.appendChild(swatch);
         span.appendChild(document.createTextNode(label));
         return span;
@@ -515,7 +523,7 @@ function renderMemoryMap(pack) {
     legend.appendChild(createLegendItem('Proc', 'procedure'));
     legend.appendChild(createLegendItem('Data', 'datafile'));
     legend.appendChild(createLegendItem('Free', 'free'));
-    // ... add others if needed or keep minimal
+    legend.appendChild(createLegendItem('Deleted', 'deleted'));
     container.appendChild(legend);
 
     return container;

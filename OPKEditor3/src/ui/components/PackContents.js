@@ -622,7 +622,7 @@ class PackContentsView {
                         // User said "Recycle ... toggles ... deleted status".
                         // And "DELETE key deletes".
                         // Usually "Delete" in UI = Remove.
-                        // Let's assume eraseItem() does the right thing.
+                        // Let's assume eraseItem() does the right thing.// 
                         console.warn("eraseItem global not found.");
                     }
                 }

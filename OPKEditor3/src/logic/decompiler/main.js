@@ -416,18 +416,25 @@
 
             const finalQCodeActual = isProc ? offset : qcodeActual;
 
+            const isLZSig = (finalQCodeActual + 1 < codeBlock.length && codeBlock[finalQCodeActual] === 0x59 && codeBlock[finalQCodeActual + 1] === 0xB2);
+            const adjQCodeStart = isLZSig ? finalQCodeActual + 2 : finalQCodeActual;
+            // If we skip 2 bytes, we must reduce the reported size so we don't read past end
+            // Note: If size is derived from pointers (sourceActual), we also reduce it.
+            let calcSize = hMeta.qcodeSize !== undefined ? hMeta.qcodeSize : (sourceActual > qcodeActual ? sourceActual - qcodeActual : codeBlock.length - qcodeActual);
+            if (isLZSig) calcSize -= 2;
+
             return {
                 varSpaceSize: hMeta.varSpaceSize,
-                qcodeSize: hMeta.qcodeSize !== undefined ? hMeta.qcodeSize : (sourceActual > qcodeActual ? sourceActual - qcodeActual : codeBlock.length - qcodeActual),
+                qcodeSize: calcSize,
                 numParams: hMeta.numParams,
                 paramTypes: hMeta.paramTypes,
                 globals,
                 externals,
                 stringFixups,
                 arrayFixups,
-                qcodeStart: finalQCodeActual,
-                actualQCodeStart: finalQCodeActual,
-                isLZ: (hMeta.isLZ === true) || (finalQCodeActual + 1 < codeBlock.length && codeBlock[finalQCodeActual] === 0x59 && codeBlock[finalQCodeActual + 1] === 0xB2),
+                qcodeStart: adjQCodeStart,
+                actualQCodeStart: adjQCodeStart,
+                isLZ: (hMeta.isLZ === true) || isLZSig,
                 isCMXP: !!hMeta.isCMXP,
                 extractedName: hMeta.extractedName
             };

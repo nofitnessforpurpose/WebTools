@@ -11,7 +11,7 @@ function arraysAreEqual(arr1, arr2) {
 
 function initialiseForm(id, val, self, handler) {
     var elemnt = document.getElementById(id);
-    if (!elemnt) {
+    if (!elemnt) {// 
         console.warn("initialiseForm: Element not found:", id);
         return;
     }
