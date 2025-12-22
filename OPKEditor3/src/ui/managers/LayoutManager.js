@@ -17,7 +17,7 @@ var LayoutManager = {
                 alert("Critical Error: Core Layout Library failed to load. Check internet connection or CDN status.");
                 return;
             }// 
-            console.warn("LayoutManager: DockviewCore not yet loaded. Retrying in 500ms...");
+//             console.warn("LayoutManager: DockviewCore not yet loaded. Retrying in 500ms...");
             setTimeout(function () { LayoutManager.init(retryCount + 1); }, 500);
             return;
         }

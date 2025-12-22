@@ -21,6 +21,8 @@ var CodeVisualizer = (function () {
 
     function extractSystemData(packs) {
 
+        var globalProcMap = {}; // procedureName -> { paramCount }
+
         var system = {
             packs: [],
             nodes: {}, // Map of name -> { type, packIndex, ... }
@@ -35,7 +37,7 @@ var CodeVisualizer = (function () {
                 name: pack.filename || "Pack " + (pIdx + 1),
                 index: pIdx,
                 procedures: [],
-                procedures: [],
+
                 globals: [],
                 dataFiles: [], // Names of Data Files
                 fileIdMap: {}  // ID -> Name Mapping
@@ -118,6 +120,24 @@ var CodeVisualizer = (function () {
                         degree: 0 // Track connections
                     };
                     packData.procedures.push(item.name);
+
+                    // Build globalProcMap for accurately decompiling procedure calls
+                    if (item.child) {
+                        // Robust check: Procedure data is usually in item.child.child.data
+                        // but we check both levels for resilience.
+                        var target = (item.child.child && item.child.child.data) ? item.child.child : (item.child.data ? item.child : null);
+                        if (target) {
+                            try {
+                                if (typeof OPLDecompiler !== 'undefined') {
+                                    var tempDecompiler = new OPLDecompiler();
+                                    var header = tempDecompiler.parseHeader(target.data, 0);
+                                    if (header && header.numParams !== undefined) {
+                                        globalProcMap[item.name.toUpperCase()] = { paramCount: header.numParams };
+                                    }
+                                }
+                            } catch (e) { /* Ignore parse errors */ }
+                        }
+                    }
                 }
 
                 // Extract Globals from OPL Header
@@ -207,9 +227,10 @@ var CodeVisualizer = (function () {
                         try {
                             if (typeof OPLDecompiler !== 'undefined') {
                                 var decompiler = new OPLDecompiler();
+                                var analysisOptions = { procMap: globalProcMap };
 
                                 // 1. Get Control Flow for Links (Calls/Access)
-                                var result = decompiler.getControlFlow(objCode, item.name);
+                                var result = decompiler.getControlFlow(objCode, item.name, analysisOptions);
                                 var instructions = result.instructions || []; // Safe access
                                 var variableMap = result.varMap;
 
@@ -232,7 +253,7 @@ var CodeVisualizer = (function () {
                                 } else if (item.text) {
                                     fullCode = item.text; // Fallback to item.text if populated
                                 } else {
-                                    fullCode = decompiler.decompile(objCode, item.name); // Decompiled OPL
+                                    fullCode = decompiler.decompile(objCode, item.name, analysisOptions); // Decompiled OPL
                                 }
 
                                 var node = system.nodes[item.name.toUpperCase()];
@@ -482,7 +503,7 @@ var CodeVisualizer = (function () {
         var nodeGap = 20;
         var cardPadding = 20;
         var innerCardPadding = 30;
-        var innerCardPadding = 30;
+
         var globalPoolHeight = 80;
         var dataFileWidth = 187;
         var dataRecordHeight = 32;
@@ -908,8 +929,9 @@ var CodeVisualizer = (function () {
     var childWindow = null;
     var lastData = null; // Store data for delayed render
 
-    function handleChildReady(win) {// 
-        console.log("Visualizer: Child Ready Handshake received");
+    function handleChildReady(win) {
+        // 
+
         childWindow = win;
         setupChildWindow(win);
         if (lastData) {
@@ -2456,8 +2478,9 @@ var CodeVisualizer = (function () {
                 } catch (e) {
                     console.error("Visualizer: renderSystemMap Crashed", e);
                 }
-            } else {// 
-                console.log("Visualizer: Window opened, waiting for handshake...");
+            } else {
+                // 
+
                 // Do nothing, wait for childWindowReady
             }
         } else {

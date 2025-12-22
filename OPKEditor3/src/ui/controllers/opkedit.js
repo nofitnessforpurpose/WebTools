@@ -16,7 +16,9 @@
 // Button Helper Class
 function Button(id, clickcallback, inputId, filecallback) {
    var _element = document.getElementById(id);
-   if (!_element) {// 
+   if (!_element) {
+      // 
+      // 
       console.warn("Button not found: " + id);
       return;
    }
@@ -326,27 +328,16 @@ function populateFileMenu() {
       if (hasFiles) {
          if (separator) separator.style.display = 'block';
 
-         // Add "Record for..." items
-         for (var i = 1; i < 110; i++) {
-            if (files[i]) {
-               var a = document.createElement('a');
-               a.href = "#";
-               a.innerHTML = '<i class="fas fa-table-list" style="width: 20px;"></i> New Record for ' + files[i];
-               a.setAttribute('data-file-id', i + 0xf); // i + 15 matches createNewItem logic
-
-               a.addEventListener('click', function (e) {
-                  e.preventDefault();
-                  var type = parseInt(this.getAttribute('data-file-id'));
-                  var hdritem = new PackItem([1, type + 0x80, 0x20], 0, 3);
-                  hdritem.setDescription();
-                  addItemToPack(hdritem);
-                  updateInventory();
-                  closeAllMenus();
-               });
-
-               container.appendChild(a);
-            }
-         }
+         // Add generic "New Record..." item
+         var a = document.createElement('a');
+         a.href = "#";
+         a.innerHTML = '<i class="fas fa-table-list" style="width: 20px;"></i> New Record...';
+         a.addEventListener('click', function (e) {
+            e.preventDefault();
+            closeAllMenus();
+            createNewRecord();
+         });
+         container.appendChild(a);
       }
    }
 }
@@ -475,14 +466,14 @@ function showOptionsDialog() {
          "</div>" +
          "</div>" +
 
-         // Global Actions (Moved to Bottom)
+         "</div>" + // Close Theme Management Box
+
+         // Global Actions (Moved to Bottom Left of Tab)
          "<div style='margin-top: 20px; text-align: left;'>" +
          "<button id='btn-reset-themes' style='background: #d32f2f; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;'>Reset All Themes to Defaults</button>" +
          "</div>" +
 
-         "</div>" +
-
-         "</div>" +
+         "</div>" + // Close Tab Content
 
          "</div>" +
 
@@ -734,6 +725,8 @@ function showOptionsDialog() {
       element.querySelector('#opt-show-toolbar').checked = OptionsManager.getOption('showIconToolbar') !== false;
       element.querySelector('#opt-show-menubar').checked = OptionsManager.getOption('showMenuBar') !== false;
       element.querySelector('#opt-stickyproc').checked = OptionsManager.getOption('stickyProcedureHeader') !== false;
+      element.querySelector('#opt-grouprecords').checked = OptionsManager.getOption('groupDataRecords') === true;
+      element.querySelector('#opt-collapsefiles').checked = OptionsManager.getOption('collapseDataFiles') === true;
       // Initialize Target Options
       var currentTarget = OptionsManager.getOption('targetSystem') || 'Standard';
       // Handle legacy/alternate values if any
@@ -1197,7 +1190,9 @@ function init() {
 
             }
             localStorage.removeItem('opkedit_cached_pack');
-         } catch (e) {// 
+         } catch (e) {
+            // 
+            // 
             console.warn("Restore Packs: Legacy migration failed", e);
          }
       }
@@ -1310,7 +1305,8 @@ function downloadFileFromUrl(filename, url) {
 }
 
 function exportCurrentItem() {
-   if (!currentItem) return;
+   var pack = packs[currentPackIndex];
+   if (!pack || !currentItem) return;
 
    var filename = "item.bin";
    if (currentItem.name) {
@@ -1319,19 +1315,20 @@ function exportCurrentItem() {
 
    // Heuristic for extension
    var type = currentItem.type;
-   if (type === 3) filename += ".opl";
-   else if (type === 7) filename += ".nts";
-   else if (type >= 16) filename += ".odb";
+   if (type === 1) filename += ".odb";
+   else if (type >= 2 && type <= 15) {
+      filename += ".OB" + type.toString(16).toUpperCase();
+   } else if (type >= 16) filename += ".odb";
    else if (!filename.match(/\.[a-z0-9]{3}$/i)) filename += ".bin";
 
    var userFilename = prompt("Save item as:", filename);
    if (userFilename) {
-      // Logic to reconstruct file format if needed?
-      // For now, assuming currentItem.data is the payload we want.
-      var blob = new Blob([currentItem.data], { type: "application/octet-stream" });
-      var url = URL.createObjectURL(blob);
-      downloadFileFromUrl(userFilename, url);
-      URL.revokeObjectURL(url);
+      var url = pack.getItemURL(currentItem);
+      if (url) {
+         downloadFileFromUrl(userFilename, url);
+      } else {
+         alert("Cannot export this item type (id: " + type + "). Only standard files (OPL, ODB, Notepad, etc) are supported.");
+      }
    }
 }
 
@@ -1436,7 +1433,7 @@ function initIconToolbar() {
    toolbarButtons.btnNewData = createToolbarBtn('tbtn-new-data', 'fas fa-database', 'New Data File', function () {
       var id = getFreeFileId();
       if (id > 0) {
-         var hdritem = createFileHeader("DATAFILE", 1, id + 0x8f);
+         var hdritem = createFileHeader("DATA" + id, 1, id + 0x8f);
          addItemToPack(hdritem);
          updateInventory();
       }
@@ -1720,10 +1717,39 @@ function itemMoved(fromPackIx, fromItemIx, toPackIx, toItemIx, isCopy) {
 }
 
 function selectPack(index) {
-   if (selectedPackIndex === index && currentItem === null && currentEditor instanceof MemoryMapEditor) {
+   // Optimization: If selecting the already selected pack
+   if (selectedPackIndex === index) {
+      // If we are merely switching from an item back to the pack root
+      // We can update the UI without a full destructive render
+      selectedPackIndex = index;
+      currentPackIndex = index;
+      currentItem = null;
+
+      // Update Sidebar Selection (Non-destructive)
       if (typeof PackContents !== 'undefined') PackContents.selectPack(index);
+
+      // Ensure we are in Memory Map mode
+      // Show Memory Map
+      if (index >= 0 && index < packs.length) {
+         var mmEditor = editors.find(function (e) { return e instanceof MemoryMapEditor; });
+         if (mmEditor) {
+            currentEditor = mmEditor;
+            mmEditor.initialise({ type: 255 }); // Refreshes Main View
+
+            var packName = packs[index].filename || "Untitled Pack";
+            if (document.getElementById('current-file-name')) document.getElementById('current-file-name').innerText = packName;
+
+            if (document.getElementById('code-editor-container')) document.getElementById('code-editor-container').style.display = 'none';
+            if (legacyEditorElement) legacyEditorElement.style.display = 'block';
+         }
+      } else {
+         if (document.getElementById('current-file-name')) document.getElementById('current-file-name').innerText = "No Pack Selected";
+      }
+
+      updateItemButtons(false);
       return;
    }
+
    if (!closeEditor()) return;
    selectedPackIndex = index;
    currentPackIndex = index;
@@ -1823,7 +1849,9 @@ function itemSelected(packIndex, itemIndex) {
       // var startAddr = getItemAddres(pack, itemIndex) + 6;
       var startAddr = 0;
       currentEditor.initialise(currentItem, startAddr);
-   } else {// 
+   } else {
+      // 
+      // 
       console.warn("No editor found for type " + tp);
    }
 
@@ -1908,7 +1936,9 @@ function loadPackFromFiles(files) {
                   openPacks.push(path);
                   localStorage.setItem('opkedit_open_packs', JSON.stringify(openPacks));
                }
-            } else {// 
+            } else {
+               // 
+               // 
                console.warn("Restore Packs: Cannot determine full path for file. Browser security may prevent this.");
                setStatus("Warning: Cannot save pack path for restore (Browser restriction).");
             }
@@ -1944,7 +1974,9 @@ function loadPackFromFiles(files) {
 
                      localStorage.setItem('opkedit_cached_packs', JSON.stringify(cachedPacks));
 
-                  } catch (e) {// 
+                  } catch (e) {
+                     // 
+                     // 
                      console.warn("Auto-Load: Failed to save pack content.", e);
                   }
                }
@@ -2000,7 +2032,9 @@ function eraseItem() {
                      }
                   } catch (e) { console.error("File parse error:", e); }
                }
-            } catch (e) {// 
+            } catch (e) {
+               // 
+               // 
                console.warn("Auto-Load: Failed to check cache on delete", e);
             }
 
@@ -2087,7 +2121,7 @@ function createNewItem() {
       if (type == 1) {
          var id = getFreeFileId();
          if (id <= 0) return;
-         var hdritem = createFileHeader("DATAFILE", type, id + 0x8f);
+         var hdritem = createFileHeader("DATA" + id, type, id + 0x8f);
          addItemToPack(hdritem);
          updateInventory();
       } else if (type == 3) {
@@ -2124,6 +2158,52 @@ function createNewItem() {
    chooseTypeScreen.start();
 }
 
+function createNewRecord() {
+   var files = getDataFiles();
+   var validFiles = [];
+   for (var k in files) {
+      if (files.hasOwnProperty(k)) {
+         var id = parseInt(k);
+         if (id >= 1 && id < 110) {
+            validFiles.push({ id: id, name: files[id] });
+         }
+      }
+   }
+
+   if (validFiles.length === 0) {
+      alert("No Data Files found in this pack. Please create a Data File first.");
+      return;
+   }
+
+   var element = document.createElement('div');
+   element.innerHTML =
+      "<div>Select Data File:</div>" +
+      "<div><select id='choosedatafile' style='width: 100%; margin-top: 10px; padding: 5px;'></select></div>";
+
+   var sel = element.querySelector("#choosedatafile");
+
+   validFiles.forEach(function (f) {
+      var opt = document.createElement('option');
+      opt.value = f.id;
+      opt.innerHTML = f.name + " (ID: " + f.id + ")";
+      sel.appendChild(opt);
+   });
+
+   var dialog = new ModalDialog(element, function () {
+      var fileId = parseInt(sel.value);
+      if (fileId > 0) {
+         // Calculate Record Type ID (FileID + 15)
+         var type = fileId + 0x0F;
+         var hdritem = new PackItem([1, type + 0x80, 0x20], 0, 3);
+         hdritem.setDescription();
+         addItemToPack(hdritem);
+         updateInventory();
+      }
+   });
+
+   dialog.start();
+}
+
 function saveSession() {
    if (!OptionsManager.getOption('restorePacks')) return;
 
@@ -2149,7 +2229,9 @@ function saveSession() {
          });
       }
       localStorage.setItem('opkedit_cached_packs', JSON.stringify(sessionPacks));
-   } catch (e) {// 
+   } catch (e) {
+      // 
+      // 
       console.warn("Session Save Failed (Quota?):", e);
    }
 }
@@ -2417,6 +2499,50 @@ function createItemFromFileData(filedata, name) {
       hdritem.child = blkhdritem;
       addItemToPack(hdritem);
       updateInventory();
+   } else if (name.match(/\.OB([0-9A-F])$/i)) {
+      // Generic Handler for .OBx files (OB2 - OBF)
+      var match = name.match(/\.OB([0-9A-F])$/i);
+      var typeExt = parseInt(match[1], 16);
+
+      // Basic check: filedata must start with ORG
+      var validHeader = false;
+      if (filedata.length >= 6) {
+         if (typeof filedata === 'string') {
+            if (filedata.substr(0, 3) === "ORG") validHeader = true;
+         } else {
+            if (filedata[0] == 79 && filedata[1] == 82 && filedata[2] == 71) validHeader = true;
+         }
+      }
+
+      if (!validHeader) {
+         alert("File " + name + " is missing required 'ORG' header.");
+         return;
+      }
+
+      // Convert to Uint8Array if needed (createItemFromFileData receives binary string usually)
+      var rawBytes = new Uint8Array(filedata.length);
+      for (var i = 0; i < filedata.length; i++) rawBytes[i] = filedata.charCodeAt(i);
+
+      var ln = (rawBytes[3] << 8) | rawBytes[4];
+      if (rawBytes.length < 6 + ln) {
+         alert("The file " + name + " seems to be truncated!");
+         return;
+      }
+
+      // Use internal type from file if present, otherwise trust extension or just use byte 5
+      var typeByte = rawBytes[5];
+
+      var hdritem = createFileHeader(name, typeByte & 0x7F, 0);
+      var blkhdr = new Uint8Array(4);
+      blkhdr[0] = 2; blkhdr[1] = 0x80; blkhdr[2] = rawBytes[3]; blkhdr[3] = rawBytes[4];
+
+      var dataitem = new PackItem(rawBytes, 6, ln);
+      var blkhdritem = new PackItem(blkhdr, 0, 4);
+      blkhdritem.child = dataitem;
+      blkhdritem.setDescription();
+      hdritem.child = blkhdritem;
+      addItemToPack(hdritem);
+      updateInventory();
    } else {
       alert("File format not recognised!");
    }
@@ -2603,7 +2729,28 @@ sidebar.addEventListener('drop', function (e) {
       e.preventDefault();
       e.stopPropagation();
       sidebar.classList.remove('drag-over');
-      loadPackFromFiles(e.dataTransfer.files);
+
+      var files = e.dataTransfer.files;
+
+      var fname = files[0].name.toUpperCase();
+      // Check for .OBx, .OPL, .ODB, .NTS (Item types)
+      var isItem = fname.match(/\.OB[0-9A-F]$/) || fname.endsWith(".OPL") || fname.endsWith(".ODB") || fname.endsWith(".NTS");
+
+      if (isItem) {
+         if (packs.length === 0) {
+            // No pack open? Create one automatically.
+            createNew();
+         }
+
+         if (packs.length > 0) {
+            LoadLocalBinaryFile(files[0], function (data, name) {
+               createItemFromFileData(data, name);
+            });
+         }
+      } else {
+         // Not an item? Assume it's a Pack file (.OPK, .HEX)
+         loadPackFromFiles(files);
+      }
    }
 }, true); // useCapture = true
 
@@ -2694,8 +2841,10 @@ function initChildMode(feature) {
    if (app) app.style.display = 'none';
 
    if (feature === 'visualizer') {
-      document.title = "Code Visualizer";// 
-      console.log("Child Mode: Visualizer initialized");
+      document.title = "Code Visualizer";
+      // 
+      // 
+
 
       // Notify opener that we are ready
       if (window.opener && window.opener.CodeVisualizer && window.opener.CodeVisualizer.childWindowReady) {

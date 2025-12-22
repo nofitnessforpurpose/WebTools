@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * instruction_handler.js
  * 
@@ -11,6 +13,7 @@ class InstructionHandler {
         this.feOpcodes = feOpcodes;
         this.floatSize = floatSize;
         this.trapNext = false;
+        this.procMap = {}; // procedureName -> { paramCount, returnType }
     }
 
     getInstructionDef(codeBlock, pc) {
@@ -464,21 +467,32 @@ class InstructionHandler {
 
         if (def.desc === 'PROC') {
             const { name } = args.params;
-            const argCountObj = stack.pop();
-            const argCount = argCountObj ? (argCountObj.text || 0) : 0;
+
+            // Pop the argument count pushed to the stack by the OPL compiler
+            const countObj = stack.pop();
+            let argCount = 0;
+            if (countObj && countObj.text !== undefined && countObj.text !== "BAD_STACK_UNDERFLOW") {
+                argCount = parseInt(countObj.text, 10);
+            } else {
+                // Fallback: check procMap if stack underflowed or count is missing
+                if (this.procMap && this.procMap[name.toUpperCase()]) {
+                    argCount = this.procMap[name.toUpperCase()].paramCount;
+                }
+            }
 
             const procArgs = [];
-            // Special handling for CONV$ which seems to feature a hidden 'mode' argument (2) 
-            // and an incorrect argument count (1) in some binaries, causing the actual string argument to be skipped.
-            if (name === 'CONV$' && argCount == 1) {
-                const modeArg = stack.pop(); // Pop the '2'
-                const strArg = stack.pop();  // Pop the String
-                procArgs.unshift(strArg ? (strArg.text || '') : '');
-                // Ignore modeArg for source generation as it is implicit
-            } else {
-                for (let i = 0; i < argCount; i++) {
-                    const argObj = stack.pop();
-                    procArgs.unshift(argObj ? (argObj.text || '') : '');
+            for (let i = 0; i < argCount; i++) {
+                // User Procedures (0x7D) interleave Type bytes (0=%, 1=none, 2=$)
+                const typeObj = stack.pop();
+                const valObj = stack.pop();
+
+                if (valObj && valObj.text !== "BAD_STACK_UNDERFLOW") {
+                    procArgs.unshift(valObj.text || '');
+                } else if (typeObj && typeObj.text !== "BAD_STACK_UNDERFLOW") {
+                    // Resilience: if we underflowed, treat the type byte as the value
+                    procArgs.unshift(typeObj.text);
+                } else {
+                    procArgs.unshift('?');
                 }
             }
 
@@ -486,6 +500,10 @@ class InstructionHandler {
             if (procArgs.length > 0) {
                 call += `(${procArgs.join(', ')})`;
             }
+
+            // Logic: Push to stack and return null.
+            // If this is a statement, the subsequent DROP opcode will pop this text and return it.
+            // If this is an expression, an operator will pop it.
             stack.push({ text: call, prec: PRECEDENCE.FUNC });
             return null;
         }
@@ -586,7 +604,7 @@ class InstructionHandler {
                     if (codeBlock && pc + size < codeBlock.length) {
                         const nextOp = codeBlock[pc + size];
                         const nextDef = this.opcodes[nextOp];
-                        // console.log("USR Debug:", { op: op.toString(16), nextOp: nextOp.toString(16), nextDefPops: nextDef ? nextDef.pops : 'not_found' });
+
                         if (nextDef && nextDef.pops && nextDef.pops.trim().length > 0) {
                             nextOpConsumes = true;
                         }

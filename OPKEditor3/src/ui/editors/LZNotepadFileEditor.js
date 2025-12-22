@@ -190,6 +190,8 @@ LZNotepadFileEditor.prototype.initialise = function (item) {
 
         // Sync content to editor
         this.syncEditorContent();
+        // Round 11: Cache baseline data to avoid false positives on "view-only" of non-normalized files
+        this.baselineData = this.getNotepadData();
     }
 }
 
@@ -197,7 +199,7 @@ LZNotepadFileEditor.prototype.reloadContent = function (initialLoad) {
     var chld = this.item.child.child;
     var lnheader = chld.data[0] * 256 + chld.data[1];
     var lnnotes = chld.data[lnheader + 2] * 256 + chld.data[lnheader + 3];
-    var isEncrypted = (chld.data[3] != 0);
+    var isEncrypted = (lnheader >= 2 && chld.data[3] != 0);
 
     var fullText = "";
     var isDecrypted = false;
@@ -332,7 +334,8 @@ LZNotepadFileEditor.prototype.getNotepadData = function () {
 
     // Encryption Handling
     var chld = this.item.child.child;
-    var wasEncrypted = (chld.data[3] != 0);
+    var lnh = chld.data[0] * 256 + chld.data[1];
+    var wasEncrypted = (lnh >= 2 && chld.data[3] != 0);
 
     // Logic: 
     // If we are Decrypting (WasEncrypted=True, Encrypt=False):
@@ -430,7 +433,8 @@ LZNotepadFileEditor.prototype.hasUnsavedChanges = function () {
     if (BlockFileEditor.prototype.hasUnsavedChanges.call(this)) return true;
     var chld = this.item.child.child;
     var newdata = this.getNotepadData();
-    return !arraysAreEqual(newdata, chld.data);
+    var original = this.baselineData || chld.data;
+    return !arraysAreEqual(newdata, original);
 }
 
 LZNotepadFileEditor.prototype.applyChanges = function () {
@@ -440,7 +444,8 @@ LZNotepadFileEditor.prototype.applyChanges = function () {
 
     // Check file state
     var chldBefore = this.item.child.child;
-    var wasEncrypted = (chldBefore.data[3] != 0);
+    var lnh = chldBefore.data[0] * 256 + chldBefore.data[1];
+    var wasEncrypted = (lnh >= 2 && chldBefore.data[3] != 0);
 
     // Case 1: Decrypting (Encrypted -> Plain)
     // Validate Password before calling getNotepadData/setData
@@ -485,6 +490,7 @@ LZNotepadFileEditor.prototype.applyChanges = function () {
     var nameChanged = false;
 
     if (differ) {
+        this.baselineData = newdata;
         chld.setData(newdata);
         chld = this.item.child;
         var ln = newdata.length;

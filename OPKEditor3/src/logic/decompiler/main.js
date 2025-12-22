@@ -1,3 +1,4 @@
+'use strict';
 (function () {
     let InstructionHandler, SourceGenerator, QCODE_DEFS, FE_OPCODES;
 
@@ -54,7 +55,10 @@
             this.floatSize = 6;
             this.opcodes = typeof QCODE_DEFS !== 'undefined' ? QCODE_DEFS : {};
             this.feOpcodes = typeof FE_OPCODES !== 'undefined' ? FE_OPCODES : {};
-            this.instHandler = new InstructionHandler(this.opcodes, this.floatSize, this.feOpcodes);
+            this.instHandler.opcodes = this.opcodes;
+            this.instHandler.floatSize = this.floatSize;
+            this.instHandler.feOpcodes = this.feOpcodes;
+            this.instHandler.procMap = options.procMap || {};
 
             let offset = 0;
             this.oplBase = 0; // Will be set during parseHeader
@@ -89,6 +93,7 @@
                 }
 
                 const size = this.instHandler.getInstructionSize(codeBlock, pc, def);
+                if (pc + size > qcodeStart + qcodeSize) break; // Ignore partial Instructions at end
                 let text = null; // Will be populated by handleInstruction logic below
 
                 if (text === null) {
@@ -486,6 +491,9 @@
                 const def = this.opcodes[op];
                 if (!def) { pc++; continue; }
 
+                const size = this.instHandler.getInstructionSize(codeBlock, pc, def);
+                if (pc + size > qcodeStart + qcodeSize) break; // Ignore partial Instructions at end
+
                 let addr = null;
                 if (def.args.includes('v') || def.args.includes('V')) {
                     addr = (codeBlock[pc + 1] << 8) | codeBlock[pc + 2];
@@ -509,7 +517,7 @@
                         arrayVars.add(addr);
                     }
                 }
-                pc += this.instHandler.getInstructionSize(codeBlock, pc, def);
+                pc += size;
             }
 
             // Helper to infer Psion type from usage
@@ -859,6 +867,7 @@
                 const def = this.opcodes[op];
                 if (!def) { pc++; continue; }
                 const instSize = this.instHandler.getInstructionSize(codeBlock, pc, def);
+                if (pc + instSize > start + size) break; // Ignore partial Instructions at end
                 const args = this.instHandler.getArgs(codeBlock, pc, def);
                 instructions.push({ pc, op, args, size: instSize });
                 if (op === 0x7E || op === 0x51 || op === 0x53) { // BranchIfFalse(7E), GOTO(51), ONERR(53)

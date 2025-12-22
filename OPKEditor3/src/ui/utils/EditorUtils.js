@@ -11,8 +11,9 @@ function arraysAreEqual(arr1, arr2) {
 
 function initialiseForm(id, val, self, handler) {
     var elemnt = document.getElementById(id);
-    if (!elemnt) {// 
-        console.warn("initialiseForm: Element not found:", id);
+    if (!elemnt) {
+        // 
+        //         console.warn("initialiseForm: Element not found:", id);
         return;
     }
     var evttp = "change";
@@ -49,7 +50,7 @@ function getItemIcon(item) {
 
     var type = item.type;
     if (type === 1) return prefix + " fa-table"; // Data File
-    if (type >= 0x90 && type < 0xff) return prefix + " fa-file-lines"; // Record
+    if (type >= 16 && type <= 126) return prefix + " fa-file-lines"; // Record
     if (type === 3) { // Procedure (Can be Text or Compiled)
         // Check for QCode Structure (Type 80 Child -> Payload)
         // Note: item.child is the Type 0 (0x80) Data Block.
@@ -72,11 +73,19 @@ function getItemIcon(item) {
     return prefix + " fa-circle-question"; // Default / Unknown
 }
 
+// Helper to get logical A-Z, AA-ZZ label
+function getLogicalFileLabel(n) {
+    if (n <= 26) return String.fromCharCode(64 + n);
+    var first = Math.floor((n - 1) / 26);
+    var second = ((n - 1) % 26) + 1;
+    return String.fromCharCode(64 + first) + String.fromCharCode(64 + second);
+}
+
 // Helper to get item description
 function getItemDescription(item) {
     var type = item.type;
     if (type === 1) return "Data File";
-    if (type >= 16 && type <= 126) return "Record " + String.fromCharCode(64 + (type - 15));
+    if (type >= 16 && type <= 126) return "Record " + getLogicalFileLabel(type - 15);
 
     if (type === 2) return "OPL Image";
     if (type === 3) {

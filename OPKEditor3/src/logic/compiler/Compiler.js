@@ -597,8 +597,9 @@ var OPLCompiler = (function () {
                         // Convert Int(Top-1) to Float? Hard with stack machine unless we emit conversion *before* pushing RHS.
                         // Actually, we parsed LHS, then RHS.
                         // This simple recursive parser makes inserting conversion code tricky without backtracking or lookahead.
-                        // TODO: Robust mixed-mode arithmetic.// 
-                        console.warn("Compiler: Mixed mode comparison not fully supported yet.");
+                        // TODO: Robust mixed-mode arithmetic.
+                        // 
+                        //                         console.warn("Compiler: Mixed mode comparison not fully supported yet.");
                     }
                 }
                 type = 0; // Result is Int (True/False)
@@ -867,7 +868,7 @@ var OPLCompiler = (function () {
                 var builtinOp = BUILTIN_OPCODES[valName];
 
                 if (builtinOp) {
-                    // console.log("Debug: Expression Builtin " + valName + " Target: " + targetSystem);
+
                     var lzOps = [
                         'CLOCK', 'DOW', 'FINDW', 'MENUN', 'WEEK', 'ACOS', 'ASIN', 'DAYS', 'MAX', 'MEAN',
                         'MIN', 'STD', 'SUM', 'VAR', 'DAYNAME$', 'DIRW$', 'MONTH$'
@@ -1287,8 +1288,9 @@ var OPLCompiler = (function () {
                         var logChar = t2.value.toUpperCase();
                         if (['A', 'B', 'C', 'D'].includes(logChar)) {
                             logVal = logChar.charCodeAt(0) - 65;
-                        } else {// 
-                            console.warn("Invalid Logical File Name: " + logChar);
+                        } else {
+                            // 
+                            //                             console.warn("Invalid Logical File Name: " + logChar);
                         }
                     }
                     emit(logVal); // 1 byte
@@ -1646,22 +1648,27 @@ var OPLCompiler = (function () {
                     }
 
                     // Parse Arguments
-                    var argCount = 0;
+                    var argTypes = [];
                     if (peek() && peek().value === '(') {
                         next(); // Eat (
                         while (true) {
-                            parseExpression(); // Push Arg
-                            argCount++;
+                            var tArg = parseExpression(); // Emits code for Arg
+                            if (!builtinOp) {
+                                // Interleave Type Byte (0=Int, 1=Float, 2=String)
+                                emit(0x20); emit(tArg);
+                            }
+                            argTypes.push(tArg);
                             if (peek() && peek().value === ',') { next(); continue; }
                             if (peek() && peek().value === ')') { next(); break; }
                             break;
                         }
                     }
+                    var argCount = argTypes.length;
 
                     if (builtinOp) {
                         emit(builtinOp);
                     } else {
-                        // 1. Push Arg Count
+                        // 1. Push Arg Count LAST
                         emit(0x20); emit(argCount);
 
                         // 2. Emit PROC Opcode
@@ -1696,8 +1703,9 @@ var OPLCompiler = (function () {
             var f = labelFixups[i];
             if (labels[f.name] !== undefined) {
                 patchFixup(f.addr, labels[f.name]);
-            } else {// 
-                console.warn("Compiler: Undefined Label " + f.name);
+            } else {
+                // 
+                //                 console.warn("Compiler: Undefined Label " + f.name);
             }
         }
 

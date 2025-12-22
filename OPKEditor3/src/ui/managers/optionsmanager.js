@@ -84,6 +84,7 @@ var OptionsManager = {
     setOption: function (key, value) {
         this.options[key] = value;
         this.saveOptions();
+        window.dispatchEvent(new CustomEvent('optionsChanged', { detail: { key: key, value: value } }));
     },
 
     applyOptions: function () {

@@ -71,7 +71,7 @@ ProcedureFileEditor.prototype.initialise = function (item) {
         header.appendChild(btn);
         this.translateBtn = btn;
 
-        // Inject Strip Source Button
+        // Inject Strip Source Button (Moved up)
         var stripBtn = document.createElement('button');
         stripBtn.innerHTML = '<i class="fa-solid fa-file-zipper"></i>';
         stripBtn.className = 'icon-btn';
@@ -91,6 +91,45 @@ ProcedureFileEditor.prototype.initialise = function (item) {
 
         header.appendChild(stripBtn);
         this.stripBtn = stripBtn;
+
+        // Inject Divider
+        var divider = document.createElement('span');
+        divider.innerHTML = '|';
+        divider.style.margin = '0 10px';
+        divider.style.color = 'var(--border-color)';
+        divider.style.opacity = '0.5';
+        header.appendChild(divider);
+        this.headerDivider = divider;
+
+        // Inject Target System Indicator (Passive)
+        var targetIndicator = document.createElement('span');
+        targetIndicator.style.marginRight = '5px';
+        targetIndicator.style.color = 'var(--text-color)';
+        targetIndicator.style.fontSize = '12px';
+        targetIndicator.style.opacity = '0.7';
+        targetIndicator.title = 'Current Compiler Target (Change in Options)';
+
+        var updateTargetLabel = function () {
+            var current = OptionsManager.getOption('targetSystem') || 'Standard';
+            var label = (current === 'LZ') ? 'LZ Mode' : 'XP Mode';
+            var icon = (current === 'LZ') ? 'fa-memory' : 'fa-microchip';
+            targetIndicator.innerHTML = '<i class="fas ' + icon + '"></i> ' + label;
+        };
+
+        updateTargetLabel();
+
+        header.appendChild(targetIndicator);
+        this.targetIndicator = targetIndicator;
+
+        // Listener for Sync
+        this.targetOptionListener = function (e) {
+            if (e.detail && e.detail.key === 'targetSystem') {
+                updateTargetLabel();
+            }
+        };
+        window.addEventListener('optionsChanged', this.targetOptionListener);
+
+
     }
 
     // extract data from item and initialise form
@@ -101,7 +140,7 @@ ProcedureFileEditor.prototype.initialise = function (item) {
     // (Disabled check removed)
     var lnsrc = chld.data[lncode + 2] * 256 + chld.data[lncode + 3];
     // Defer the heavy decompilation to allow UI to update first
-    // Defer the heavy decompilation to allow UI to update first
+
     setTimeout(function () {
         var s = "";
         var hasSource = (lnsrc > 0);
@@ -231,6 +270,18 @@ ProcedureFileEditor.prototype.finish = function () {
     if (this.translateBtn && this.translateBtn.parentNode) {
         this.translateBtn.parentNode.removeChild(this.translateBtn);
         this.translateBtn = null;
+    }
+    if (this.targetIndicator && this.targetIndicator.parentNode) {
+        this.targetIndicator.parentNode.removeChild(this.targetIndicator);
+        this.targetIndicator = null;
+    }
+    if (this.headerDivider && this.headerDivider.parentNode) {
+        this.headerDivider.parentNode.removeChild(this.headerDivider);
+        this.headerDivider = null;
+    }
+    if (this.targetOptionListener) {
+        window.removeEventListener('optionsChanged', this.targetOptionListener);
+        this.targetOptionListener = null;
     }
     if (this.stripBtn && this.stripBtn.parentNode) {
         this.stripBtn.parentNode.removeChild(this.stripBtn);
@@ -619,6 +670,34 @@ ProcedureFileEditor.prototype.translateAndSave = function () {
     }
 };
 
+// Helper to build a process map (procedure name -> param count) for the decompiler
+function buildProcMap() {
+    var procMap = {};
+    if (window.packs) {
+        window.packs.forEach(function (pack) {
+            pack.items.forEach(function (item) {
+                if (item.type === 3 && !item.deleted && item.child) {
+                    // Robust check: Procedure data is usually in item.child.child.data
+                    // but we check both levels for resilience.
+                    var target = (item.child.child && item.child.child.data) ? item.child.child : (item.child.data ? item.child : null);
+                    if (target) {
+                        try {
+                            var tempDecompiler = new OPLDecompiler();
+                            var header = tempDecompiler.parseHeader(target.data, 0);
+                            if (header && header.numParams !== undefined) {
+                                procMap[item.name.toUpperCase()] = { paramCount: header.numParams };
+                            }
+                        } catch (e) {
+                            console.warn("Failed to parse header for procMap:", item.name, e);
+                        }
+                    }
+                }
+            });
+        });
+    }
+    return procMap;
+}
+
 ProcedureFileEditor.prototype.refreshDecompilerLog = function (hasSource) {
     if (!window.OPLDecompiler) return;
 
@@ -676,6 +755,7 @@ ProcedureFileEditor.prototype.refreshDecompilerLog = function (hasSource) {
             }
 
             var decompiler = new OPLDecompiler();
+            logOptions.procMap = buildProcMap();
             // Pass the stamped buffer!
             var decompiled = decompiler.decompile(stampedBuffer, procName, logOptions);
 

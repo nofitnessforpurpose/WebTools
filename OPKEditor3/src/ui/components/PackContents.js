@@ -258,7 +258,11 @@ class PackContentsView {
             var input = document.createElement('input');
             input.type = 'text';
             input.value = packs[pIdx].filename ? packs[pIdx].filename : "Pack" + (pIdx + 1) + ".opk";
-            input.style.width = '150px';
+            input.style.width = '100%';
+            input.style.boxSizing = 'border-box';
+            input.style.padding = '2px';
+            input.style.fontSize = 'inherit';
+            input.style.fontFamily = 'inherit';
 
             function saveName() {
                 var newName = input.value.trim();
@@ -274,6 +278,7 @@ class PackContentsView {
 
             input.addEventListener('blur', saveName);
             input.addEventListener('keydown', function (e) {
+                e.stopPropagation(); // Prevent parent from seeing Enter (Select) or Backspace (Delete)
                 if (e.key === 'Enter') {
                     saveName();
                 }
@@ -281,6 +286,12 @@ class PackContentsView {
 
             title.innerHTML = '';
             title.appendChild(input);
+
+            // Critical: Stop propagation to prevent parent packHeader handlers from stealing focus or intercepting keys
+            input.addEventListener('click', function (e) { e.stopPropagation(); });
+            input.addEventListener('dblclick', function (e) { e.stopPropagation(); });
+            input.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+
             input.focus();
         });
 
@@ -354,91 +365,76 @@ class PackContentsView {
             var items = pack.items;
 
             // Grouping Logic
+            // Grouping and Child Counting Logic
             var groupRecords = OptionsManager.getOption('groupDataRecords');
             var itemsToRender = [];
-
-            // Calculate child counts for Data Files (Type 1)
             var childCounts = {};
-            var fileIds = {};
+            var dataFileIndices = {}; // RecordType -> HeaderIndex
+            var dataFileChildren = {}; // HeaderIndex -> Array<RecordIndex>
+            var childIndices = new Set();
 
-            // 1. Map Data Files
+            // 0. Clear stale grouping state
+            for (var i = 0; i < items.length; i++) {
+                delete items[i].isLastChild;
+            }
+
+            // 1. Identify Data Files and their record types
             for (var i = 0; i < items.length; i++) {
                 if (items[i].type === 1 && items[i].data && items[i].data.length > 10) {
-                    var id = items[i].data[10] & 0x7f;
-                    fileIds[id] = i;
+                    var rType = items[i].data[10] & 0x7f;
+                    // Normalize ID: If data[10] is a raw ID (1..15), it maps to Record Type (16..30)
+                    if (rType > 0 && rType < 16) rType += 15;
+                    dataFileIndices[rType] = i;
                     childCounts[i] = 0;
+                    dataFileChildren[i] = [];
                 }
             }
 
-            // 2. Count Children
+            // 2. Assign Records to Parents
             for (var i = 0; i < items.length; i++) {
-                if (items[i].type === 1) continue;
-                // Check if this item's type matches a known File ID
-                if (fileIds.hasOwnProperty(items[i].type)) {
-                    var parentIndex = fileIds[items[i].type];
-                    childCounts[parentIndex]++;
+                if (items[i].type >= 16 && items[i].type <= 126) {
+                    var parentIdx = dataFileIndices[items[i].type];
+                    if (parentIdx !== undefined) {
+                        childCounts[parentIdx]++;
+                        if (groupRecords) {
+                            dataFileChildren[parentIdx].push(i);
+                            childIndices.add(i);
+                        }
+                    }
                 }
             }
 
             if (groupRecords) {
-                // Pre-calculation pass: Map Data Files to their children
-                var dataFileChildren = {}; // Map<FileID, Array<Index>>
-                var childIndices = new Set(); // Set<Index> of all items that are children
-
-                // 1. Find all Data Files and their IDs
-                var dataFiles = [];
-                for (var i = 0; i < items.length; i++) {
-                    if (items[i].type === 1) {
-                        // Safely access data
-                        var id = (items[i].data && items[i].data.length > 10) ? (items[i].data[10] & 0x7f) : -1;
-                        if (id >= 0) dataFiles.push({ index: i, id: id });
-                    }
-                }
-
-                // 2. Find children for each Data File
-                dataFiles.forEach(function (df) {
-                    var children = [];
-                    for (var j = 0; j < items.length; j++) {
-                        if (j === df.index) continue; // Skip self
-                        if (items[j].type === df.id) {
-                            children.push(j);
-                            childIndices.add(j);
-                        }
-                    }
-
-                    // Mark the last child for CSS styling
+                // 3. Mark last children for tree lines
+                for (var parentIdx in dataFileChildren) {
+                    var children = dataFileChildren[parentIdx];
                     if (children.length > 0) {
                         items[children[children.length - 1]].isLastChild = true;
                     }
-                    dataFileChildren[df.index] = children;
-                });
+                }
 
-                // 3. Render loop
+                // 4. Render loop with grouping
                 for (var i = 0; i < items.length; i++) {
-                    // If this item is a child of someone else, skip it (it will be rendered under its parent)
                     if (childIndices.has(i)) continue;
 
                     var item = items[i];
                     itemsToRender.push({ item: item, index: i, indent: false });
 
                     // If this is a Data File, check if it has children to render
-                    if (item.type === 1 && dataFileChildren[i]) {
-                        // Apply default collapse setting if not already set
+                    if (item.type === 1 && dataFileChildren[i] && dataFileChildren[i].length > 0) {
                         if (typeof item.collapsed === 'undefined') {
                             item.collapsed = !!OptionsManager.getOption('collapseDataFiles');
                         }
 
-                        // Check collapsed state
                         if (!item.collapsed) {
                             var children = dataFileChildren[i];
                             for (var k = 0; k < children.length; k++) {
-                                var childIndex = children[k];
-                                itemsToRender.push({ item: items[childIndex], index: childIndex, indent: true });
+                                var childIdx = children[k];
+                                itemsToRender.push({ item: items[childIdx], index: childIdx, indent: true });
                             }
                         }
                     }
                 }
-
             } else {
                 // Linear rendering
                 for (var i = 0; i < items.length; i++) {
@@ -461,7 +457,7 @@ class PackContentsView {
                 var address = addressMap[originalIndex];
                 var count = (childCounts[originalIndex] !== undefined) ? childCounts[originalIndex] : 0;
 
-                var itemRow = this.createItemRow(item, pIdx, originalIndex, address, pl, renderItem.indent, count);
+                var itemRow = this.createItemRow(item, pIdx, originalIndex, address, pl, renderItem.indent, count, groupRecords);
                 // Add tracking data
                 itemRow.setAttribute('data-pack-idx', pIdx);
                 itemRow.setAttribute('data-item-idx', originalIndex);
@@ -474,7 +470,7 @@ class PackContentsView {
         return packWrapper;
     }
 
-    createItemRow(item, packIndex, itemIndex, address, addrLen, indent, childCount) {
+    createItemRow(item, packIndex, itemIndex, address, addrLen, indent, childCount, showGrouping) {
         var row = document.createElement('li');
         row.className = 'pack-item-row';
         if (currentItem === item) {
@@ -499,9 +495,9 @@ class PackContentsView {
         itemIcon.innerHTML = `<i class="${iconClass}"></i>`;
 
         // Feature: Collapse/Expand Data Files
-        if (item.type === 1) {
+        if (item.type === 1 && showGrouping && childCount > 0) {
             itemIcon.style.cursor = "pointer";
-            var countStr = (childCount !== undefined) ? " (" + childCount + " records)" : "";
+            var countStr = " (" + childCount + " records)";
             itemIcon.title = (item.collapsed ? "Click to expand records" : "Click to collapse records") + countStr;
 
             var self = this;
@@ -622,8 +618,9 @@ class PackContentsView {
                         // User said "Recycle ... toggles ... deleted status".
                         // And "DELETE key deletes".
                         // Usually "Delete" in UI = Remove.
-                        // Let's assume eraseItem() does the right thing.// 
-                        console.warn("eraseItem global not found.");
+                        // Let's assume eraseItem() does the right thing.
+                        // 
+                        //                         console.warn("eraseItem global not found.");
                     }
                 }
             } else if (e.key === 'ArrowDown') {
