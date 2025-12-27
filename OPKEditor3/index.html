@@ -22,16 +22,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Psion OPK Editor v03.00.06</title>
+    <title>Psion OPK Editor v03.00.07</title>
+
+    <!-- Stylesheets with cache busting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
         id="font-awesome-css">
-    <link rel="stylesheet" href="styles/base.css?v=03.00.06">
-    <link rel="stylesheet" href="styles/layout.css?v=03.00.06">
-    <link rel="stylesheet" href="styles/components.css?v=03.00.06">
-    <link rel="stylesheet" href="styles/editor.css?v=03.00.06">
-
-    <link rel="stylesheet" href="styles/psion.css?v=03.00.06">
-    <link rel="stylesheet" href="styles/syntax.css?v=03.00.06">
+    <link rel="stylesheet" href="styles/base.css?v=03.00.07">
+    <link rel="stylesheet" href="styles/layout.css?v=03.00.07">
+    <link rel="stylesheet" href="styles/components.css?v=03.00.07">
+    <link rel="stylesheet" href="styles/editor.css?v=03.00.07">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="styles/psion.css?v=03.00.07">
+    <link rel="stylesheet" href="styles/syntax.css?v=03.00.07">
 </head>
 
 <body>
@@ -172,7 +174,7 @@
     <script src="src/logic/decompiler/disassembler.js"></script>
     <script src="src/logic/decompiler/instruction_handler.js?v=fix_pon_1"></script>
     <script src="src/logic/decompiler/source_generator.js?v=rem_ext_fix"></script>
-    <script src="src/logic/compiler/Compiler.js?v=fix_rem_1"></script>
+    <script src="src/logic/compiler/Compiler.js?v=fix_menu_1"></script>
 
     <script src="src/logic/decompiler/main.js?v=fix_pon_1"></script>
     <script src="src/ui/editors/BaseEditor.js?v=cb1"></script>
@@ -182,7 +184,7 @@
     <script src="src/ui/editors/HeaderlessFileEditor.js?v=cb1"></script>
     <script src="src/ui/editors/DataFileEditor.js?v=cb1"></script>
     <script src="src/ui/editors/CommsSetupEditor.js?v=cb1"></script>
-    <script src="src/ui/editors/ProcedureFileEditor.js?v=translate_fix_2"></script>
+    <script src="src/ui/editors/ProcedureFileEditor.js?v=fix_confirm_1"></script>
     <script src="src/ui/utils/NotepadUtils.js?v=cb1"></script>
     <script src="src/ui/editors/LZNotepadFileEditor.js?v=cb7"></script>
     <script src="src/ui/editors/SpreadsheetFormulaDecoder.js?v=cb1"></script>
@@ -194,6 +196,7 @@
     <script src="src/ui/editors/MemoryMapEditor.js?v=cb1"></script>
     <script src="src/ui/managers/optionsmanager.js"></script>
     <script src="src/ui/managers/thememanager.js"></script>
+    <script src="src/ui/managers/DialogManager.js?v=force_1"></script>
     <script src="src/ui/managers/tooltipmanager.js"></script>
 
     <!-- Controller -->
@@ -208,6 +211,7 @@
     <script src="src/ui/components/PackContents.js?v=type_fix_1"></script>
     <script src="src/ui/components/OPLCommandData.js"></script>
     <script src="src/ui/components/DecompilerLogWindow.js?v=logfix1"></script>
+    <script src="src/ui/components/VariableStorageWindow.js?v=force_1"></script>
     <script src="src/ui/components/SpreadsheetDebugWindow.js"></script>
     <script src="src/ui/components/OPLCommandReference.js"></script>
     <script src="src/ui/managers/LayoutManager.js"></script>
