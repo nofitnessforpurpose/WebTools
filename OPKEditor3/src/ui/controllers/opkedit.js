@@ -18,8 +18,8 @@ function Button(id, clickcallback, inputId, filecallback) {
    var _element = document.getElementById(id);
    if (!_element) {
       // 
-      // 
-      console.warn("Button not found: " + id);
+      // // 
+//       console.warn("Button not found: " + id);
       return;
    }
 
@@ -450,8 +450,8 @@ function init() {
             localStorage.removeItem('opkedit_cached_pack');
          } catch (e) {
             // 
-            // 
-            console.warn("Restore Packs: Legacy migration failed", e);
+            // // 
+//             console.warn("Restore Packs: Legacy migration failed", e);
          }
       }
 
@@ -511,16 +511,38 @@ function init() {
 
 // Core Functions
 
-function createNew() {
+function createNew(e) {
    if (typeof HexViewer !== 'undefined') HexViewer.close();
-   // if (!discardUnsavedPack()) return; // Removed single pack check
-   var newPack = new PackImage(null);
-   newPack.filename = "Pack" + (packs.length + 1) + ".opk";
-   packs.push(newPack);
-   currentPack = newPack; // Make new pack active
-   currentPackIndex = packs.length - 1;
-   updateInventory();
-   setStatus("New pack created");
+
+   // Create Size Selection Dialog
+   var element = document.createElement('div');
+   element.innerHTML =
+      "<div>Select Pack Size:</div>" +
+      "<div><select id='packsize'>" +
+      "<option value='1'>8 KB (Standard)</option>" +
+      "<option value='2'>16 KB</option>" +
+      "<option value='3'>32 KB</option>" +
+      "<option value='4'>64 KB</option>" +
+      "<option value='5'>128 KB</option>" +
+      "</select></div>";
+
+   var sel = element.querySelector("#packsize");
+   var sizeDialog = new ModalDialog(element, function () {
+      var sizeCode = parseInt(sel.value);
+      if (sizeCode >= 1 && sizeCode <= 5) {
+         var newPack = new PackImage(null, sizeCode);
+         newPack.filename = "Pack" + (packs.length + 1) + ".opk";
+         packs.push(newPack);
+         currentPack = newPack; // Make new pack active
+         currentPackIndex = packs.length - 1;
+         updateInventory();
+         setStatus("New " + (8 * Math.pow(2, sizeCode - 1)) + "KB pack created");
+      }
+   });
+
+   sizeDialog.start();
+   // Focus select
+   sel.focus();
 }
 
 function packSaved() {
@@ -619,7 +641,17 @@ function updateItemButtons(isDirty) {
       toolbarButtons.btnNewData.setActive(hasPack && !isDirty);
       toolbarButtons.btnDelete.setActive(canDelete);
       toolbarButtons.btnApply.setActive(isDirty);
+      toolbarButtons.btnApply.setActive(isDirty);
       toolbarButtons.btnDiscard.setActive(isDirty);
+
+      // Check for Procedures
+      var hasProcs = false;
+      if (typeof selectedItems !== 'undefined' && selectedItems.length > 0) {
+         hasProcs = selectedItems.some(function (it) { return it.type === 3 && !it.deleted; });
+      } else if (currentItem && currentItem.type === 3 && !currentItem.deleted) {
+         hasProcs = true;
+      }
+      toolbarButtons.btnCopyObj.setActive(hasProcs && !isDirty);
 
       toolbarButtons.btnAbout.setActive(true);
       toolbarButtons.btnMaxMin.setActive(true);
@@ -701,6 +733,27 @@ function initIconToolbar() {
 
    toolbarButtons.btnApply = createToolbarBtn('tbtn-apply', 'fas fa-circle-check', 'Apply Changes', applyEdits);
    toolbarButtons.btnDiscard = createToolbarBtn('tbtn-discard', 'fas fa-rotate-left', 'Discard Changes', discardEdits);
+
+   createSeparator();
+
+   // New: Batch Copy Object Button
+   toolbarButtons.btnCopyObj = createToolbarBtn('tbtn-copy-obj', 'fa-solid fa-file-zipper', 'Copy Object Code (Extract)', function () {
+      if (typeof selectedItems === 'undefined' || selectedItems.length === 0) return;
+      var targets = selectedItems.filter(function (it) { return it.type === 3; });
+      if (targets.length === 0) return;
+
+      var procEditor = editors.find(function (e) { return e instanceof ProcedureFileEditor; });
+      if (procEditor) {
+         // Temporarily bind the editor to the first target to satisfy internal checks
+         var oldItem = procEditor.item;
+         procEditor.item = targets[0];
+         try {
+            procEditor.copyObjectCode();
+         } finally {
+            procEditor.item = oldItem;
+         }
+      }
+   });
 
    createSeparator();
 
@@ -1262,8 +1315,8 @@ function itemSelected(packIndex, itemIndex, event) {
       currentEditor.initialise(currentItem, startAddr);
    } else {
       // 
-      // 
-      console.warn("No editor found for type " + tp);
+      // // 
+//       console.warn("No editor found for type " + tp);
    }
 
    // Optimized update: Don't re-render entire list, just update selection
@@ -1347,19 +1400,49 @@ function loadPackFromFiles(files) {
                   openPacks.push(path);
                   localStorage.setItem('opkedit_open_packs', JSON.stringify(openPacks));
                }
-            } else {
-               // 
-               // 
-               console.warn("Restore Packs: Cannot determine full path for file. Browser security may prevent this.");
+            } else {// 
+//                console.warn("Restore Packs: Cannot determine full path for file. Browser security may prevent this.");
                setStatus("Warning: Cannot save pack path for restore (Browser restriction).");
             }
          }
 
          LoadLocalBinaryFile(files[0],
             function (data, nm) {
+               // Check if WRAPPED (OPK Header present)
+               var isWrapped = (data.length >= 3 && data[0] === 79 && data[1] === 80 && data[2] === 75);
+
+               // Check for OPK Header, if missing assume raw binary and wrap it
+               if (!isWrapped) {
+                  // Create 6-byte header: OPK + 3-byte Length
+                  var ln = data.byteLength;
+                  var wrapped = new Uint8Array(ln + 6);
+                  wrapped[0] = 79; // O
+                  wrapped[1] = 80; // P
+                  wrapped[2] = 75; // K
+                  wrapped[3] = (ln >> 16) & 0xff;
+                  wrapped[4] = (ln >> 8) & 0xff;
+                  wrapped[5] = ln & 0xff;
+                  wrapped.set(data, 6);
+                  data = wrapped; // Reassign data to wrapped buffer
+               }
+
                var newPack = new PackImage(data);
                newPack.unsaved = false;
                newPack.filename = nm;
+
+               // Feature: Validate Header Size Code
+               // Only 0 is truly invalid (0KB)
+               if (newPack.items && newPack.items.length > 0) {
+                  var header = newPack.items[0];
+                  if (header && header.data && header.data.length > 1) {
+                     var sc = header.data[1];
+                     if (sc < 1) { // Only 0 is truly invalid (0KB)
+                        alert("Import Warning: Invalid Pack Size Code (" + sc + ") detected.\nDefaulting to 8KB (Code 1).");
+                        header.data[1] = 1; // Default to 8KB
+                     }
+                  }
+               }
+
                // Store content in localStorage for auto-load
                if (OptionsManager.getOption('restorePacks')) {
                   try {
@@ -1385,10 +1468,8 @@ function loadPackFromFiles(files) {
 
                      localStorage.setItem('opkedit_cached_packs', JSON.stringify(cachedPacks));
 
-                  } catch (e) {
-                     // 
-                     // 
-                     console.warn("Auto-Load: Failed to save pack content.", e);
+                  } catch (e) {// 
+//                      console.warn("Auto-Load: Failed to save pack content.", e);
                   }
                }
 
@@ -1448,8 +1529,8 @@ function eraseItem() {
                }
             } catch (e) {
                // 
-               // 
-               console.warn("Auto-Load: Failed to check cache on delete", e);
+               // // 
+//                console.warn("Auto-Load: Failed to check cache on delete", e);
             }
 
             // Fix: Also remove from open packs list (Filespaths)
@@ -1507,11 +1588,22 @@ function eraseItem() {
 
       // Defer to render status
       setTimeout(function () {
-         // Map items to indices to sort reverse
+         // Sort by index descending to handle splices if needed
          var indices = toDelete.map(function (it) { return pack.items.indexOf(it); }).sort(function (a, b) { return b - a; });
 
          indices.forEach(function (idx) {
-            if (idx >= 0) pack.items.splice(idx, 1);
+            if (idx >= 0) {
+               var it = pack.items[idx];
+               if (it.deleted) {
+                  // Already deleted? Hard delete (Remove)
+                  pack.items.splice(idx, 1);
+               } else {
+                  // Soft Delete (Mark as deleted)
+                  it.deleted = true;
+                  if (it.data && it.data.length > 1) it.data[1] &= 0x7F; // Clear bit 7
+                  it.setDescription();
+               }
+            }
          });
 
          selectedItems = [];
@@ -1530,17 +1622,32 @@ function eraseItem() {
       return; // Exit sync flow
    } else if (currentItem) {
       // Single Item Deletion (Legacy Path or Fallback)
-      // ... existing logic ...
+      // Check if it's special
+      var type = currentItem.type;
+      if (type <= 0 || type === 255) return;
+
       if (!currentItem.deleted) {
          var suppress = OptionsManager.getOption('suppressConfirmations');
          if (!suppress) {
             var discard = window.confirm("Are you sure you want to erase " + (currentItem.name ? currentItem.name : "this item") + " from the pack?");
             if (!discard) return false;
          }
+         // Soft Delete
+         currentItem.deleted = true;
+         if (currentItem.data && currentItem.data.length > 1) currentItem.data[1] &= 0x7F;
+         currentItem.setDescription();
+      } else {
+         // Already deleted -> Hard Delete confirm?
+         var suppress = OptionsManager.getOption('suppressConfirmations');
+         if (!suppress) {
+            var discard = window.confirm("This item is already deleted. Permanently remove it (reclaim space)?");
+            if (!discard) return false;
+         }
+
+         var items = pack.items;
+         var i = items.indexOf(currentItem);
+         if (i >= 0) items.splice(i, 1);
       }
-      var items = pack.items;
-      var i = items.indexOf(currentItem);
-      if (i >= 0) items.splice(i, 1);
 
       currentItem = null;
    } else {
@@ -1689,8 +1796,8 @@ function saveSession() {
       localStorage.setItem('opkedit_cached_packs', JSON.stringify(sessionPacks));
    } catch (e) {
       // 
-      // 
-      console.warn("Session Save Failed (Quota?):", e);
+      // // 
+//       console.warn("Session Save Failed (Quota?):", e);
    }
 }
 
@@ -2036,7 +2143,16 @@ function addItemToPack(item) {
    if (!pack) return;
 
    var items = pack.items;
-   var insertIndex = items.length - 1; // Default: append before terminator
+   var items = pack.items;
+   // Default: append before terminator (Find explicit terminator to be safe)
+   var insertIndex = -1;
+   for (var i = 0; i < items.length; i++) {
+      if (items[i].type === 255) { // End of Pack
+         insertIndex = i;
+         break;
+      }
+   }
+   if (insertIndex === -1) insertIndex = items.length; // Fallback if no terminator found
 
    // Sequential Insertion Logic for Records
    if (item.type >= 16) { // Is a Record
@@ -2315,6 +2431,10 @@ function initChildMode(feature) {
       // Notify opener that we are ready
       if (window.opener && window.opener.CodeVisualizer && window.opener.CodeVisualizer.childWindowReady) {
          window.opener.CodeVisualizer.childWindowReady(window);
+      }
+   } else if (feature === 'command_ref') {
+      if (window.opener && window.opener.OPLCommandReference && window.opener.OPLCommandReference.childWindowReady) {
+         window.opener.OPLCommandReference.childWindowReady(window);
       }
    }
 }

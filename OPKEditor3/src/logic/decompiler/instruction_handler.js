@@ -294,17 +294,20 @@
         }
 
         formatAddress(val, usedSystemVars) {
-            // Check if val is a simple integer literal string
-            if (typeof val === 'string' && /^\d+$/.test(val)) {
-                const num = parseInt(val, 10);
+            // Check if val is a simple integer literal string (positive or negative)
+            if (typeof val === 'string' && /^-?\d+$/.test(val)) {
+                let num = parseInt(val, 10);
                 if (!isNaN(num)) {
-                    // Format as Hex
-                    const hex = '$' + num.toString(16).toUpperCase(); // e.g. $180
-
-                    // Track usage if it's a known system constant
+                    // Track usage if it's a known system constant (using signed value)
                     if (usedSystemVars && typeof SYSTEM_CONSTANTS !== 'undefined' && SYSTEM_CONSTANTS[num]) {
                         usedSystemVars.add(num);
                     }
+
+                    // Convert to unsigned 16-bit for display
+                    if (num < 0) num += 65536;
+
+                    // Format as Hex
+                    const hex = '$' + num.toString(16).toUpperCase(); // e.g. $FFFF
                     return hex;
                 }
             }

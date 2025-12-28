@@ -8,8 +8,11 @@
 var OPLCompiler = (function () {
 
     // --- Constants ---
+    // --- Constants ---
     var OPERATORS = ['+', '-', '*', '/', '**', '=', '<', '>', '<=', '>=', '<>', 'AND', 'OR', 'NOT', '%'];
-    var KEYWORDS = [
+
+    // Shared Keywords (XP/LZ)
+    var KEYWORDS_SHARED = [
         'PROC', 'ENDP', 'LOCAL', 'GLOBAL', 'EXTERNAL',
         'IF', 'ELSE', 'ELSEIF', 'ENDIF',
         'WHILE', 'ENDWH', 'DO', 'UNTIL',
@@ -20,8 +23,12 @@ var OPLCompiler = (function () {
         'APPEND', 'CLOSE', 'COPY', 'CREATE', 'DELETE', 'ERASE',
         'FIRST', 'LAST', 'NEXT', 'BACK', 'OPEN', 'POSITION', 'RENAME', 'UPDATE', 'USE',
         'KSTAT', 'EDIT', 'INPUT', 'VIEW', 'ON', 'OFF',
-        'RAISE', 'UDG', 'MENU', 'EXT',
-        'DISP', 'COPYW', 'DELETEW'
+        'RAISE', 'EXT', 'DISP', 'COPYW', 'DELETEW'
+    ];
+
+    // LZ-Only Keywords
+    var KEYWORDS_LZ = [
+        'UDG', 'MENU'
     ];
 
     // --- Helper: Invert QCODE_DEFS for name-based lookup ---
@@ -29,7 +36,8 @@ var OPLCompiler = (function () {
 
     function init() {
         if (typeof QCODE_DEFS === 'undefined') {
-            console.error("OPLCompiler: QCODE_DEFS not found!");
+            // console.error("OPLCompiler: QCODE_DEFS not found!"); 
+            // Silent fail allowed for unit tests mocking it?
             return;
         }
         for (var code in QCODE_DEFS) {
@@ -48,15 +56,19 @@ var OPLCompiler = (function () {
     }
 
     // --- Tokenizer ---
-    function tokenize(source) {
+    function tokenize(source, targetSystem) {
         var tokens = [];
         var lines = source.split('\n');
+
+        // Determine active Keywords
+        var activeKeywords = KEYWORDS_SHARED.slice();
+        if (targetSystem === 'LZ') {
+            activeKeywords = activeKeywords.concat(KEYWORDS_LZ);
+        }
 
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i].trim();
             if (!line || line.startsWith('REM')) continue;
-
-            // Handle comments (REM or ' at end of line not strictly supported in basic tokenizer yet, assume line-based)
 
             // Scanner
             var ptr = 0;
@@ -77,12 +89,10 @@ var OPLCompiler = (function () {
                     continue;
                 }
 
-                // Numbers (Simpified: Integers and Floats)
+                // Numbers
                 if (/[0-9]/.test(char) || (char === '.' && /[0-9]/.test(line[ptr + 1]))) {
                     var start = ptr;
                     while (ptr < line.length && /[0-9.]/.test(line[ptr])) ptr++;
-                    // Optional scientific notation e.g. 1.2E5 - SKIP for now
-                    // Check for HEX ($)
                     var val = line.substring(start, ptr);
                     if (val.includes('.')) {
                         tokens.push({ type: 'FLOAT', value: parseFloat(val), line: i + 1 });
@@ -116,7 +126,7 @@ var OPLCompiler = (function () {
                         continue;
                     }
 
-                    if (KEYWORDS.indexOf(upper) !== -1 || OPERATORS.indexOf(upper) !== -1) {
+                    if (activeKeywords.indexOf(upper) !== -1 || OPERATORS.indexOf(upper) !== -1) {
                         tokens.push({ type: 'KEYWORD', value: upper, line: i + 1 });
                     } else {
                         tokens.push({ type: 'IDENTIFIER', value: word, line: i + 1 });
@@ -131,7 +141,7 @@ var OPLCompiler = (function () {
                     continue;
                 }
 
-                // Multi-char operators (<=, >=, <>, **) - Basic handling
+                // Multi-char operators
                 if (char === '<' || char === '>' || char === ':') {
                     if (line[ptr + 1] === '=' || line[ptr + 1] === '>') {
                         tokens.push({ type: 'OPERATOR', value: char + line[ptr + 1], line: i + 1 });
@@ -147,7 +157,6 @@ var OPLCompiler = (function () {
                     }
                 }
 
-                // Single char operator
                 if (OPERATORS.indexOf(char) !== -1) {
                     tokens.push({ type: 'OPERATOR', value: char, line: i + 1 });
                     ptr++;
@@ -175,7 +184,8 @@ var OPLCompiler = (function () {
     }
 
     // --- OPL Built-in Opcode Mapping ---
-    const BUILTIN_OPCODES = {
+    // Split into Shared and LZ-Specific
+    const BUILTIN_OPCODES_SHARED = {
         'GET': 0x91, 'KEY': 0x95, 'POS': 0xA5, 'COUNT': 0xA2, 'EOF': 0xA3, 'ERR': 0x8E,
         'FREE': 0x90, 'RECSIZE': 0x9D, 'FIND': 0x8F, 'LEN': 0x96, 'LOC': 0x97, 'ASC': 0x8B,
         'ADDR': 0x8A, 'ABS': 0x93, 'IABS': 0x93, 'INT': 0x94, 'FLT': 0x86, 'DIR$': 0xB7, 'KEY$': 0xBF,
@@ -187,8 +197,10 @@ var OPLCompiler = (function () {
         'REPT$': 0xC5, 'GEN$': 0xBC, 'FIX$': 0xBB, 'SCI$': 0xC6, 'NUM$': 0xC3, 'DATIM$': 0xB9,
         'ERR$': 0xBA, 'GET$': 0xBD, 'VAL': 0xB5, 'PI': 0xAF, 'RAD': 0xB0, 'DEG': 0xA9,
         'SIN': 0xB2, 'COS': 0xA8, 'TAN': 0xB4, 'ATAN': 0xA7, 'SQR': 0xB3, 'LN': 0xAD,
-        'LOG': 0xAE, 'EXP': 0xAA, 'RND': 0xB1, 'INTF': 0xAC, 'SPACE': 0xB6,
-        // LZ Extensions
+        'LOG': 0xAE, 'EXP': 0xAA, 'RND': 0xB1, 'INTF': 0xAC, 'SPACE': 0xB6
+    };
+
+    const BUILTIN_OPCODES_LZ = {
         'CLOCK': 0xD6, 'DOW': 0xD7, 'FINDW': 0xD8, 'MENUN': 0xD9, 'WEEK': 0xDA,
         'ACOS': 0xDB, 'ASIN': 0xDC, 'DAYS': 0xDD, 'MAX': 0xDE, 'MEAN': 0xDF,
         'MIN': 0xE0, 'STD': 0xE1, 'SUM': 0xE2, 'VAR': 0xE3,
@@ -198,17 +210,21 @@ var OPLCompiler = (function () {
     // --- Parser & Compiler ---
     function compile(source, options) {
         options = options || {};
-        // Default to LZ if not specified? Or standard? 
-        // Logic suggests if user picks Standard, targetSystem='Standard'.
-        // If undefined, default to Standard? Or LZ as per user task? 
-        // Let's assume passed options from Editor are robust. 
-        // If not, default to 'Standard' to be safe for legacy, but user wants LZ support as primary.
-        // Actually, let's just use what's passed.
-        var targetSystem = options.targetSystem || 'Standard'; // Default to Standard (CM/XP) per request
+        var targetSystem = options.targetSystem || 'Standard'; // Default to Standard
 
-        // init(); // Ensure QCODE maps are built
         init();
-        var tokens = tokenize(source);
+        var tokens = tokenize(source, targetSystem);
+
+        // Prep Active Opcodes
+        var activeOpcodes = Object.assign({}, BUILTIN_OPCODES_SHARED);
+        if (targetSystem === 'LZ') {
+            Object.assign(activeOpcodes, BUILTIN_OPCODES_LZ);
+        }
+
+        var activeKeywords = KEYWORDS_SHARED.slice();
+        if (targetSystem === 'LZ') {
+            activeKeywords = activeKeywords.concat(KEYWORDS_LZ);
+        }
 
 
         // Pass 1: Scan Declarations & Header Info
@@ -383,7 +399,7 @@ var OPLCompiler = (function () {
                 var name = t.value.toUpperCase();
 
                 // Exclude Keywords
-                if (KEYWORDS.indexOf(name.toUpperCase()) !== -1) continue;
+                if (activeKeywords.indexOf(name.toUpperCase()) !== -1) continue;
                 if (OPERATORS.indexOf(name.toUpperCase()) !== -1) continue; // AND/OR/NOT are identifiers in scanner?
 
                 // Exclude Definition contexts (LOCAL A, GLOBAL B) - handled by declaredNames check
@@ -399,7 +415,7 @@ var OPLCompiler = (function () {
                 if (tokens[i + 1] && tokens[i + 1].value === ':') continue; // Simple Label "Lab:"
 
                 // Exclude Built-in Opcodes (e.g. FIX$, GEN$, etc.)
-                if (BUILTIN_OPCODES[name]) continue;
+                if (activeOpcodes[name]) continue;
 
                 // Known?
                 if (declaredNames[name]) continue;
@@ -604,7 +620,9 @@ var OPLCompiler = (function () {
         }
 
         // --- CodeGen Helpers ---
-        function emit(b) { qcode.push(b & 0xFF); }
+        function emit(b) {
+            qcode.push(b & 0xFF);
+        }
         function emitWord(w) { emit(w >> 8); emit(w & 0xFF); }
         function emitOp(op) { emit(op); }
 
@@ -785,7 +803,7 @@ var OPLCompiler = (function () {
                         if (type === 0 && rhsType === 1) {
                             // Int LHS, Float RHS -> Promote LHS? 
                             // We are stuck because LHS is already on stack.
-                            console.warn("Compiler: Mixed mode comparison (Int vs Float) not fully supported yet. LHS conversion needed.");
+//                             console.warn("Compiler: Mixed mode comparison (Int vs Float) not fully supported yet. LHS conversion needed.");
                         } else if (type === 1 && rhsType === 0) {
                             // Float LHS, Int RHS -> Promote RHS
                             emit(0x86); // FLT RHS
@@ -979,11 +997,19 @@ var OPLCompiler = (function () {
                         // Parse Indices first (if any)
                         if (hasIndices) {
                             next(); // Eat (
-                            while (true) {
-                                parseExpression();
-                                if (peek() && peek().value === ',') { next(); continue; }
-                                if (peek() && peek().value === ')') { next(); break; }
-                                break;
+
+                            // Check for empty parens: ADDR(arr())
+                            if (peek() && peek().value === ')') {
+                                next(); // Eat )
+                                // Implicitly reference the first element (Index 1)
+                                emit(0x22); emitWord(1);
+                            } else {
+                                while (true) {
+                                    parseExpression();
+                                    if (peek() && peek().value === ',') { next(); continue; }
+                                    if (peek() && peek().value === ')') { next(); break; }
+                                    break;
+                                }
                             }
                         }
 
@@ -1022,26 +1048,23 @@ var OPLCompiler = (function () {
                         }
 
                         // Emit ADDR op
-                        if (type === 2 || type === 5) emit(0xC9); // String
-                        else emit(0x8A); // Int/Float
+                        if (type === 2 || type === 5) {
+//                             console.log("Emit ADDR String");
+                            emit(0xC9); // String
+                        }
+                        else {
+//                             console.log("Emit ADDR Int/Float (0x8A)");
+                            emit(0x8A); // Int/Float
+                        }
                     }
                     if (peek() && peek().value === ')') next();
                     return 0; // Int (Address)
                 }
             } else if (t.type === 'IDENTIFIER' || t.type === 'KEYWORD') {
                 var valName = t.value.toUpperCase(); // Full Name Lookup
-                var builtinOp = BUILTIN_OPCODES[valName];
+                var builtinOp = activeOpcodes[valName];
 
                 if (builtinOp) {
-
-                    var lzOps = [
-                        'CLOCK', 'DOW', 'FINDW', 'MENUN', 'WEEK', 'ACOS', 'ASIN', 'DAYS', 'MAX', 'MEAN',
-                        'MIN', 'STD', 'SUM', 'VAR', 'DAYNAME$', 'DIRW$', 'MONTH$'
-                    ];
-                    if (targetSystem !== 'LZ' && lzOps.includes(valName)) {
-                        throw new Error("Command '" + valName + "' is only available for LZ targets.");
-                    }
-
                     // Check if it's a function using parenthesis: GET()
                     if (peek() && peek().value === '(') {
                         next(); // Eat (
@@ -1433,7 +1456,7 @@ var OPLCompiler = (function () {
                     // Check for optional duration (LZ OFF: 0xD2)
                     var hasArg = false;
                     var p = peek();
-                    if (p && (p.type === 'INTEGER' || p.type === 'FLOAT' || p.type === 'HEX' || p.value === '(' || (p.type === 'IDENTIFIER' && KEYWORDS.indexOf(p.value) === -1))) {
+                    if (p && (p.type === 'INTEGER' || p.type === 'FLOAT' || p.type === 'HEX' || p.value === '(' || (p.type === 'IDENTIFIER' && activeKeywords.indexOf(p.value) === -1))) {
                         hasArg = true;
                     }
 
@@ -1881,9 +1904,11 @@ var OPLCompiler = (function () {
 
                         // Push Ref (LHS)
                         if (sym.isGlobal || sym.isLocal) {
+//                             console.log("Emit LHS Local/Global Ref:", sym.name, "Type:", sym.type, "Offset:", sym.offset);
                             emit(0x0D + sym.type);
                             emitWord(sym.offset);
                         } else if (sym.isExtern) {
+//                             console.log("Emit LHS Extern Ref:", sym.name, "Type:", sym.type, "Index:", sym.index);
                             // External Ref Base is 0x14 for assignment
                             emit(0x14 + sym.type);
                             if (sym.offset !== undefined) emitWord(sym.offset);
@@ -1892,6 +1917,7 @@ var OPLCompiler = (function () {
 
                         next(); // Eat =
                         var rhsType = parseExpression(); // Value
+//                         console.log("RHS Parsed. Type:", rhsType);
 
                         // Auto-Cast if types differ
                         var baseType = sym.type;
@@ -1906,6 +1932,7 @@ var OPLCompiler = (function () {
                         }
 
                         // Assign Opcode
+//                         console.log("Emit ASSIGN Opcode:", 0x7F + baseType);
                         emit(0x7F + baseType);
                     }
                 } else if (isCall) {
@@ -1917,16 +1944,8 @@ var OPLCompiler = (function () {
                     else if (procCallName.endsWith('$')) returnType = 2; // String
 
                     // Check for Built-in mapping
-                    var builtinOp = BUILTIN_OPCODES[upperName];
+                    var builtinOp = activeOpcodes[upperName];
                     if (builtinOp) {
-                        // Enforce Target Compatibility
-                        var lzOps = [
-                            'CLOCK', 'DOW', 'FINDW', 'MENUN', 'WEEK', 'ACOS', 'ASIN', 'DAYS', 'MAX', 'MEAN',
-                            'MIN', 'STD', 'SUM', 'VAR', 'DAYNAME$', 'DIRW$', 'MONTH$'
-                        ];
-                        if (targetSystem !== 'LZ' && lzOps.includes(upperName)) {
-                            throw new Error("Command '" + upperName + "' is only available for LZ targets.");
-                        }
 
                         var intBuiltins = [
                             'GET', 'KEY', 'POS', 'COUNT', 'EOF', 'ERR', 'DAY', 'HOUR', 'MINUTE', 'MONTH', 'SECOND', 'YEAR',

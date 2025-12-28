@@ -28,7 +28,7 @@ var EditorManager = {
                     if (document.getElementById('current-file-name')) document.getElementById('current-file-name').innerText = packName;
 
                     if (document.getElementById('code-editor-container')) document.getElementById('code-editor-container').style.display = 'none';
-                    if (document.getElementById('editor-view')) document.getElementById('editor-view').style.display = 'block';
+                    if (document.getElementById('legacy-editor')) document.getElementById('legacy-editor').style.display = 'block';
                 }
             } else {
                 if (document.getElementById('current-file-name')) document.getElementById('current-file-name').innerText = "No Pack Selected";
@@ -56,7 +56,7 @@ var EditorManager = {
                 if (document.getElementById('current-file-name')) document.getElementById('current-file-name').innerText = packName;
 
                 if (document.getElementById('code-editor-container')) document.getElementById('code-editor-container').style.display = 'none';
-                if (document.getElementById('editor-view')) document.getElementById('editor-view').style.display = 'block';
+                if (document.getElementById('legacy-editor')) document.getElementById('legacy-editor').style.display = 'block';
             }
         } else {
             if (document.getElementById('current-file-name')) document.getElementById('current-file-name').innerText = "No Pack Selected";
@@ -125,13 +125,14 @@ var EditorManager = {
 
         if (selectedEditor) {
             AppStore.state.currentEditor = selectedEditor;
-            var legacyEditorElement = document.getElementById('editor-view'); // Re-checking ID in opkedit.js... wait, code uses `legacyEditorElement`.
-            // opkedit.js: var legacyEditorElement = document.getElementById("editor-view");
+            var legacyEditorElement = document.getElementById('legacy-editor'); // Re-checking ID in opkedit.js... wait, code uses `legacyEditorElement`.
+            // opkedit.js: var legacyEditorElement = document.getElementById("legacy-editor");
             if (legacyEditorElement) legacyEditorElement.style.display = 'block';
 
             var startAddr = 0;
             AppStore.state.currentEditor.initialise(AppStore.state.currentItem, startAddr);
         } else {
+            // // 
             console.warn("No editor found for type " + tp);
         }
 
@@ -156,7 +157,7 @@ var EditorManager = {
             AppStore.state.currentEditor = null;
 
             // Clear editors
-            var legacyEditorElement = document.getElementById("editor-view");
+            var legacyEditorElement = document.getElementById("legacy-editor");
             var codeEditorElement = document.getElementById("code-editor-container"); // Assuming ID
 
             if (legacyEditorElement) {

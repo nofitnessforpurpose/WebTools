@@ -554,130 +554,171 @@ ProcedureFileEditor.prototype.applyChanges = function () {
 };
 
 ProcedureFileEditor.prototype.copyObjectCode = function () {
-    if (this.item.deleted) return;
-    // Check if this is "OPL Text" (Types masked to 3) or uncompiled.
-    // Logic: If Type is 3 AND we can't find valid QCode structure, it's Text.
+    // Detect Batch Mode via Global Selection
+    var targets = [];
+    if (typeof selectedItems !== 'undefined' && selectedItems.length > 0) {
+        // Filter for this item OR Type 3 items in selection
+        // If the current item is in selection, process WHOLE selection.
+        if (selectedItems.indexOf(this.item) !== -1) {
+            targets = selectedItems.filter(function (it) { return it.type === 3; });
+        } else {
+            targets = [this.item];
+        }
+    } else {
+        targets = [this.item];
+    }
+
+    if (targets.length === 0) return;
+
+    if (!OptionsManager.getOption('suppressConfirmations')) {
+        var msg = (targets.length === 1) ?
+            "Are you sure you want to Copy the Object Code?\n\nThis will:\n1. Mark this 'OPL Procedure' as DELETED.\n2. Create/Update an 'OPL Object' record." :
+            "Are you sure you want to Copy the Object Code for " + targets.length + " items?\n\nThis will mark sources as DELETED and create/update Object records.";
+
+        if (!confirm(msg)) return;
+    }
+
+    var pack = packs[currentPackIndex];
+    var successCount = 0;
+    var self = this;
+
+    targets.forEach(function (targetItem) {
+        if (self.processItemCopyObject(targetItem, pack)) {
+            successCount++;
+        }
+    });
+
+    // Update UI if current item was processed
+    if (this.item.deleted) {
+        var delChk = document.getElementById('deleted');
+        if (delChk) delChk.checked = true;
+        var ta = document.getElementById('sourcecode');
+        if (ta) ta.disabled = true;
+        if (this.codeEditorInstance) this.codeEditorInstance.setReadOnly(true);
+        if (this.translateBtn) this.translateBtn.disabled = true;
+        if (this.stripBtn) this.stripBtn.disabled = true;
+    }
+
+    // Force Save
+    if (window.saveSession) window.saveSession();
+    else if (window.updateInventory) window.updateInventory();
+
+    if (!OptionsManager.getOption('suppressConfirmations') && targets.length > 1) {
+        alert("Processed " + successCount + " items.");
+    }
+};
+
+// Helper: Process Single Item (Decoupled from Editor UI)
+ProcedureFileEditor.prototype.processItemCopyObject = function (targetItem, pack) {
+    if (targetItem.deleted) return false;
+
+    // Check for QCode
     var hasQCode = false;
-    if (this.item.type === 3 && this.item.child && this.item.child.child && this.item.child.child.data) {
-        var d = this.item.child.child.data;
+    if (targetItem.child && targetItem.child.child && targetItem.child.child.data) {
+        var d = targetItem.child.child.data;
         if (d.length >= 4) {
             var len = (d[0] << 8) | d[1];
             if (len > 0) hasQCode = true;
         }
     }
 
-    if (this.item.type === 3 && !hasQCode) {
-        alert("This is an OPL Text record (Source only). No Object Code exists to copy.\nPlease Translate it first.");
-        return;
+    if (!hasQCode) {// 
+//         console.warn("Skipping " + targetItem.name + ": No Object Code found.");
+        return false;
     }
 
-    if (!OptionsManager.getOption('suppressConfirmations')) {
-        if (!confirm("Are you sure you want to Copy the Object Code?\n\nThis will:\n1. Mark this 'OPL Procedure' as DELETED.\n2. Create a NEW 'OPL Object' record with the same name containing only the translated code.")) return;
+    var chld = targetItem.child.child;
+
+    // ARCHITECTURE UPDATE (2025-12-28):
+    // The OPL Object Length is BIG ENDIAN (Offset 0x0F, 0x10).
+    // There is no "Count Byte" or "Padding".
+    // e.g. 00 27 ... -> Length 0x0027 (39).
+
+    // 1. Read Object Length (Big Endian)
+    var currentObjLen = (chld.data[0] << 8) | chld.data[1];
+
+    if (currentObjLen <= 0) return false;
+
+    // Safety Cap
+    if (currentObjLen > chld.data.length - 2) currentObjLen = chld.data.length - 2;
+
+    // Heuristic Check (for trailing garbage)
+    var expectedEnd = 2 + currentObjLen; // 2 byte header + body
+    var remainingBytes = chld.data.length - expectedEnd;
+    var isValid = false;
+
+    if (remainingBytes >= 2) {
+        // SrcLen is Big Endian too? Usually LE according to docs, but let's check
+        // "Source" usually follows.
+        // If remaining is just the terminator 00 00.
+        var termword = (chld.data[expectedEnd] << 8) | chld.data[expectedEnd + 1];
+        if (termword === 0 && remainingBytes > 2) {// 
+//             console.log("Found valid terminator. Truncating garbage.");
+            isValid = true;
+        } else if (remainingBytes === 2) {
+            isValid = true;
+        }
     }
 
-    var self = this;
-    // 2. Get Object Code (Strict Copy from Existing Record)
-    var chld = this.item.child.child;
+    var objCodeToKeep = chld.data.subarray(2, 2 + currentObjLen);
 
-    // Detect offset: Psion Long Records (02 80) often contain a 'Total Length' word (2 bytes) before the OPL Object.
-    // If the first word is 0 or matches the block length, we skip it.
-    var offset = 0;
-    var firstWord = (chld.data[0] << 8) | chld.data[1];
+    // Mark Original as Deleted
+    targetItem.deleted = true;
+    targetItem.data[1] &= 0x7F;
 
-    if (firstWord === 0 || firstWord === chld.data.length) {
-        offset = 2;
-    }
-
-    var currentObjLen = (chld.data[offset] << 8) | chld.data[offset + 1];
-
-    // Validate QCode presence
-    if (currentObjLen <= 0) {
-        alert("This record does not appear to contain any compiled Object Code (QCode). Copy cancelled.");
-        return;
-    }
-
-    // Safety check for length
-    if (currentObjLen > chld.data.length - 2) {
-        alert("Warning: Existing object code length seems invalid. Copying safe range.");
-        currentObjLen = chld.data.length - 2;
-    }
-
-    // Extract BODY ONLY (Skip Size Word). 
-    // Range: offset + 2 (Start of Body) to offset + currentObjLen (End of Body).
-    // Note: currentObjLen is the value of the size word, which includes itself (2 bytes).
-    var objCodeToKeep = chld.data.subarray(offset + 2, offset + currentObjLen);
-
-
-    // 3. Mark Current Item as DELETED
-    // 3. Mark Current Item as DELETED
-    this.item.deleted = true; // Flag for UI
-    this.item.data[1] &= 0x7F; // Commit to Data (Clear 'Active' bit 0x80)
-
-    // Update UI Checkbox immediately to prevent state mismatch
-    var delChk = document.getElementById('deleted');
-    if (delChk) delChk.checked = true;
-
-    // Set Editor to Read-Only
-    var ta = document.getElementById('sourcecode');
-    if (ta) ta.disabled = true;
-    if (this.codeEditorInstance) this.codeEditorInstance.setReadOnly(true);
-    if (this.translateBtn) this.translateBtn.disabled = true;
-    if (this.stripBtn) this.stripBtn.disabled = true;
-
-    // Do NOT mark child items (Block 0x80) as deleted.
-    // The File Header (Type 3) 'Deleted' status (0x03) implies the file is deleted.
-    // The internal block structure (0x80) must remain intact for the parser to read its length.
-
-    // 4. Create NEW Item (Type 3 OPL Object)
-    // Structure: [ObjLen(2) + ObjCode + SrcLen(2=0000)]
-    var newTotalSize = 2 + objCodeToKeep.length + 2;
+    // Prepare New Data (Big Endian)
+    // Structure: [Len High] [Len Low] [Body...] [SrcLen High] [SrcLen Low]
+    var finalLen = objCodeToKeep.length;
+    var newTotalSize = 2 + finalLen + 2;
     var newData = new Uint8Array(newTotalSize);
 
-    // ObjLen (Inclusive: Body + 2)
-    var finalLen = objCodeToKeep.length + 2;
+    // Write Length (Big Endian)
     newData[0] = (finalLen >> 8) & 0xFF;
     newData[1] = finalLen & 0xFF;
 
-    // ObjCode
+    // Write Body
     newData.set(objCodeToKeep, 2);
 
-    // SrcLen (0)
-    newData[2 + objCodeToKeep.length] = 0;
-    newData[2 + objCodeToKeep.length + 1] = 0;
+    // Write Terminator (00 00)
+    newData[2 + finalLen] = 0;
+    newData[2 + finalLen + 1] = 0;
 
-    // Create Item Structure mimicking loader
-    // Verify Environment
-    // currentPack is not a global variable in the conventional sense in opkedit.js 
-    // it's accessed via packs[currentPackIndex].
-    // Though opkedit.js has: Object.defineProperty(window, 'currentPack', ...) which SHOULD work if AppStore is active.
-    // However, if that is failing, we fallback to packs[currentPackIndex].
-
-    // 4. Delegate to standard createBlockFile (same as 'New OPL Procedure')
-    // This ensures consistent hierarchy, ID handling (ID 0), and pack integration.
-    if (typeof createBlockFile !== 'function') {
-        alert("Error: createBlockFile function not found in global scope.");
-        return;
+    // Search for Existing Active Object Record
+    var existingItem = null;
+    if (pack && pack.items) {
+        for (var i = 0; i < pack.items.length; i++) {
+            var it = pack.items[i];
+            // Match Name, Type 3, Not Deleted, Not Self
+            if (it.type === 3 && !it.deleted && it !== targetItem && it.name === targetItem.name) {
+                existingItem = it;
+                break;
+            }
+        }
     }
 
-    try {
-        createBlockFile(newData, this.item.name, 3);
-    } catch (e) {
-        alert("Error creating block file: " + e.message);
-        return;
+    if (existingItem) {
+        // Update In-Place
+        var blkHdrItem = existingItem.child;
+        if (blkHdrItem) {
+            var dataItem = blkHdrItem.child;
+            // Resize if needed (PackItem.setData handles array replacement)
+            dataItem.setData(newData);
+
+            // Update Block Header details
+            var blocklen = newData.length;
+            blkHdrItem.data[2] = (blocklen >> 8) & 0xFF;
+            blkHdrItem.data[3] = blocklen & 0xFF;
+
+            pack.unsaved = true;
+        }
+    } else {
+        // Create New
+        if (typeof createBlockFile === 'function') {
+            createBlockFile(newData, targetItem.name, 3);
+        }
     }
 
-    // 5. Force Save to ensure Pack consistency in Storage
-    // createBlockFile already calls updateInventory() which debounces save.
-    // We force it immediately to prevent corruption via reload-race.
-    if (window.saveSession) {
-        window.saveSession();
-    } else if (window.updateInventory) {
-        window.updateInventory();
-    }
-
-    if (!OptionsManager.getOption('suppressConfirmations')) {
-        alert("Copied Object Code to new record.\nOriginal marked as deleted.");
-    }
+    return true;
 };
 
 ProcedureFileEditor.prototype.translateAndSave = function () {
@@ -886,8 +927,8 @@ function buildProcMap() {
                             if (header && header.numParams !== undefined) {
                                 procMap[item.name.toUpperCase()] = { paramCount: header.numParams };
                             }
-                        } catch (e) {
-                            console.warn("Failed to parse header for procMap:", item.name, e);
+                        } catch (e) {// 
+//                             console.warn("Failed to parse header for procMap:", item.name, e);
                         }
                     }
                 }

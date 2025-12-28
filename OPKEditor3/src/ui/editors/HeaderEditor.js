@@ -288,13 +288,36 @@ HeaderEditor.prototype.initialise = function (item) {
     initialiseForm("bit4", (flags & 0x10) == 0, this, refFill);
     initialiseForm("bit5", (flags & 0x20) == 0, this, ref);
     initialiseForm("bit6", (flags & 0x40) == 0, this, ref);
-    var sz = item.data[1];
-    var i = -1;
-    while (sz > 0) {
-        i++;
-        sz >>= 1;
+
+    // Dynamic Pack Size Options
+    var psSelect = document.getElementById("packsize");
+    if (psSelect) {
+        psSelect.innerHTML = ""; // Clear existing
+        // Standard Options (1-8)
+        var stdSizes = ["8K", "16K", "32K", "64K", "128K", "256K", "512K", "1024K"];
+        for (var k = 0; k < 8; k++) {
+            var opt = document.createElement("option");
+            opt.value = k + 1;
+            opt.innerText = stdSizes[k];
+            psSelect.appendChild(opt);
+        }
+
+        var sz = item.data[1];
+        var targetIndex = -1;
+
+        if (sz >= 1 && sz <= 8) {
+            targetIndex = sz - 1;
+        } else {
+            // Non-standard / Linear
+            var customOpt = document.createElement("option");
+            customOpt.value = sz;
+            customOpt.innerText = "Custom/Linear (" + (sz * 8) + "K)";
+            psSelect.appendChild(customOpt);
+            targetIndex = 8; // The 9th option
+        }
+
+        initialiseForm("packsize", targetIndex, this, ref);
     }
-    initialiseForm("packsize", i, this, ref);
 
     FillInHeader(this);
 
@@ -372,8 +395,7 @@ HeaderEditor.prototype.getHeaderData = function () {
 
     // size
     var szElem = document.getElementById("packsize");
-    var sz = szElem ? szElem.selectedIndex : 0;
-    sz = 1 << sz;
+    var sz = szElem ? parseInt(szElem.value) : 1;
     newdata[1] = sz;
 
     var isBootable = (flags & 0x10) == 0;

@@ -658,6 +658,72 @@ class PackContentsView {
         var isMain = (item.name === "MAIN");
         var isEOP = (item.type === 255);
 
+        // Feature: Pack Overflow Warning
+        if (isEOP) {
+            var pack = packs[packIndex];
+            if (pack && pack.items && pack.items.length > 0) {
+                var headerItem = pack.items[0];
+                if (headerItem && headerItem.data && headerItem.data.length > 1) {
+                    var sizeCode = headerItem.data[1];
+                    // console.log("Debug Overflow: SizeCode", sizeCode);
+                    // Calculate max size:
+                    // Standard: 8KB * 2^(code-1) (Logarithmic, Codes 1-8)
+                    // Linear: Code * 8KB (Codes >= 16, e.g. 32=256k)
+                    var maxSize = 0;
+                    if (sizeCode >= 16) {
+                        maxSize = sizeCode * 8192;
+                    } else if (sizeCode >= 1) {
+                        maxSize = 8192 * Math.pow(2, sizeCode - 1);
+                    }
+
+                    if (maxSize > 0) {
+                        var currentSize = pack.getLength();
+                        // console.log("Debug Overflow: Current", currentSize, "Max", maxSize);
+
+                        // Always generate stats tooltip for EOP
+                        var titleStr = "Pack Status";
+
+                        if (currentSize > maxSize) {
+                            row.classList.add('pack-overflow');
+                            // Red/Orange text
+                            row.style.color = '#ff4500'; // OrangeRed
+                            itemName.style.color = '#ff4500'; // Ensure name inherits
+                            itemDesc.style.color = '#ff4500'; // Ensure desc inherits
+
+                            // Strike through "End Of Pack" text
+                            itemName.style.textDecoration = "line-through";
+                            itemDesc.style.textDecoration = "line-through";
+
+                            // Warning Icon
+                            titleStr = "Pack Overflow!";
+                            iconClass = "fas fa-triangle-exclamation"; // Warning icon
+                            itemIcon.innerHTML = `<i class="${iconClass}"></i>`;
+                        }
+
+                        // Custom Tooltip
+                        var overflowTooltip = "<h4>" + titleStr + "</h4>" +
+                            "<div class='tooltip-row'><span class='tooltip-label'>Size Code:</span><span class='tooltip-value'>" + sizeCode + "</span></div>" +
+                            "<div class='tooltip-row'><span class='tooltip-label'>Capacity:</span><span class='tooltip-value'>" + maxSize + " bytes (" + (maxSize / 1024) + "KB)</span></div>" +
+                            "<div class='tooltip-row'><span class='tooltip-label'>Consumed:</span><span class='tooltip-value'>" + currentSize + " bytes</span></div>" +
+                            "<div class='tooltip-row'><span class='tooltip-label'>Free:</span><span class='tooltip-value'>" + (maxSize - currentSize) + " bytes</span></div>";
+
+                        // Remove old listeners (by cloning node) to prevent standard tooltip
+                        var newIcon = itemIcon.cloneNode(true);
+                        itemIcon.parentNode.replaceChild(newIcon, itemIcon);
+                        itemIcon = newIcon;
+
+                        itemIcon.addEventListener('mouseenter', function (e) {
+                            var rect = e.target.getBoundingClientRect();
+                            TooltipManager.show(rect.left, rect.bottom, overflowTooltip);
+                        });
+                        itemIcon.addEventListener('mouseleave', function () {
+                            TooltipManager.hide();
+                        });
+                    }
+                }
+            }
+        }
+
         if (!isHeader && !isMain && !isEOP) {
             row.draggable = true;
             row.addEventListener('dragstart', function (e) {

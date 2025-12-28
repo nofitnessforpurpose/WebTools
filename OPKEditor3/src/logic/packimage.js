@@ -10,15 +10,17 @@
  * 
  * This file handles the low-level parsing and serialization of the Psion file system format.
  */
-function PackImage(inputData) {
+function PackImage(inputData, sizeCode) {
    this.items = [];
    this.path = null; // Store full path for restore feature
    if (!inputData) {
+      // Default Size Code: 1 (8KB) if not specified
+      var sc = sizeCode || 1;
       var now = new Date();
       var ms = (now.getMinutes() * 60 + now.getSeconds()) * 1000 + now.getMilliseconds();
       ms &= 0xffff;
       inputData = [0, 0, 0, 0, 0, 0,
-         0x7a, 0x1, now.getFullYear() - 1900, now.getMonth(), now.getDate() - 1, now.getHours(), ms >> 8, ms & 0xff, 0xff, 0xff,
+         0x7a, sc, now.getFullYear() - 1900, now.getMonth(), now.getDate() - 1, now.getHours(), ms >> 8, ms & 0xff, 0xff, 0xff,
          0x09, 0x81, 'M'.charCodeAt(0), 'A'.charCodeAt(0), 'I'.charCodeAt(0), 'N'.charCodeAt(0), 0x20, 0x20, 0x20, 0x20, 0x90];
       var sum1 = inputData[6] + inputData[8] + inputData[10] + inputData[12];
       var sum2 = inputData[7] + inputData[9] + inputData[11] + inputData[13];
@@ -79,20 +81,109 @@ PackImage.prototype = {
       }
    },
    getRawData: function () {
-      var ln = this.getLength();
-      var savedata = new Uint8Array(new ArrayBuffer(ln + 8));  // +6+2 for header and footer
+      var contentLen = this.getLength();
+
+      // Determine Target Pack Size from Header (Item 0)
+      var targetSize = 0;
+      var hasFixedSize = false;
+
+      if (this.items.length > 0 && this.items[0].length >= 10) {
+         // Header format: 0x7A, SizeCode, ...
+         // Item[0].data[7] usually holds the size code? 
+         // Looking at constructor: inputData[6]=0x7a, inputData[7]=sc.
+         // getHeader creates item from index 6. So item.data[0]=0x7a, item.data[1]=sc.
+
+         if (this.items[0].data[0] === 0x7A) {
+            var sc = this.items[0].data[1];
+            if (sc >= 1 && sc <= 8) { // Valid Size Codes 1-8 (8KB to 1MB etc)
+               // Size = 8KB * 2^(sc-1)
+               targetSize = 8192 * Math.pow(2, sc - 1);
+               hasFixedSize = true;
+            }
+         }
+      }
+
+      var allocSize = contentLen + 8; // Default minimal size (+8 for OPK header/terminator safety?)
+      // OPK Header is 6 bytes.
+
+      if (hasFixedSize && targetSize > allocSize) {
+         allocSize = targetSize + 6; // +6 for OPK header (Or should raw image NOT include OPK header? logic says YES based on code)
+         // Wait, 'getRawData' adds 'OPK' header bytes [0-5]. 
+         // If this is a Raw Image (EPROM), it usually DOES NOT have 'OPK' header. 
+         // BUT the function writes 'OPK' at 0,1,2.
+         // So this function produces an .OPK file, NOT a raw EPROM image?
+         // If the user wants a raw image, they should export as HEX or BIN without OPK header?
+
+         // However, user complains "Changed pack size". If they opened a 64KB .OPK, it likely had 64KB of data?
+         // Standard OPK files are variable length.
+         // Images are fixed length.
+
+         // Re-reading User Request: "The last item of course must never occur." (Pack size change)
+         // If they treat it as an EPROM image, they expect 64KB.
+         // If I pad it...
+
+         // Let's assume we want to PAD the *content part* to targetSize.
+         // allocSize = 6 (Header) + targetSize.
+         allocSize = 6 + targetSize;
+      } else {
+         allocSize = contentLen + 6;
+      }
+
+      var savedata = new Uint8Array(allocSize);
+      // Init with 0xFF (Empty EPROM state)
+      // savedata.fill(0xFF); // (Polyfill might be needed? standard in modern JS)
+      for (var k = 0; k < allocSize; k++) savedata[k] = 0xFF;
+
       savedata[0] = 79; // OPK
       savedata[1] = 80;
       savedata[2] = 75;
-      savedata[3] = (ln >> 16) & 0xff;
-      savedata[4] = (ln >> 8) & 0xff;
-      savedata[5] = ln & 0xff;
+
+      // Length Field in OPK Header:
+      // Does it represent Content Length or File Length?
+      // Usually Content Length.
+      // If we pad, does 'ln' change?
+      // If we pad, the 'content' effectively extends to the end?
+      // Or is valid content just 'ln', and rest is junk?
+      // If we save as OPK with padding, it might just be a big file.
+
+      // CRITICAL: If the user says "changed pack size", maybe they mean the *capacity* indicator? 
+      // OR the file itself.
+      // If I enforce fixed size, I should write the FULL size in the header?
+      // Or write the used size, but pad the file?
+
+      // Safe bet: Write USED size in header, but PAD file to fixed size.
+      // BUT OPK format usually wraps purely used data.
+      // IF this is for EPROM emulation, maybe the loader reads 'ln'?
+
+      // Let's stick to: Write CONTENT ln, but output a BUFFER of fixed size.
+      // Wait, if I write 'ln' (short), loaders might stop reading there.
+      // If I want it to BE a 64KB image, 'ln' should probably be ignored or set to full?
+
+      // Actually, if it's an .OPK file, it's a wrapper.
+      // If the user exports HEX, `getHexURL` calls `getRawData`? No, it re-generates.
+
+      // Let's look at `getHexURL` (Line 111):
+      // var ln = this.getLength(); 
+      // var savedata = new Uint8Array(new ArrayBuffer(ln)); 
+      // ... createIntelHexFromBinary
+
+      // HEX export ALSO shrinks!
+
+      // I will update BOTH to respect target size.
+
+      // For getRawData (OPK File):
+      // Padding it makes it a large OPK file.
+
+      savedata[3] = (contentLen >> 16) & 0xff;
+      savedata[4] = (contentLen >> 8) & 0xff;
+      savedata[5] = contentLen & 0xff;
+
       var ix = 6;
       for (var i = 0; i < this.items.length; i++) {
          ix += this.items[i].storeData(savedata, ix);
       }
-      // savedata[ix++] = 0xff; // Terminator is now in items
-      // savedata[ix++] = 0xff;
+
+      // Remaining bytes are already 0xFF.
       return savedata;
    },
    getURL: function () {
@@ -112,8 +203,60 @@ PackImage.prototype = {
          wu.revokeObjectURL(this.hexurl);
          this.hexurl = null;
       }
-      var ln = this.getLength();
-      var savedata = new Uint8Array(new ArrayBuffer(ln));
+
+      // Use getRawData to ensure we get the padded/fixed-size buffer
+      // Note: getRawData adds 6 bytes of OPK header [OPK...Ln].
+      // For HEX export, we might strictly want the content (Raw EPROM image) OR the OPK file as hex.
+      // EPROM programmers usually want the Raw Image (Memory Map).
+      // OPK Header is NOT part of the EPROM memory map (usually).
+      // However, the previous logic (ln = getLength) implied it exported the content... wait.
+      // Previous `getHexURL`: `var ln = this.getLength(); var savedata = new Uint8Array(ln); ... storeData(savedata, 0)`
+      // NOTE: `storeData` was called with start 0.
+      // `getRawData` calls `storeData` with start 6.
+
+      // If I use `getRawData`, I get the OPK header.
+      // If the user wants a 64KB EPROM image, they probably DON'T want the "OPK" header at 0x0000.
+      // The Psion Organiser treats 0x0000 as the start of the first record (Header).
+
+      // The "OPK" header (OPK + Len) is a container format artifact?
+      // Psion LZ/XP Packs start with the Header Record (Type 1).
+      // `PackImage` items[0] is the header.
+      // `getRawData` puts "OPK...." at 0-5, and items start at 6.
+
+      // Wait. `PackImage.js` L23 (Initializer) creates InputData:
+      // [0..5] = 00.. (Junk/Padding? or OPK header placeholder?)
+      // [6..] = 0x7a (Header Record).
+
+      // If I flash a pack, 0x0000 should be the Header Record (09 .. ..).
+      // The "OPK" header bytes are likely file-format metadata, NOT EPROM data.
+
+      // So `getHexURL` was correct to start at 0.
+      // BUT it was shrinking.
+
+      // I need to apply Fixed Size logic to `getHexURL` too, but WITHOUT the 6 byte offset.
+
+      var contentLen = this.getLength();
+      var targetSize = 0;
+      var hasFixedSize = false;
+
+      if (this.items.length > 0 && this.items[0].length >= 10) {
+         if (this.items[0].data[0] === 0x7A) {
+            var sc = this.items[0].data[1];
+            if (sc >= 1 && sc <= 8) {
+               targetSize = 8192 * Math.pow(2, sc - 1);
+               hasFixedSize = true;
+            }
+         }
+      }
+
+      var allocSize = contentLen;
+      if (hasFixedSize && targetSize > allocSize) {
+         allocSize = targetSize;
+      }
+
+      var savedata = new Uint8Array(allocSize);
+      for (var k = 0; k < allocSize; k++) savedata[k] = 0xFF;
+
       var ix = 0;
       for (var i = 0; i < this.items.length; i++) {
          ix += this.items[i].storeData(savedata, ix);

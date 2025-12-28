@@ -333,22 +333,21 @@ var DialogManager = {
             });
 
             // Color Inputs
-            var colorInputs = element.querySelectorAll('.color-input');
+            var colorInputs = element.querySelectorAll('input[type="color"]');
             colorInputs.forEach(input => {
                 var varName = input.getAttribute('data-var');
                 if (varName) {
                     input.addEventListener('input', function () {
                         setCSSVar(varName, this.value);
-                        // If it's a syntax or MM color, save to ThemeManager
-                        if (varName.startsWith('--syntax-') || varName.startsWith('--mm-')) {
-                            var currentTheme = ThemeManager.currentTheme;
-                            var defs = ThemeManager.getThemeDefinition(currentTheme);
-                            defs[varName] = this.value;
-                            ThemeManager.updateThemeDefinition(currentTheme, defs);
+                        // Save to ThemeManager
+                        var currentTheme = ThemeManager.currentTheme;
+                        // We get the current definition (merged includes overrides)
+                        var defs = ThemeManager.getThemeDefinition(currentTheme);
+                        defs[varName] = this.value;
+                        ThemeManager.updateThemeDefinition(currentTheme, defs);
 
-                            if (varName.startsWith('--mm-') && AppStore.state.currentEditor instanceof MemoryMapEditor) {
-                                AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
-                            }
+                        if (varName.startsWith('--mm-') && AppStore.state.currentEditor instanceof MemoryMapEditor) {
+                            AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
                         }
                     });
                 }

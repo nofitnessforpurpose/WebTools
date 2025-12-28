@@ -22,18 +22,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Psion OPK Editor v03.00.07</title>
+    <title>Psion OPK Editor v03.00.09</title>
 
     <!-- Stylesheets with cache busting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
         id="font-awesome-css">
-    <link rel="stylesheet" href="styles/base.css?v=03.00.07">
-    <link rel="stylesheet" href="styles/layout.css?v=03.00.07">
-    <link rel="stylesheet" href="styles/components.css?v=03.00.07">
-    <link rel="stylesheet" href="styles/editor.css?v=03.00.07">
+    <link rel="stylesheet" href="styles/base.css?v=03.00.09">
+    <link rel="stylesheet" href="styles/layout.css?v=03.00.09">
+    <link rel="stylesheet" href="styles/components.css?v=03.00.09">
+    <link rel="stylesheet" href="styles/editor.css?v=03.00.09">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="styles/psion.css?v=03.00.07">
-    <link rel="stylesheet" href="styles/syntax.css?v=03.00.07">
+    <link rel="stylesheet" href="styles/psion.css?v=03.00.09">
+    <link rel="stylesheet" href="styles/syntax.css?v=03.00.09">
 </head>
 
 <body>
@@ -167,7 +167,7 @@
     <script src="src/logic/binaryfile.js"></script>
     <script src="src/logic/checksums.js"></script>
     <script src="src/logic/intelhex.js"></script>
-    <script src="src/logic/packimage.js?v=type_fix_1"></script>
+    <script src="src/logic/packimage.js?v=size_fix_2"></script>
     <script src="src/logic/decompiler/constants.js?v=fix_conv_2"></script>
     <script src="src/logic/decompiler/system_constants.js"></script>
     <script src="src/logic/decompiler/stack.js"></script>
@@ -184,11 +184,11 @@
     <script src="src/ui/editors/HeaderlessFileEditor.js?v=cb1"></script>
     <script src="src/ui/editors/DataFileEditor.js?v=cb1"></script>
     <script src="src/ui/editors/CommsSetupEditor.js?v=cb1"></script>
-    <script src="src/ui/editors/ProcedureFileEditor.js?v=fix_confirm_1"></script>
+    <script src="src/ui/editors/ProcedureFileEditor.js?v=record_fix_be_6"></script>
     <script src="src/ui/utils/NotepadUtils.js?v=cb1"></script>
     <script src="src/ui/editors/LZNotepadFileEditor.js?v=cb7"></script>
     <script src="src/ui/editors/SpreadsheetFormulaDecoder.js?v=cb1"></script>
-    <script src="src/ui/editors/SpreadsheetFileEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/SpreadsheetFileEditor.js?v=debug_parse_2"></script>
     <script src="src/ui/editors/PagerSetupFileEditor.js?v=cb1"></script>
     <script src="src/ui/editors/DiaryFileEditor.js?v=cb1"></script>
 
@@ -205,7 +205,7 @@
     <script src="src/ui/components/codeeditor.js"></script>
     <script src="src/ui/components/modal.js"></script>
     <script src="src/ui/components/dragdroplist.js"></script>
-    <script src="src/ui/components/MemoryMap.js"></script>
+    <script src="src/ui/components/MemoryMap.js?v=fix_size_exp_1"></script>
     <script src="src/ui/components/HexViewer.js"></script>
     <script src="src/ui/components/CodeVisualizer.js?v=debug37"></script>
     <script src="src/ui/components/PackContents.js?v=type_fix_1"></script>
@@ -214,8 +214,8 @@
     <script src="src/ui/components/VariableStorageWindow.js?v=force_1"></script>
     <script src="src/ui/components/SpreadsheetDebugWindow.js"></script>
     <script src="src/ui/components/OPLCommandReference.js"></script>
-    <script src="src/ui/managers/LayoutManager.js"></script>
-    <script src="src/ui/controllers/opkedit.js"></script>
+
+    <script src="src/ui/controllers/opkedit.js?v=placement_fix_1"></script>
     <script>
         // pp
         // Controller will handle initialization

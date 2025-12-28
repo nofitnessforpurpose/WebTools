@@ -7,14 +7,33 @@ function renderMemoryMap(pack) {
     var container = document.createElement('div');
     container.className = 'memory-map-container';
 
-    // Calculate Total Pack Size
+    // Calculate Total Pack Size (from Header)
     var sizeMultiplier = pack.items[0].data[1];
-    var totalSize = sizeMultiplier * 8192;
+    // Fix: Size Code is exponential (1=8k, 2=16k, 3=32k, 4=64k...) NOT linear.
+    // Logic matches opkedit.js: 8 * Math.pow(2, code - 1) KB
+    var totalSize = 8192 * Math.pow(2, sizeMultiplier - 1);
+
+    // Calculate Actual Used Size
+    var usedSize = 0;
+    for (var i = 0; i < pack.items.length; i++) {
+        usedSize += pack.items[i].getLength();
+    }
+
+    // Determine Render Size (Graph consumes max of Header Size or Content Size)
+    // This supports "Overflow" visualization without clipping.
+    var renderTotalSize = Math.max(totalSize, usedSize);
 
     // Title
+    var titleText = "Memory Map (Set: " + (totalSize / 1024) + " KB";
+    if (usedSize > totalSize) {
+        titleText += ", Used: " + (Math.round(usedSize / 1024 * 10) / 10) + " KB [OVERFLOW]";
+    } else {
+        titleText += ")";
+    }
+
     var title = document.createElement('div');
     title.className = 'memory-map-title';
-    title.innerText = "Memory Map (Total: " + (totalSize / 1024) + " KB)";
+    title.innerText = titleText;
     container.appendChild(title);
 
     // Canvas Container
@@ -61,7 +80,8 @@ function renderMemoryMap(pack) {
 
     // Calculate Layout
     var chunkSize = displaySize;
-    var numChunks = Math.ceil(totalSize / chunkSize);
+    // Use renderTotalSize for chunks so we see everything
+    var numChunks = Math.ceil(renderTotalSize / chunkSize);
 
     // Dimensions
     var labelSize = 25; // Height for labels in vertical, Width in horizontal
