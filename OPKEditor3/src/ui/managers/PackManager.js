@@ -606,7 +606,7 @@ var PackManager = {
     /**
      * Creates a block-style file (Procedure or Notepad) and adds it to the active pack.
      */
-    createBlockFile: function (data, name, type) {
+    createBlockFile: function (data, name, type, suppressUpdate) {
         var hdritem = this.createFileHeader(name, type, 0);
         var c2item = new PackItem(data, 0, data.length);
         var c1item = new PackItem([2, 0x80, data.length >> 8, data.length & 0xff], 0, 4);
@@ -614,7 +614,8 @@ var PackManager = {
         c1item.setDescription();
         hdritem.child = c1item;
         this.addItemToPack(hdritem);
-        updateInventory();
+
+        if (!suppressUpdate) updateInventory();
     },
 
     /**

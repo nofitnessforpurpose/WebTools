@@ -133,7 +133,7 @@ var EditorManager = {
             AppStore.state.currentEditor.initialise(AppStore.state.currentItem, startAddr);
         } else {
             // // 
-            console.warn("No editor found for type " + tp);
+//             console.warn("No editor found for type " + tp);
         }
 
         // Update UI logic

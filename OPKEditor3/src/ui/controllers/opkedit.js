@@ -18,8 +18,9 @@ function Button(id, clickcallback, inputId, filecallback) {
    var _element = document.getElementById(id);
    if (!_element) {
       // 
-      // // 
-//       console.warn("Button not found: " + id);
+      // 
+      // 
+      //       console.warn("Button not found: " + id);
       return;
    }
 
@@ -450,8 +451,9 @@ function init() {
             localStorage.removeItem('opkedit_cached_pack');
          } catch (e) {
             // 
-            // // 
-//             console.warn("Restore Packs: Legacy migration failed", e);
+            // 
+            // 
+            //             console.warn("Restore Packs: Legacy migration failed", e);
          }
       }
 
@@ -521,15 +523,19 @@ function createNew(e) {
       "<div><select id='packsize'>" +
       "<option value='1'>8 KB (Standard)</option>" +
       "<option value='2'>16 KB</option>" +
-      "<option value='3'>32 KB</option>" +
+      "<option value='3' selected>32 KB</option>" +
       "<option value='4'>64 KB</option>" +
       "<option value='5'>128 KB</option>" +
+      "<option value='6'>256 KB</option>" +
+      "<option value='7'>512 KB</option>" +
+      "<option value='8'>1 MB</option>" +
+      "<option value='9'>2 MB</option>" +
       "</select></div>";
 
    var sel = element.querySelector("#packsize");
    var sizeDialog = new ModalDialog(element, function () {
       var sizeCode = parseInt(sel.value);
-      if (sizeCode >= 1 && sizeCode <= 5) {
+      if (sizeCode >= 1 && sizeCode <= 9) {
          var newPack = new PackImage(null, sizeCode);
          newPack.filename = "Pack" + (packs.length + 1) + ".opk";
          packs.push(newPack);
@@ -1315,8 +1321,9 @@ function itemSelected(packIndex, itemIndex, event) {
       currentEditor.initialise(currentItem, startAddr);
    } else {
       // 
-      // // 
-//       console.warn("No editor found for type " + tp);
+      // 
+      // 
+      //       console.warn("No editor found for type " + tp);
    }
 
    // Optimized update: Don't re-render entire list, just update selection
@@ -1400,8 +1407,9 @@ function loadPackFromFiles(files) {
                   openPacks.push(path);
                   localStorage.setItem('opkedit_open_packs', JSON.stringify(openPacks));
                }
-            } else {// 
-//                console.warn("Restore Packs: Cannot determine full path for file. Browser security may prevent this.");
+            } else {
+               // 
+               //                console.warn("Restore Packs: Cannot determine full path for file. Browser security may prevent this.");
                setStatus("Warning: Cannot save pack path for restore (Browser restriction).");
             }
          }
@@ -1468,8 +1476,9 @@ function loadPackFromFiles(files) {
 
                      localStorage.setItem('opkedit_cached_packs', JSON.stringify(cachedPacks));
 
-                  } catch (e) {// 
-//                      console.warn("Auto-Load: Failed to save pack content.", e);
+                  } catch (e) {
+                     // 
+                     //                      console.warn("Auto-Load: Failed to save pack content.", e);
                   }
                }
 
@@ -1529,8 +1538,9 @@ function eraseItem() {
                }
             } catch (e) {
                // 
-               // // 
-//                console.warn("Auto-Load: Failed to check cache on delete", e);
+               // 
+               // 
+               //                console.warn("Auto-Load: Failed to check cache on delete", e);
             }
 
             // Fix: Also remove from open packs list (Filespaths)
@@ -1796,13 +1806,14 @@ function saveSession() {
       localStorage.setItem('opkedit_cached_packs', JSON.stringify(sessionPacks));
    } catch (e) {
       // 
-      // // 
-//       console.warn("Session Save Failed (Quota?):", e);
+      // 
+      // 
+      //       console.warn("Session Save Failed (Quota?):", e);
    }
 }
 
 
-function createBlockFile(data, name, type) {
+function createBlockFile(data, name, type, suppressUpdate) {
    var hdritem = createFileHeader(name, type, 0);
    var c2item = new PackItem(data, 0, data.length);
    var c1item = new PackItem([2, 0x80, data.length >> 8, data.length & 0xff], 0, 4);
@@ -1810,15 +1821,16 @@ function createBlockFile(data, name, type) {
    c1item.setDescription();
    hdritem.child = c1item;
    addItemToPack(hdritem);
-   updateInventory();
+   if (!suppressUpdate) updateInventory();
 
    // Auto-select and Open Editor
    if (typeof currentPackIndex !== 'undefined' && currentPackIndex >= 0 && packs[currentPackIndex]) {
       var idx = packs[currentPackIndex].items.indexOf(hdritem);
       if (idx !== -1) {
-         itemSelected(currentPackIndex, idx);
+         if (!suppressUpdate) itemSelected(currentPackIndex, idx);
       }
    }
+   return hdritem;
 }
 
 // Re-implemented packSaved

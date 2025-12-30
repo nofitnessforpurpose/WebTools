@@ -203,18 +203,20 @@ class PackContentsView {
             TooltipManager.hide();
         });
 
-        // Feature: Click Pack Folder to visualize MAIN procedure
+        // Feature: Click Pack Folder to visualize System Map
         icon.style.cursor = "pointer";
-        icon.title = "Click to visualize MAIN procedure";
-        icon.onclick = function (e) {
+        icon.title = "Click to visualize System Map";
+        icon.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
-            if (typeof CodeVisualizer !== 'undefined') {
-                CodeVisualizer.showSystemMap(packs);
+            var viz = (typeof CodeVisualizer !== 'undefined') ? CodeVisualizer : window.CodeVisualizer;
+            if (viz) {
+                viz.showSystemMap(packs);
             } else {
                 console.error("Visualizer: CodeVisualizer is UNDEFINED");
+                alert("Visualizer component not loaded.");
             }
-        };
+        });
 
         var title = document.createElement('span');
         title.innerText = pack.filename ? pack.filename : "Untitled Pack " + (pIdx + 1);
@@ -531,12 +533,14 @@ class PackContentsView {
             itemIcon.style.cursor = "pointer";
             itemIcon.title = "Click to view Code Visualization"; // Native title
             itemIcon.addEventListener('click', function (e) {
-
+                e.preventDefault();
                 e.stopPropagation();
-                if (typeof CodeVisualizer !== 'undefined') {
-                    CodeVisualizer.showSystemMap(packs);
+                var viz = (typeof CodeVisualizer !== 'undefined') ? CodeVisualizer : window.CodeVisualizer;
+                if (viz) {
+                    viz.showSystemMap(packs);
                 } else {
                     console.error("Visualizer: CodeVisualizer is UNDEFINED"); // DEBUG LOG
+                    alert("Visualizer component not loaded.");
                 }
             });
         }

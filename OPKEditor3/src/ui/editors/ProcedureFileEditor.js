@@ -29,201 +29,36 @@ ProcedureFileEditor.prototype.initialise = function (item) {
     if (this.item.deleted) {
         var ta = document.getElementById('sourcecode');
         if (ta) ta.disabled = true;
-        if (this.codeEditorInstance) this.codeEditorInstance.setReadOnly(true);
+        if (this.codeEditorInstance) {// 
+            console.log("ProcedureFileEditor: Item Deleted. Setting ReadOnly=TRUE");
+            this.codeEditorInstance.setReadOnly(true);
+        }
 
         // Also disable filename input if possible (handled in BlockEditor but we can verify)
         var fn = document.getElementById('filename');
         if (fn) fn.disabled = true;
-    }
-
-    // Inject Buttons into Editor Header
-    var header = document.getElementById('editor-header');
-    if (header) {
-        // Cleanup existing toolbars (prevents duplication)
-        var existingLeft = document.getElementById('editor-left-tools');
-        if (existingLeft) existingLeft.remove();
-
-        var existingRight = document.getElementById('editor-right-tools');
-        if (existingRight) existingRight.remove();
-
-        // 1. Left Toolbar (Copy/Paste)
-        var leftTools = document.createElement('div');
-        leftTools.id = 'editor-left-tools';
-        leftTools.style.display = 'inline-flex';
-        leftTools.style.alignItems = 'center';
-        leftTools.style.marginRight = '10px';
-
-        // Helper to create icon button
-        function createHeaderBtn(iconClass, title, clickHandler) {
-            var b = document.createElement('button');
-            b.innerHTML = '<i class="' + iconClass + '"></i>';
-            b.className = 'icon-btn';
-            b.style.background = 'none';
-            b.style.border = 'none';
-            b.style.color = 'var(--text-color)';
-            b.style.cursor = 'pointer';
-            b.style.fontSize = '14px';
-            b.style.marginRight = '8px';
-            b.style.padding = '2px';
-            b.title = title;
-            b.addEventListener('click', function (e) {
-                e.preventDefault();
-                clickHandler(e);
-            });
-            b.addEventListener('mousedown', function (e) { e.preventDefault(); });
-            return b;
+    } else {
+        // Essential Fix: Ensure ReadOnly is FALSE for new/active items
+        // (Because the editor instance is reused, it might retain previous RO state)
+        if (this.codeEditorInstance) {
+            // console.log("ProcedureFileEditor: Item Active. Setting ReadOnly=FALSE");
+            this.codeEditorInstance.setReadOnly(false);
         }
-
-        leftTools.appendChild(createHeaderBtn('far fa-copy', 'Copy the selected text to clipboard', function () {
-            document.execCommand('copy');
-        }));
-
-        leftTools.appendChild(createHeaderBtn('fas fa-file-export', 'Copy the entire source code to clipboard', function () {
-            if (self.codeEditorInstance) {
-                var text = self.codeEditorInstance.getValue();
-                navigator.clipboard.writeText(text);
-            } else {
-                var ta = document.getElementById('sourcecode');
-                if (ta) navigator.clipboard.writeText(ta.value);
-            }
-        }));
-
-        var pasteBtn = createHeaderBtn('fas fa-paste', 'Paste text from clipboard at cursor position', function () {
-            if (self.item.deleted) return;
-            navigator.clipboard.readText().then(function (text) {
-                if (!text) return;
-                var target = null;
-                if (document.activeElement && (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'INPUT')) {
-                    target = document.activeElement;
-                } else if (self.codeEditorInstance) {
-                    target = self.codeEditorInstance.inputLayer;
-                    target.focus();
-                } else {
-                    target = document.getElementById('sourcecode');
-                    if (target) target.focus();
-                }
-                if (target) {
-                    if (typeof target.setRangeText === 'function') {
-                        var start = target.selectionStart;
-                        var end = target.selectionEnd;
-                        target.setRangeText(text, start, end, 'end');
-                        target.dispatchEvent(new Event('input'));
-                    } else {
-                        target.value += text;
-                        target.dispatchEvent(new Event('input'));
-                    }
-                }
-            }).catch(function (err) {
-                console.error("Paste failed:", err);
-                alert("Paste failed. Please check browser permissions.");
-            });
-        });
-        if (this.item.deleted) pasteBtn.disabled = true;
-        leftTools.appendChild(pasteBtn);
-
-        // Divider
-        var div = document.createElement('span');
-        div.innerHTML = '|';
-        div.style.margin = '0 5px 0 2px';
-        div.style.color = 'var(--border-color)';
-        div.style.opacity = '0.5';
-        leftTools.appendChild(div);
-
-        header.insertBefore(leftTools, header.firstChild);
-
-        // 2. Right Toolbar (Translate/Strip/Target)
-        // Group them to ensure margin-left: auto works for the block
-        var rightTools = document.createElement('div');
-        rightTools.id = 'editor-right-tools';
-        rightTools.style.display = 'inline-flex';
-        rightTools.style.alignItems = 'center';
-        rightTools.style.marginLeft = 'auto'; // Push entire group to right
-
-        // Translate Button
-        var btn = document.createElement('button');
-        btn.innerHTML = '<i class="fas fa-gears"></i> Translate';
-        btn.className = 'icon-btn';
-        btn.style.background = 'none';
-        btn.style.border = 'none';
-        btn.style.color = 'var(--text-color)';
-        btn.style.cursor = 'pointer';
-        btn.style.fontSize = '13px';
-        btn.title = 'Translate (Compile Source to Object Code)';
-        btn.addEventListener('click', function (e) {
-            if (self.item.deleted) return;
-            self.translateAndSave();
-        });
-        if (this.item.deleted) btn.disabled = true;
-        rightTools.appendChild(btn);
-        this.translateBtn = btn;
-
-        // Strip Source Button
-        var stripBtn = document.createElement('button');
-        stripBtn.innerHTML = '<i class="fa-solid fa-file-zipper"></i>';
-        stripBtn.className = 'icon-btn';
-        stripBtn.style.marginLeft = '5px';
-        stripBtn.style.background = 'none';
-        stripBtn.style.border = 'none';
-        stripBtn.style.color = 'var(--text-color)';
-        stripBtn.style.cursor = 'pointer';
-        stripBtn.style.fontSize = '13px';
-        stripBtn.title = 'Copy Object Code';
-        stripBtn.addEventListener('click', function (e) {
-            if (self.item.deleted) return;
-            self.copyObjectCode();
-        });
-        if (this.item.deleted) stripBtn.disabled = true;
-        rightTools.appendChild(stripBtn);
-        this.stripBtn = stripBtn;
-
-        // Divider
-        var divider = document.createElement('span');
-        divider.innerHTML = '|';
-        divider.style.margin = '0 10px';
-        divider.style.color = 'var(--border-color)';
-        divider.style.opacity = '0.5';
-        rightTools.appendChild(divider);
-        this.headerDivider = divider;
-
-        // Target System Indicator
-        var targetIndicator = document.createElement('span');
-        targetIndicator.style.marginRight = '5px';
-        targetIndicator.style.color = 'var(--text-color)';
-        targetIndicator.style.fontSize = '12px';
-        targetIndicator.style.opacity = '0.7';
-        targetIndicator.title = 'Current Compiler Target (Change in Options)';
-
-        var updateTargetLabel = function () {
-            var current = OptionsManager.getOption('targetSystem') || 'Standard';
-            var label = (current === 'LZ') ? 'LZ Mode' : 'XP Mode';
-            var icon = (current === 'LZ') ? 'fa-memory' : 'fa-microchip';
-            targetIndicator.innerHTML = '<i class="fas ' + icon + '"></i> ' + label;
-        };
-        updateTargetLabel();
-        rightTools.appendChild(targetIndicator);
-        this.targetIndicator = targetIndicator;
-
-        // Listener for Sync
-        this.targetOptionListener = function (e) {
-            if (e.detail && e.detail.key === 'targetSystem') {
-                updateTargetLabel();
-            }
-        };
-        window.addEventListener('optionsChanged', this.targetOptionListener);
-
-        header.appendChild(rightTools);
-
+        var ta = document.getElementById('sourcecode');
+        if (ta) ta.disabled = false;
+        var fn = document.getElementById('filename');
+        if (fn) fn.disabled = false;
     }
 
+    // Inject Buttons into Editor Header (Moved logic to helper)
+    this.createToobarButtons();
 
     // extract data from item and initialise form
     var chld = this.item.child.child;
     var lncode = chld.data[0] * 256 + chld.data[1];
     document.getElementById("objectcode").innerHTML = "" + lncode;
-    // Allow re-translation even if QCode exists
-    // (Disabled check removed)
+
     var lnsrc = chld.data[lncode + 2] * 256 + chld.data[lncode + 3];
-    // Defer the heavy decompilation to allow UI to update first
 
     setTimeout(function () {
         var s = "";
@@ -231,12 +66,10 @@ ProcedureFileEditor.prototype.initialise = function (item) {
 
         // 1. Extract Existing Source if available
         if (hasSource) {
-            // Check if last byte is null terminator and exclude it
             var limit = lnsrc;
             if (limit > 0 && chld.data[lncode + 4 + limit - 1] === 0) {
                 limit--;
             }
-
             for (var i = 0; i < limit; i++) {
                 var c = chld.data[lncode + 4 + i];
                 if (c == 0) s += "\n";
@@ -244,7 +77,7 @@ ProcedureFileEditor.prototype.initialise = function (item) {
             }
         }
 
-        // 2. Refresh Decompiler Log (if needed or if explicitly open)
+        // 2. Refresh Decompiler Log
         var decompiledResult = self.refreshDecompilerLog(hasSource);
         if (!hasSource && decompiledResult) {
             s = decompiledResult;
@@ -252,21 +85,19 @@ ProcedureFileEditor.prototype.initialise = function (item) {
 
         self.originalSource = s;
         self.updateEditorContent(s);
+        // Initial State Check
+        self.updateToolbarButtons();
     }, 10);
 
-    // Initial placeholder state
     var s = "REM Loading...";
 
     // Custom Code Editor Integration
     if (this.codeEditorContainer) {
-        // Hide legacy textarea container
         var legacyContainer = document.getElementById('opl-legacy-container');
         if (legacyContainer) legacyContainer.style.display = 'none';
 
-        // Show CodeEditor container
         this.codeEditorContainer.style.display = 'flex';
 
-        // Create wrapper if not exists
         if (!this.codeEditorWrapper) {
             this.codeEditorWrapper = document.createElement('div');
             this.codeEditorWrapper.style.flex = '1';
@@ -276,8 +107,6 @@ ProcedureFileEditor.prototype.initialise = function (item) {
         }
         this.codeEditorWrapper.style.display = 'flex';
 
-        // Initialize CodeEditor if not already
-        // Check if mode has changed
         var targetSplitMode = OptionsManager.getOption('stickyProcedureHeader') !== false;
         if (this.codeEditorInstance && this.codeEditorInstance.isSplitMode() !== targetSplitMode) {
             this.codeEditorInstance = null;
@@ -295,10 +124,8 @@ ProcedureFileEditor.prototype.initialise = function (item) {
                 theme: ThemeManager.currentTheme,
                 procedureMode: true,
                 onHeaderBlur: function (headerValue) {
-                    // ... (keep existing)
                     var match = headerValue.match(/^\s*([a-zA-Z][a-zA-Z0-9]{0,7}[%$]?)\s*:/i);
                     if (match && match[1]) {
-                        // ...
                         var newName = match[1];
                         if (self.item.name !== newName) {
                             self.item.name = newName;
@@ -311,13 +138,17 @@ ProcedureFileEditor.prototype.initialise = function (item) {
                 }
             });
 
-
             this.codeEditorInstance.onChange = function () {
                 self.callback(EditorMessage.CHANGEMADE);
+                self.updateToolbarButtons();
             };
         } else {
             this.codeEditorInstance.setValue(s);
             this.codeEditorInstance.update();
+            this.codeEditorInstance.onChange = function () {
+                self.callback(EditorMessage.CHANGEMADE);
+                self.updateToolbarButtons();
+            };
         }
 
         initialiseForm("sourcecode", s, this);
@@ -330,7 +161,6 @@ ProcedureFileEditor.prototype.initialise = function (item) {
 
         initialiseForm("sourcecode", s, this);
 
-        // Reset highlight state (Legacy)
         var hl = document.getElementById("highlightedcode");
         var sc = document.getElementById("sourcecode");
         if (hl && sc) {
@@ -339,14 +169,236 @@ ProcedureFileEditor.prototype.initialise = function (item) {
                 hl.innerHTML = SyntaxHighlighter.highlight(this.value);
                 hl.scrollTop = this.scrollTop;
                 hl.scrollLeft = this.scrollLeft;
+                self.callback(EditorMessage.CHANGEMADE);
+                self.updateToolbarButtons();
             };
-            sc.onscroll = function () {
-                hl.scrollTop = this.scrollTop;
-                hl.scrollLeft = this.scrollLeft;
-            };
-            hl.style.display = "none";
-            sc.classList.remove("transparent-text");
         }
+    }
+}
+
+ProcedureFileEditor.prototype.createToobarButtons = function () {
+    var self = this;
+    var header = document.getElementById('editor-header');
+    if (!header) return;
+
+    // Cleanup existing logic...
+    var existingLeft = document.getElementById('editor-left-tools');
+    if (existingLeft) existingLeft.remove();
+    var existingRight = document.getElementById('editor-right-tools');
+    if (existingRight) existingRight.remove();
+
+    var leftTools = document.createElement('div');
+    leftTools.id = 'editor-left-tools';
+    leftTools.style.display = 'inline-flex';
+    leftTools.style.alignItems = 'center';
+    leftTools.style.marginRight = '10px';
+
+    function createHeaderBtn(iconClass, title, clickHandler) {
+        var b = document.createElement('button');
+        b.innerHTML = '<i class="' + iconClass + '"></i>';
+        b.className = 'icon-btn';
+        b.style.background = 'none';
+        b.style.border = 'none';
+        b.style.color = 'var(--text-color)';
+        b.style.cursor = 'pointer';
+        b.style.fontSize = '14px';
+        b.style.marginRight = '8px';
+        b.style.padding = '2px';
+        b.title = title;
+        b.addEventListener('click', function (e) {
+            e.preventDefault();
+            clickHandler(e);
+        });
+        b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        return b;
+    }
+
+    // [New] Apply Changes (Save)
+    var applyBtn = createHeaderBtn('fas fa-circle-check', 'Apply Changes', function () {
+        if (self.item.deleted) return;
+        self.applyChanges(); // This triggers UI update/refresh
+    });
+    if (this.item.deleted) applyBtn.disabled = true;
+    leftTools.appendChild(applyBtn);
+    this.applyBtn = applyBtn;
+
+    // [New] Discard Changes (Revert)
+    var discardBtn = createHeaderBtn('fas fa-undo', 'Discard Changes', function () {
+        if (self.item.deleted) return;
+        if (confirm("Discard unsaved changes?")) {
+            self.updateEditorContent(self.originalSource);
+            // Manually trigger reset of toolbar state
+            self.updateToolbarButtons();
+        }
+    });
+    // Discard initially disabled if clean
+    discardBtn.disabled = true;
+    leftTools.appendChild(discardBtn);
+    this.discardBtn = discardBtn;
+
+    // Divider
+    var div1 = document.createElement('span');
+    div1.innerHTML = '|';
+    div1.style.margin = '0 10px 0 2px'; // Balanced spacing (Matches ~10px visual gap from prev btn margin)
+    div1.style.color = 'var(--border-color)';
+    div1.style.opacity = '0.5';
+    leftTools.appendChild(div1);
+
+
+    leftTools.appendChild(createHeaderBtn('far fa-copy', 'Copy the selected text to clipboard', function () {
+        document.execCommand('copy');
+    }));
+
+    leftTools.appendChild(createHeaderBtn('fas fa-file-export', 'Copy the entire source code to clipboard', function () {
+        if (self.codeEditorInstance) {
+            var text = self.codeEditorInstance.getValue();
+            navigator.clipboard.writeText(text);
+        } else {
+            var ta = document.getElementById('sourcecode');
+            if (ta) navigator.clipboard.writeText(ta.value);
+        }
+    }));
+
+    var pasteBtn = createHeaderBtn('fas fa-paste', 'Paste text from clipboard at cursor position', function () {
+        if (self.item.deleted) return;
+        navigator.clipboard.readText().then(function (text) {
+            if (!text) return;
+            // ... Paste Logic ...
+            var target = null;
+            if (self.codeEditorInstance) target = self.codeEditorInstance.inputLayer;
+            else target = document.getElementById('sourcecode');
+
+            if (target) {
+                if (typeof target.setRangeText === 'function') {
+                    target.setRangeText(text, target.selectionStart, target.selectionEnd, 'end');
+                    target.dispatchEvent(new Event('input'));
+                } else {
+                    target.value += text;
+                    target.dispatchEvent(new Event('input'));
+                }
+                // Trigger Change
+                if (self.codeEditorInstance) self.codeEditorInstance.onChange();
+            }
+        }).catch(function (e) { console.error(e); });
+    });
+    if (this.item.deleted) pasteBtn.disabled = true;
+    leftTools.appendChild(pasteBtn);
+
+    var div = document.createElement('span');
+    div.innerHTML = '|';
+    div.style.margin = '0 5px 0 2px';
+    div.style.color = 'var(--border-color)';
+    div.style.opacity = '0.5';
+    leftTools.appendChild(div);
+
+    // [Moved] Translate Button
+    var btn = document.createElement('button');
+    btn.innerHTML = '<i class="fas fa-gears"></i>';
+    btn.className = 'icon-btn';
+    btn.style.background = 'none';
+    btn.style.border = 'none';
+    btn.style.color = 'var(--text-color)';
+    btn.style.cursor = 'pointer';
+    btn.style.fontSize = '13px';
+    btn.title = 'Translate (Compile Source to Object Code)';
+    btn.addEventListener('click', function (e) {
+        if (self.item.deleted) return;
+        self.translateAndSave();
+    });
+    // Initial Disable check
+    if (this.item.deleted) btn.disabled = true;
+    leftTools.appendChild(btn);
+    this.translateBtn = btn;
+
+    // [Moved] Copy Object Code Button
+    var stripBtn = document.createElement('button');
+    stripBtn.innerHTML = '<i class="fa-solid fa-file-zipper"></i>';
+    stripBtn.className = 'icon-btn';
+    stripBtn.style.marginLeft = '5px';
+    stripBtn.style.background = 'none';
+    stripBtn.style.border = 'none';
+    stripBtn.style.color = 'var(--text-color)';
+    stripBtn.style.cursor = 'pointer';
+    stripBtn.style.fontSize = '13px';
+    stripBtn.title = 'Copy Object Code';
+    stripBtn.addEventListener('click', function (e) {
+        if (self.item.deleted) return;
+        self.copyObjectCode();
+    });
+    if (this.item.deleted) stripBtn.disabled = true;
+    leftTools.appendChild(stripBtn);
+    this.stripBtn = stripBtn;
+
+    // [Moved] Trailing Divider
+    var divider = document.createElement('span');
+    divider.innerHTML = '|';
+    divider.style.margin = '0 10px';
+    divider.style.color = 'var(--border-color)';
+    divider.style.opacity = '0.5';
+    leftTools.appendChild(divider);
+    this.headerDivider = divider;
+
+    header.insertBefore(leftTools, header.firstChild);
+
+    // Right Tools (Now only Target Indicator)
+    var rightTools = document.createElement('div');
+    rightTools.id = 'editor-right-tools';
+    rightTools.style.display = 'inline-flex';
+    rightTools.style.alignItems = 'center';
+    rightTools.style.marginLeft = 'auto';
+
+    // (Buttons moved to Left...)
+
+    var targetIndicator = document.createElement('span');
+    targetIndicator.style.marginRight = '5px';
+    targetIndicator.style.color = 'var(--text-color)';
+    targetIndicator.style.fontSize = '12px';
+    targetIndicator.style.opacity = '0.7';
+    targetIndicator.title = 'Current Compiler Target';
+
+    var updateTargetLabel = function () {
+        var current = OptionsManager.getOption('targetSystem') || 'Standard';
+        var label = (current === 'LZ') ? 'LZ Mode' : 'XP Mode';
+        var icon = (current === 'LZ') ? 'fa-memory' : 'fa-microchip';
+        targetIndicator.innerHTML = '<i class="fas ' + icon + '"></i> ' + label;
+    };
+    updateTargetLabel();
+    rightTools.appendChild(targetIndicator);
+    this.targetIndicator = targetIndicator;
+
+    this.targetOptionListener = function (e) {
+        if (e.detail && e.detail.key === 'targetSystem') {
+            updateTargetLabel();
+        }
+    };
+    window.addEventListener('optionsChanged', this.targetOptionListener);
+
+    header.appendChild(rightTools);
+};
+
+ProcedureFileEditor.prototype.updateToolbarButtons = function () {
+    var hasChanges = this.hasUnsavedChanges();
+    var isDeleted = this.item.deleted;
+
+    if (this.translateBtn) {
+        this.translateBtn.disabled = isDeleted || hasChanges;
+        this.translateBtn.title = hasChanges ? "Save changes before Translating" : "Translate (Compile Source to Object Code)";
+        this.translateBtn.style.opacity = (isDeleted || hasChanges) ? '0.5' : '1';
+    }
+    if (this.stripBtn) {
+        this.stripBtn.disabled = isDeleted || hasChanges;
+        this.stripBtn.title = hasChanges ? "Save changes before Copying Object Code" : "Copy Object Code";
+        this.stripBtn.style.opacity = (isDeleted || hasChanges) ? '0.5' : '1';
+    }
+
+    // New Buttons Logic
+    if (this.applyBtn) {
+        this.applyBtn.disabled = isDeleted || !hasChanges;
+        this.applyBtn.style.opacity = (isDeleted || !hasChanges) ? '0.5' : '1';
+    }
+    if (this.discardBtn) {
+        this.discardBtn.disabled = isDeleted || !hasChanges;
+        this.discardBtn.style.opacity = (isDeleted || !hasChanges) ? '0.5' : '1';
     }
 }
 
@@ -550,6 +602,16 @@ ProcedureFileEditor.prototype.applyChanges = function () {
         }
     }
 
+    // [New] Update Toolbar Buttons (Re-enable if saved)
+    // Sync originalSource to prevent "unsaved changes" warning if text matches saved state
+    // (Wait: If we saved, the current text IS the blessed state)
+    var txt = "";
+    if (this.codeEditorInstance) txt = this.codeEditorInstance.getValue();
+    else txt = document.getElementById("sourcecode").value;
+    this.originalSource = txt;
+
+    this.updateToolbarButtons();
+
     return differ || headerChanged;
 };
 
@@ -560,7 +622,7 @@ ProcedureFileEditor.prototype.copyObjectCode = function () {
         // Filter for this item OR Type 3 items in selection
         // If the current item is in selection, process WHOLE selection.
         if (selectedItems.indexOf(this.item) !== -1) {
-            targets = selectedItems.filter(function (it) { return it.type === 3; });
+            targets = selectedItems.filter(function (it) { return it.type === 3 || it.type === 2; });
         } else {
             targets = [this.item];
         }
@@ -583,8 +645,15 @@ ProcedureFileEditor.prototype.copyObjectCode = function () {
     var self = this;
 
     targets.forEach(function (targetItem) {
-        if (self.processItemCopyObject(targetItem, pack)) {
+        var result = self.processItemCopyObject(targetItem, pack);
+        if (result === true || (result && result.success)) {
             successCount++;
+        } else {
+            console.error("Copy Object Code Failed for " + targetItem.name + ": ", result);
+            if (targets.length === 1) {
+                var reason = (result && result.error) ? result.error : "Unknown validation error";
+                alert("Failed to copy object code: " + reason);
+            }
         }
     });
 
@@ -599,312 +668,147 @@ ProcedureFileEditor.prototype.copyObjectCode = function () {
         if (this.stripBtn) this.stripBtn.disabled = true;
     }
 
-    // Force Save
-    if (window.saveSession) window.saveSession();
-    else if (window.updateInventory) window.updateInventory();
+    // Force Save & Refresh if any success
+    if (successCount > 0) {
+        if (window.saveSession) window.saveSession();
+        // Force generic update
+        if (window.updateInventory) window.updateInventory();
 
-    if (!OptionsManager.getOption('suppressConfirmations') && targets.length > 1) {
-        alert("Processed " + successCount + " items.");
+        if (!OptionsManager.getOption('suppressConfirmations')) {
+            if (targets.length > 1) alert("Processed " + successCount + " items.");
+            // For single item, the UI update is feedback enough, or we can toast.
+            // Existing behavior was silent success for single item. Keeping it (unless error).
+        }
     }
 };
 
 // Helper: Process Single Item (Decoupled from Editor UI)
+// Helper: Process Single Item (Decoupled from Editor UI)
 ProcedureFileEditor.prototype.processItemCopyObject = function (targetItem, pack) {
-    if (targetItem.deleted) return false;
+    if (targetItem.deleted) return { success: false, error: "Item is already deleted" };
 
-    // Check for QCode
-    var hasQCode = false;
-    if (targetItem.child && targetItem.child.child && targetItem.child.child.data) {
-        var d = targetItem.child.child.data;
-        if (d.length >= 4) {
-            var len = (d[0] << 8) | d[1];
-            if (len > 0) hasQCode = true;
+    // Helper: Parse Record Structure
+    function parseRecordStructure(data, itemType) {
+        var offset = 0;
+        // Skip leading nulls (Alignment Correction)
+        while (offset < data.length && data[offset] === 0) { offset++; }
+
+        // 1. Try Standard Long Record Header (02 80) - Used by Type 3
+        var syncFound = -1;
+        for (var i = offset; i < data.length - 1; i++) {
+            if (data[i] === 0x02 && data[i + 1] === 0x80) {
+                syncFound = i;
+                break;
+            }
+        }
+
+        if (syncFound !== -1) {
+            var lenOffset = syncFound + 2;
+            if (lenOffset + 1 >= data.length) return { valid: false, error: "Truncated header" };
+            var len = (data[lenOffset] << 8) | data[lenOffset + 1];
+            return { valid: true, offset: lenOffset, length: len, start: syncFound, type: 'long' };
+        }
+
+        // 2. Fallback: Raw / Type 2 Check
+        // Check if index 0 is valid BE len 
+        if (data.length >= 2) {
+            var rawLen = (data[0] << 8) | data[1];
+            // If rawLen fits exactly? (Common for imported Type 2 with Len prefix)
+            if (rawLen > 0 && (2 + rawLen) <= data.length) {
+                return { valid: true, offset: 0, length: rawLen, start: 0, type: 'raw' };
+            }
+        }
+
+        // 3. Last Resort: Bare Type 2 (Treat All Data as QCode)
+        // Only if Type 2 and we have data
+        if (itemType === 2 && data.length > 0) {
+            return { valid: true, offset: 0, length: data.length, start: 0, type: 'bare' };
+        }
+
+        return { valid: false, error: "Sync 02 80 not found and Raw Header check failed" };
+    }
+
+    var struct = parseRecordStructure(targetItem.child.data, targetItem.type);
+    if (!struct.valid) return { success: false, error: struct.error };
+
+    var chld = targetItem.child;
+    var srcData = null;
+    var qcodeLen = 0;
+    var qcodeOffset = 0;
+    var isBare = (struct.type === 'bare');
+
+    if (chld.child && chld.child.data) {
+        // Hierarchical (Standard Type 3)
+        srcData = chld.child.data;
+        qcodeOffset = 0;
+        if (srcData.length >= 2) {
+            qcodeLen = (srcData[0] << 8) | srcData[1];
+        } else {
+            return { success: false, error: "Payload too short (Hierarchical)" };
+        }
+    } else {
+        // Flat or Bare
+        srcData = chld.data;
+        if (isBare) {
+            qcodeLen = srcData.length;
+            qcodeOffset = 0;
+        } else if (struct.type === 'raw') {
+            qcodeLen = struct.length;
+            qcodeOffset = struct.offset; // 0 usually
+        } else {
+            // Long Record Wrapper
+            qcodeOffset = struct.offset + 2; // Skip LenLen
+            if (qcodeOffset + 1 < srcData.length) {
+                qcodeLen = (srcData[qcodeOffset] << 8) | srcData[qcodeOffset + 1];
+            } else {
+                return { success: false, error: "Payload too short (Flat)" };
+            }
         }
     }
 
-    if (!hasQCode) {// 
-//         console.warn("Skipping " + targetItem.name + ": No Object Code found.");
-        return false;
-    }
+    if (qcodeLen <= 0 && !isBare) return { success: false, error: "Object Data Length is 0" };
 
-    var chld = targetItem.child.child;
+    // Extract Logic
+    var objCodeToKeep;
 
-    // ARCHITECTURE UPDATE (2025-12-28):
-    // The OPL Object Length is BIG ENDIAN (Offset 0x0F, 0x10).
-    // There is no "Count Byte" or "Padding".
-    // e.g. 00 27 ... -> Length 0x0027 (39).
-
-    // 1. Read Object Length (Big Endian)
-    var currentObjLen = (chld.data[0] << 8) | chld.data[1];
-
-    if (currentObjLen <= 0) return false;
-
-    // Safety Cap
-    if (currentObjLen > chld.data.length - 2) currentObjLen = chld.data.length - 2;
-
-    // Heuristic Check (for trailing garbage)
-    var expectedEnd = 2 + currentObjLen; // 2 byte header + body
-    var remainingBytes = chld.data.length - expectedEnd;
-    var isValid = false;
-
-    if (remainingBytes >= 2) {
-        // SrcLen is Big Endian too? Usually LE according to docs, but let's check
-        // "Source" usually follows.
-        // If remaining is just the terminator 00 00.
-        var termword = (chld.data[expectedEnd] << 8) | chld.data[expectedEnd + 1];
-        if (termword === 0 && remainingBytes > 2) {// 
-//             console.log("Found valid terminator. Truncating garbage.");
-            isValid = true;
-        } else if (remainingBytes === 2) {
-            isValid = true;
+    if (isBare) {
+        // Must synthesize [Len][QCode]
+        objCodeToKeep = new Uint8Array(2 + qcodeLen);
+        objCodeToKeep[0] = (qcodeLen >> 8) & 0xFF;
+        objCodeToKeep[1] = qcodeLen & 0xFF;
+        objCodeToKeep.set(srcData.subarray(0, qcodeLen), 2);
+    } else {
+        // Safety Cap
+        var totalNeeded = qcodeOffset + 2 + qcodeLen;
+        if (totalNeeded > srcData.length) {
+            if (srcData.length - qcodeOffset - 2 < qcodeLen) {
+                qcodeLen = srcData.length - qcodeOffset - 2;
+                if (qcodeLen < 0) qcodeLen = 0;
+            }
         }
+        var objectOnlyLen = 2 + qcodeLen;
+        objCodeToKeep = srcData.subarray(qcodeOffset, qcodeOffset + objectOnlyLen);
     }
-
-    var objCodeToKeep = chld.data.subarray(2, 2 + currentObjLen);
 
     // Mark Original as Deleted
     targetItem.deleted = true;
     targetItem.data[1] &= 0x7F;
 
-    // Prepare New Data (Big Endian)
-    // Structure: [Len High] [Len Low] [Body...] [SrcLen High] [SrcLen Low]
-    var finalLen = objCodeToKeep.length;
-    var newTotalSize = 2 + finalLen + 2;
-    var newData = new Uint8Array(newTotalSize);
+    // Prepare New Data (Type 3 Standard: [QCodeLen][QCode][SrcLen=0][Src=Empty])
+    var finalPayloadLen = objCodeToKeep.length + 2;
+    var newData = new Uint8Array(finalPayloadLen);
 
-    // Write Length (Big Endian)
-    newData[0] = (finalLen >> 8) & 0xFF;
-    newData[1] = finalLen & 0xFF;
+    newData.set(objCodeToKeep, 0);
+    newData[objCodeToKeep.length] = 0; // SrcLen High
+    newData[objCodeToKeep.length + 1] = 0; // SrcLen Low
 
-    // Write Body
-    newData.set(objCodeToKeep, 2);
-
-    // Write Terminator (00 00)
-    newData[2 + finalLen] = 0;
-    newData[2 + finalLen + 1] = 0;
-
-    // Search for Existing Active Object Record
-    var existingItem = null;
-    if (pack && pack.items) {
-        for (var i = 0; i < pack.items.length; i++) {
-            var it = pack.items[i];
-            // Match Name, Type 3, Not Deleted, Not Self
-            if (it.type === 3 && !it.deleted && it !== targetItem && it.name === targetItem.name) {
-                existingItem = it;
-                break;
-            }
-        }
-    }
-
-    if (existingItem) {
-        // Update In-Place
-        var blkHdrItem = existingItem.child;
-        if (blkHdrItem) {
-            var dataItem = blkHdrItem.child;
-            // Resize if needed (PackItem.setData handles array replacement)
-            dataItem.setData(newData);
-
-            // Update Block Header details
-            var blocklen = newData.length;
-            blkHdrItem.data[2] = (blocklen >> 8) & 0xFF;
-            blkHdrItem.data[3] = blocklen & 0xFF;
-
-            pack.unsaved = true;
-        }
+    // [Fix] Always Create NEW Record (Append)
+    // Do NOT search for existing items by name to update. OPL records are additive.
+    // If the user wants to clean up, they can delete old ones.
+    if (typeof createBlockFile === 'function') {
+        createBlockFile(newData, targetItem.name, 3);
     } else {
-        // Create New
-        if (typeof createBlockFile === 'function') {
-            createBlockFile(newData, targetItem.name, 3);
-        }
-    }
-
-    return true;
-};
-
-ProcedureFileEditor.prototype.translateAndSave = function () {
-    var self = this;
-
-    // Force Save (sync header name)
-    this.applyChanges();
-
-    // Determine target items
-    var targets = [];
-    if (typeof selectedItems !== 'undefined' && selectedItems.length > 1) {
-        // Batch Mode: Filter for valid OPL Types (Type 3)
-        targets = selectedItems.filter(function (it) { return it.type === 3; });
-    }
-
-    // Fallback: If no valid multi-selection, target current item
-    if (targets.length === 0) {
-        targets = [this.item];
-    }
-
-    var successes = 0;
-    var errors = [];
-
-    // Check Compiler presence once
-    if (!window.OPLCompiler) {
-        alert("Translator (Compiler) not found!");
-        return;
-    }
-
-    // Status Bar Feedback
-    var statusEl = document.getElementById("status-message");
-    var oldStatus = statusEl ? statusEl.innerText : "";
-    if (statusEl) statusEl.innerText = "Translating " + targets.length + " items...";
-
-    // Use timeout to allow UI to render status message
-    setTimeout(function () {
-        targets.forEach(function (targetItem) {
-            var sourceCode = "";
-
-            // 1. Get Source
-            if (targetItem === self.item) {
-                // Active Item: Use Editor Content
-                if (self.codeEditorInstance) sourceCode = self.codeEditorInstance.getValue();
-                else sourceCode = document.getElementById("sourcecode").value;
-            } else {
-                // Inactive Item: Extract from Binary
-                sourceCode = self.getSourceFromItem(targetItem);
-            }
-
-            // 2. Compile & Update
-            try {
-                var result = self.compileAndSaveItem(targetItem, sourceCode, targetItem === self.item); // Pass 'interactive' flag
-                if (result.success) successes++;
-                else errors.push(targetItem.name + ": " + result.error);
-            } catch (e) {
-                errors.push(targetItem.name + ": " + e.message);
-            }
-        });
-
-        // 3. Update UI & Report
-        // Refresh Current Editor Log if it was translated
-        if (targets.indexOf(self.item) !== -1) {
-            self.refreshDecompilerLog(true);
-        }
-
-        if (window.updateInventory) window.updateInventory();
-
-        // Restore Status
-        if (statusEl) statusEl.innerText = oldStatus;
-
-        if (!OptionsManager.getOption('suppressConfirmations')) {
-            if (errors.length === 0) {
-                alert("Translated " + successes + " item(s) successfully!");
-            } else {
-                alert("Translated " + successes + " item(s).\n\nErrors:\n" + errors.join("\n"));
-            }
-        }
-    }, 20);
-};
-
-ProcedureFileEditor.prototype.getSourceFromItem = function (item) {
-    if (!item || !item.child || !item.child.child) return "";
-    var chld = item.child.child;
-    var lncode = (chld.data[0] << 8) | chld.data[1];
-    var lnsrc = (chld.data[lncode + 2] << 8) | chld.data[lncode + 3];
-
-    if (lnsrc <= 0) return "";
-
-    // Extract
-    var limit = lnsrc;
-    // Exclude null terminator
-    if (limit > 0 && chld.data[lncode + 4 + limit - 1] === 0) {
-        limit--;
-    }
-
-    var s = "";
-    for (var i = 0; i < limit; i++) {
-        var c = chld.data[lncode + 4 + i];
-        s += (c === 0 ? "\n" : String.fromCharCode(c));
-    }
-    return s;
-};
-
-ProcedureFileEditor.prototype.compileAndSaveItem = function (targetItem, source, interactive) {
-    // Basic validation
-    if (!source) return { success: false, error: "No source code found" };
-
-    var options = {};
-    if (typeof OptionsManager !== 'undefined') {
-        options.targetSystem = OptionsManager.getOption('targetSystem');
-    }
-    var qcode = window.OPLCompiler.compile(source, options);
-
-    if (!qcode || qcode.length === 0) {
-        return { success: false, error: "Compilation produced no output" };
-    }
-
-    var saveSource = true;
-
-    // Type 2 Conversion Check
-    if (targetItem.type === 2) {
-        if (interactive) {
-            var doConvert = true;
-            if (!OptionsManager.getOption('suppressConfirmations')) {
-                doConvert = confirm("This is an Object-only record (Type 2).\n\nDo you want to convert it to an OPL Procedure record (Type 3)?\n\nThis will allow the source code to be saved along with the object code.");
-            }
-            if (doConvert) targetItem.type = 3;
-            else saveSource = false;
-        } else {
-            // Batch: Skip conversion? Or assume 3?
-            saveSource = false;
-        }
-    }
-
-    // Reconstruct Data Block
-    var srcBytes = [];
-    for (var i = 0; i < source.length; i++) {
-        var c = source.charCodeAt(i);
-        srcBytes.push(c === 10 ? 0 : c);
-    }
-    // Always append a generic null terminator to ensure the last line/empty line is preserved
-    // The loader strips the last byte if it is 0, so this acts as the "sacrificial" terminator.
-    srcBytes.push(0);
-
-    var newTotalSize = 2 + qcode.length + 2;
-    if (saveSource) newTotalSize += srcBytes.length;
-
-    var newData = new Uint8Array(newTotalSize);
-
-    // ObjLen
-    newData[0] = (qcode.length >> 8) & 0xFF;
-    newData[1] = qcode.length & 0xFF;
-
-    // ObjCode
-    newData.set(qcode, 2);
-
-    // SrcLen & SrcCode
-    var offset = 2 + qcode.length;
-    if (saveSource) {
-        newData[offset] = (srcBytes.length >> 8) & 0xFF;
-        newData[offset + 1] = srcBytes.length & 0xFF;
-        newData.set(srcBytes, offset + 2);
-    } else {
-        newData[offset] = 0;
-        newData[offset + 1] = 0;
-    }
-
-    // Update Item
-    if (targetItem.child && targetItem.child.child) {
-        targetItem.child.child.setData(newData);
-    }
-
-    // TYPE PROMOTION
-    if (targetItem.type === 3) {
-        targetItem.deleted = false;
-        if (targetItem.data && targetItem.data.length > 1) {
-            targetItem.data[1] = 0x83; // Active
-        }
-    }
-
-    // Update Block Len (Container)
-    var blockItem = targetItem.child;
-    var ln = newData.length;
-    if (blockItem && blockItem.data && blockItem.data.length >= 4) {
-        blockItem.data[2] = (ln >> 8) & 0xFF;
-        blockItem.data[3] = ln & 0xFF;
+        return { success: false, error: "createBlockFile is not a function" };
     }
 
     return { success: true };
@@ -927,8 +831,390 @@ function buildProcMap() {
                             if (header && header.numParams !== undefined) {
                                 procMap[item.name.toUpperCase()] = { paramCount: header.numParams };
                             }
-                        } catch (e) {// 
-//                             console.warn("Failed to parse header for procMap:", item.name, e);
+                        } catch (e) {
+                            // 
+                            //                             console.warn("Failed to parse header for procMap:", item.name, e);
+                        }
+                    }
+                }
+            });
+        });
+    }
+    return procMap;
+}
+
+ProcedureFileEditor.prototype.translateAndSave = function () {
+    var self = this;
+
+    // [Fix] Do NOT call applyChanges() here.
+    // applyChanges() updates the current item in-place (mutating it).
+    // Translate should strictly be "Create New + Delete Old".
+    // forcing applyChanges() would inject the source into the original Type 2 record before deleting it.
+    // this.applyChanges();
+
+
+    // Determine target items
+    var targets = [];
+    if (typeof selectedItems !== 'undefined' && selectedItems.length > 1) {
+        // Batch Mode: Filter for valid OPL Types (Type 3)
+        targets = selectedItems.filter(function (it) { return it.type === 3 || it.type === 2; });
+    }
+
+    // Fallback: If no valid multi-selection, target current item
+    if (targets.length === 0) {
+        targets = [this.item];
+    }
+
+    var successes = 0;
+    var errors = [];
+
+    // Check Compiler presence once
+    if (!window.OPLCompiler) {
+        alert("Translator (Compiler) not found!");
+        return;
+    }
+
+    // Status Bar Feedback
+    var statusEl = document.getElementById("status-message");
+    var oldStatus = statusEl ? statusEl.innerText : "";
+    if (statusEl) statusEl.innerText = "Translating " + targets.length + " items...";
+
+    // [Fix] Remove setTimeout to run synchronous batch loop (matches copyObjectCode behavior)
+    // Prevents potential race conditions or closure updates
+    // setTimeout(function () { // 
+
+    console.log("Translate Batch: " + targets.length + " targets.");
+
+    // [Fix] Determine suppressUpdate flag (true for batch mode, false for single item interactive)
+    var isBatch = (targets.length > 1);
+
+    targets.forEach(function (targetItem) {// 
+        console.log("Processing: " + (targetItem.name || "Unnamed"));
+        var sourceCode = "";
+
+        // 1. Get Source
+        // 1. Get Source
+        // Always read from Item Data (Require "Apply Changes" first)
+        // This avoids reading stale #sourcecode or unsaved editor state
+        sourceCode = self.getSourceFromItem(targetItem) || self.getDecompiledSource(targetItem);
+
+        // 2. Compile & Update
+        try {
+            // Pass suppressUpdate=true only for batch mode to prevent UI thrashing
+            // interactive flag is (targetItem === self.item)
+            var result = self.compileAndSaveItem(targetItem, sourceCode, targetItem === self.item, isBatch);
+            if (result.success) successes++;
+            else errors.push(targetItem.name + ": " + result.error);
+        } catch (e) {
+            errors.push(targetItem.name + ": " + e.message);
+        }
+    });
+
+    // 3. Update UI & Report
+    // Only refresh logs/inventory explicitly if we suppressed them (Batch Mode)
+    if (isBatch) {
+        if (targets.indexOf(self.item) !== -1) {
+            self.refreshDecompilerLog(true);
+        }
+        if (window.updateInventory) window.updateInventory();
+    }
+
+    // Restore Status
+    if (statusEl) statusEl.innerText = oldStatus;
+
+    if (!OptionsManager.getOption('suppressConfirmations')) {
+        if (errors.length === 0) {
+            // Only alert for SINGLE item if successful? No, usually translation is silent success for single item editor loop?
+            // "Translate" button usually gives feedback.
+            // Existing logic gave alert. We Keep it.
+            alert("Translated " + successes + " item(s) successfully!");
+        } else {
+            alert("Translated " + successes + " item(s).\n\nErrors:\n" + errors.join("\n"));
+        }
+    }
+    // }, 20); // Timeout removed
+};
+
+ProcedureFileEditor.prototype.getSourceFromItem = function (item) {
+    if (!item || !item.child) return "";
+
+    // Determine the actual data buffer (Header vs Nested Payload)
+    var data = null;
+    var isNested = false;
+
+    if (item.child.child && item.child.child.data) {
+        data = item.child.child.data;
+        isNested = true;
+    } else if (item.child.data) {
+        data = item.child.data;
+    } else {
+        return "";
+    }
+
+    // Helper: Detect Endianness (Duplicated from processItemCopyObject - Consider Refactoring)
+    // Parse Structure Strict
+    var offset = 0;
+    while (offset < data.length && data[offset] === 0) offset++;
+
+    var sync = -1;
+    // If nested, we don't expect 02 80 header at start of payload usually?
+    // Actually, payload is [QCodeLen] [QCode]... so NO 02 80 unless it's a Long Record inside?
+    // Standard Type 3 payload is JUST the body.
+
+    // Scan for 02 80
+    // [Fix] If isNested, we are already inside the payload. Do NOT scan for 02 80 as it might appear in QCode.
+    if (!isNested) {
+        for (var i = offset; i < data.length - 1; i++) {
+            if (data[i] === 0x02 && data[i + 1] === 0x80) { sync = i; break; }
+        }
+    }
+
+    // Fallback for Source View if Sync missing (e.g. Raw obj code imported?)
+    // Try standard BE read at 0
+    var lncode = 0;
+    var base = 0;
+
+    // If using Nested Payload, offset should be 0 if no Sync found
+    if (sync === -1 && isNested) {
+        // Treat as Raw/Body directly
+        if (data.length >= 2) {
+            lncode = (data[0] << 8) | data[1];
+            base = 0;
+        } else return "";
+    } else {
+        // Fallback or Sync Found logic for Flat/Header
+        if (sync !== -1) {
+            // 02 80 [BodyLen] [QCodeLen] ...
+            // We need to skip 02 80 (2 bytes) + BodyLen (2 bytes) = 4 bytes
+            if (sync + 5 >= data.length) return "";
+            lncode = (data[sync + 4] << 8) | data[sync + 5];
+            base = sync + 4;
+        } else {
+            if (data.length >= 2) {
+                lncode = (data[0] << 8) | data[1];
+                base = 0; // Assume aligned
+            } else return "";
+        }
+    }
+
+    // Bounds Check
+    if (base + 2 > data.length) return "";
+
+    var lnsrcOffset = base + 2 + lncode;
+    if (lnsrcOffset + 1 >= data.length) return "";
+
+    // Strict Big Endian Source Length
+    var lnsrc = (data[lnsrcOffset] << 8) | data[lnsrcOffset + 1];
+
+    if (lnsrc <= 0) return "";
+    var srcStart = lnsrcOffset + 2;
+
+    // Bounds Check for Source Body
+    if (srcStart + lnsrc > data.length) {
+        // Cap
+        lnsrc = data.length - srcStart;
+        if (lnsrc <= 0) return "";
+    }
+
+    // Extract Source
+    var src = "";
+    var current = srcStart;
+
+    // Extract Loop
+    for (var i = 0; i < lnsrc; i++) {
+        var c = data[current + i];
+        if (c === 0 && i === lnsrc - 1) continue; // Skip trailing null
+        if (c === 0) src += "\n";
+        else src += String.fromCharCode(c);
+    }
+
+    return src;
+};
+
+// [Helper] Decompile Item (Handles Type 2/3 extraction + Header Synthesis)
+ProcedureFileEditor.prototype.getDecompiledSource = function (item) {
+    if (!item || !window.OPLDecompiler) return "";
+
+    var qcodeBuffer = null;
+    var procName = (item.name || "MAIN").trim();
+
+    // 1. Extract Raw QCode Body
+    if (item.type === 2) {
+        // Type 2: Raw QCode (usually in child.child or child)
+        if (item.child && item.child.child && item.child.child.data) {
+            qcodeBuffer = item.child.child.data;
+        } else if (item.child && item.child.data) {
+            qcodeBuffer = item.child.data;
+        }
+    } else if (item.type === 3) {
+        // Type 3: Payload [Len 2] [QCode] [SrcLen 2] [Src]
+        // We want just the QCode.
+        // Usually located in child.child.data
+        var payload = null;
+        if (item.child && item.child.child && item.child.child.data) {
+            payload = item.child.child.data;
+        }
+
+        if (payload && payload.length > 2) {
+            var qLen = (payload[0] << 8) | payload[1];
+            if (payload.length >= 2 + qLen) {
+                qcodeBuffer = payload.subarray(2, 2 + qLen);
+            }
+        }
+    }
+
+    if (!qcodeBuffer) return "";
+
+    // 2. Synthesize Headers for Decompiler
+    // Decompiler expects: FileHeader -> RecHeader -> QCode
+    try {
+        var nameStr = (procName + "        ").substring(0, 8);
+        var totalLen = 17 + qcodeBuffer.length;
+        var stamped = new Uint8Array(totalLen);
+
+        // 09 83 File Header
+        stamped[0] = 0x09; stamped[1] = 0x83;
+        for (var k = 0; k < 8; k++) stamped[2 + k] = nameStr.charCodeAt(k);
+        stamped[10] = 0x00;
+
+        // 02 80 Record Header
+        var longRecLen = qcodeBuffer.length + 2;
+        stamped[11] = 0x02; stamped[12] = 0x80;
+        stamped[13] = (longRecLen >> 8) & 0xFF;
+        stamped[14] = longRecLen & 0xFF;
+        stamped[15] = (qcodeBuffer.length >> 8) & 0xFF;
+        stamped[16] = qcodeBuffer.length & 0xFF;
+
+        stamped.set(qcodeBuffer, 17);
+
+        var decomp = new window.OPLDecompiler();
+        // Use empty procMap to avoid side-effects from dirty pack state
+        var analysis = decomp.getRawAnalysis(stamped, procName, { procMap: {} });
+        return decomp.sourceGen.generateSource(analysis.header, analysis.varMap, analysis.flow, stamped, analysis.finalProcName, { oplBase: decomp.oplBase });
+    } catch (e) {// 
+        console.warn("Decompile failed for " + procName, e);
+        return "";
+    }
+};
+
+ProcedureFileEditor.prototype.compileAndSaveItem = function (targetItem, source, interactive, suppressUpdate) {
+    // Basic validation
+    if (!source) return { success: false, error: "No source code found" };
+
+    var options = {};
+    if (typeof OptionsManager !== 'undefined') {
+        options.targetSystem = OptionsManager.getOption('targetSystem');
+    }
+    var qcode = window.OPLCompiler.compile(source, options);
+
+    if (!qcode || qcode.length === 0) {
+        return { success: false, error: "Compilation produced no output" };
+    }
+
+    var saveSource = true;
+
+    // [Legacy Logic Removed] 
+    // We do NOT convert Type 2 records in-place.
+    // We always create a NEW Type 3 record and leave the original alone (deleted).
+
+    // Reconstruct Data Block (Strict Long Record Structure)
+    var srcBytes = [];
+    for (var i = 0; i < source.length; i++) {
+        var c = source.charCodeAt(i);
+        srcBytes.push(c === 10 ? 0 : c);
+    }
+    srcBytes.push(0);
+
+    // Calculate Sizes
+    // Payload Only: QCodeLen(2) + QCode + SrcLen(2) + Src
+    var contentSize = 2 + qcode.length + 2;
+    if (saveSource) contentSize += srcBytes.length;
+
+    // newData is Payload Only. createBlockFile will wrap it in 02 80 and add BodyLen.
+    var newData = new Uint8Array(contentSize);
+    var cursor = 0;
+
+    // 1. QCode Length (Big Endian)
+    newData[cursor++] = (qcode.length >> 8) & 0xFF;
+    newData[cursor++] = qcode.length & 0xFF;
+
+    // 2. QCode Body
+    newData.set(qcode, cursor);
+    cursor += qcode.length;
+
+    // 3. Source Length (Big Endian)
+    var srcLen = saveSource ? srcBytes.length : 0;
+    newData[cursor++] = (srcLen >> 8) & 0xFF;
+    newData[cursor++] = srcLen & 0xFF;
+
+    // 4. Source Body
+    if (saveSource) {
+        newData.set(srcBytes, cursor);
+        cursor += srcBytes.length;
+    }
+
+    // [Fixed Logic: Non-Destructive Update]
+    // 1. Mark Original as Deleted (Status Only)
+    // We strictly do NOT modify the original data buffer to avoid "appending" artifacts.
+    targetItem.deleted = true;
+    if (targetItem.data && targetItem.data.length > 1) {
+        targetItem.data[1] &= 0x7F; // Clear Active Bit
+    }
+
+    // 2. Create NEW Record
+    // This calls PackManager.createBlockFile which always appends a new item.
+    // It does not search for existing items or update in-place.
+    if (typeof createBlockFile === 'function') {
+        // Use original name (will duplicate in list until refresh)
+        // [Fix] Always suppress internal update in createBlockFile to prevent race conditions.
+        // We will handle UI updates explicitly below.
+        var newItem = createBlockFile(newData, targetItem.name, 3, true);
+
+        // [Fix] Explicit update logic
+        if (!suppressUpdate) {
+            // 1. Refresh Inventory (Visual List)
+            if (window.updateInventory) window.updateInventory();
+
+            // 2. Select and Initialize the New Item
+            // We use the reference returned by createBlockFile to be 100% sure.
+            if (newItem && window.packs && window.packs[window.currentPackIndex]) {
+                var idx = window.packs[window.currentPackIndex].items.indexOf(newItem);
+                if (idx !== -1) {
+                    // This triggers itemSelected -> initialise -> sets this.item = newItem
+                    if (window.itemSelected) window.itemSelected(window.currentPackIndex, idx);
+                } else {
+                    // Fallback if indexOf fails (unlikely)
+                    self.initialise(newItem);
+                }
+            }
+        }
+    } else {
+        console.error("createBlockFile missing");
+    }
+
+    return { success: true };
+};
+
+// Helper to build a process map (procedure name -> param count) for the decompiler
+function buildProcMap() {
+    var procMap = {};
+    if (window.packs) {
+        window.packs.forEach(function (pack) {
+            pack.items.forEach(function (item) {
+                if (item.type === 3 && !item.deleted && item.child) {
+                    // Robust check: Procedure data is usually in item.child.child.data
+                    // but we check both levels for resilience.
+                    var target = (item.child.child && item.child.child.data) ? item.child.child : (item.child.data ? item.child : null);
+                    if (target) {
+                        try {
+                            var tempDecompiler = new OPLDecompiler();
+                            var header = tempDecompiler.parseHeader(target.data, 0);
+                            if (header && header.numParams !== undefined) {
+                                procMap[item.name.toUpperCase()] = { paramCount: header.numParams };
+                            }
+                        } catch (e) {
+                            // 
+                            //                             console.warn("Failed to parse header for procMap:", item.name, e);
                         }
                     }
                 }

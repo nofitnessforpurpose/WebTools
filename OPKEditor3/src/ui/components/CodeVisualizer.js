@@ -14,7 +14,7 @@
  * 6. Code Editor: Uses the application's native CodeEditor component.
  * 7. Styling: Rounded corners for all containers (SVG attributes), robust ThemeManager integration.
  */
-var CodeVisualizer = (function () {
+var CodeVisualizer = window.CodeVisualizer = (function () {
 
 
     // --- Data Extraction ---
@@ -144,10 +144,23 @@ var CodeVisualizer = (function () {
                 if (item.type === 3) {
                     if (item.child && item.child.child && item.child.child.data) {
                         var data = item.child.child.data;
+
+                        // Strict Parsing Helper (Inline/Scope)
+                        function parseRec(d) {
+                            var off = 0; while (off < d.length && d[off] === 0) off++;
+                            var sync = -1; for (var i = off; i < d.length - 1; i++) { if (d[i] === 0x02 && d[i + 1] === 0x80) { sync = i; break; } }
+                            if (sync === -1) return (d.length >= 2 && (2 + ((d[0] << 8) | d[1]) <= d.length)) ? { valid: true, off: 0, len: (d[0] << 8) | d[1], base: 0 } : { valid: false };
+                            var lnOff = sync + 2; if (lnOff + 1 >= d.length) return { valid: false };
+                            return { valid: true, off: lnOff, len: (d[lnOff] << 8) | d[lnOff + 1], base: lnOff };
+                        }
+
                         if (data.length >= 2) {
-                            var obLen = (data[0] << 8) | data[1];
-                            if (obLen > 0 && data.length >= 2 + obLen) {
-                                var objCode = data.slice(2, 2 + obLen);
+                            var struct = parseRec(data);
+                            var obLen = struct.valid ? struct.len : 0;
+                            var base = struct.valid ? struct.base : 2;
+
+                            if (obLen > 0 && data.length >= base + obLen) {
+                                var objCode = data.slice(base, base + obLen);
                                 try {
                                     if (typeof OPLDecompiler !== 'undefined') {
                                         var decompiler = new OPLDecompiler();
@@ -221,255 +234,343 @@ var CodeVisualizer = (function () {
                 var instructions = []; // Ensure defined
                 if (item.child && item.child.child && item.child.child.data) {
                     var data = item.child.child.data;
-                    var obLen = (data[0] << 8) | data[1];
-                    if (obLen > 0 && data.length >= 2 + obLen) {
-                        var objCode = data.slice(2, 2 + obLen);
+
+                    // Helper: Detect Endianness / Structure (Strict)
+                    // Updated 2025-12-29 to return start index for header inclusion.
+                    function parseRecS(d) {
+                        var off = 0; while (off < d.length && d[off] === 0) off++;
+                        var sync = -1; for (var i = off; i < d.length - 1; i++) { if (d[i] === 0x02 && d[i + 1] === 0x80) { sync = i; break; } }
+                        // Fallback logic for raw/legacy if no sync found
+                        if (sync === -1) return (d.length >= 2 && (2 + ((d[0] << 8) | d[1]) <= d.length)) ?
+                            { valid: true, len: (d[0] << 8) | d[1], base: 2, start: 0, type: 'raw' } : { valid: false };
+
+                        var lnOff = sync + 2; if (lnOff + 1 >= d.length) return { valid: false };
+                        return { valid: true, len: (d[lnOff] << 8) | d[lnOff + 1], base: lnOff + 2, start: sync, type: 'long' };
+                    }
+
+                    var st = parseRecS(data);
+
+                    // Logic Setup
+                    var obLen = st.valid ? st.len : ((data[0] << 8) | data[1]);
+                    var baseStart = st.valid ? st.base : 2;
+
+                    // For Decompiler: Use slice including 02 80 Header if available
+                    // This ensures parseHeader in Main.js recognizes the record type.
+
+                    // Only apply header logic if Long Record found
+                    if (st.valid && st.type === 'long') {
+                        var sliceEnd = st.start + 4 + st.len; // 02 80 Len Len [Body...]
+                        if (sliceEnd <= data.length) {
+                            var objCode = data.slice(st.start, sliceEnd);
+                            try {
+                                if (window.OPLDecompiler) {
+                                    var decompiler = new window.OPLDecompiler();
+                                    var analysis = decompiler.getControlFlow(objCode, item.name);
+                                    item.instructions = analysis.instructions;
+                                    item.flow = analysis.flow;
+                                    item.varMap = analysis.varMap;
+                                }
+                            } catch (e) { }
+                        }
+                    } else if (obLen > 0 && data.length >= baseStart + obLen) {
+                        // Fallback (Raw/Legacy)
+                        // Try raw slice 
+                        var objCode = data.slice(baseStart, baseStart + obLen);
                         try {
-                            if (typeof OPLDecompiler !== 'undefined') {
-                                var decompiler = new OPLDecompiler();
-                                var analysisOptions = { procMap: globalProcMap };
+                            if (window.OPLDecompiler) {
+                                var decompiler = new window.OPLDecompiler();
+                                var analysis = decompiler.getControlFlow(objCode, item.name);
+                                item.instructions = analysis.instructions;
+                                item.flow = analysis.flow;
+                                item.varMap = analysis.varMap;
+                            }
+                        } catch (e) { /* Ignore parse errors */ }
+                    }
 
-                                // 1. Get Control Flow for Links (Calls/Access)
-                                var result = decompiler.getControlFlow(objCode, item.name, analysisOptions);
-                                var instructions = result.instructions || []; // Safe access
-                                var variableMap = result.varMap;
+                    // 2. Get Full Source for Code Viewer & Regex Extraction
+                    var fullCode = null;
+                    var lncode = obLen;
+                    var lnsrc = 0;
+                    var srcOffset = baseStart + lncode;
 
-                                // 2. Get Full Source for Code Viewer & Regex Extraction
-                                var fullCode = null;
-                                var lncode = (data[0] << 8) | data[1];
-                                var lnsrc = 0;
-                                if (data.length >= lncode + 4) {
-                                    lnsrc = (data[lncode + 2] << 8) | data[lncode + 3];
+                    if (data.length >= srcOffset + 2) {
+                        lnsrc = (data[srcOffset] << 8) | data[srcOffset + 1];
+                    }
+
+
+
+                    if (lnsrc > 0 && data.length >= srcOffset + 2 + lnsrc) {
+                        // Extract Source from Data
+                        var srcBytes = data.slice(srcOffset + 2, srcOffset + 2 + lnsrc);
+                        fullCode = "";
+                        for (var i = 0; i < srcBytes.length; i++) {
+                            var c = srcBytes[i];
+                            fullCode += (c === 0 ? '\n' : String.fromCharCode(c));
+                        }
+                    } else if (item.text) {
+                        fullCode = item.text; // Fallback to item.text if populated
+                    } else {
+                        // Fallback Decompilation
+                        if (typeof objCode !== 'undefined' && window.OPLDecompiler) {
+                            var d = (typeof decompiler !== 'undefined') ? decompiler : new window.OPLDecompiler();
+                            fullCode = d.decompile(objCode, item.name, {});
+                        }
+                    }
+
+                    var node = system.nodes[item.name.toUpperCase()];
+                    if (node) {
+                        node.code = fullCode;
+
+                        var hasSource = (lnsrc > 0 && data.length >= lncode + 4 + lnsrc) || (item.text ? true : false);
+
+                        if (!hasSource && item.varMap) {
+                            // Fallback: Use Decompiler Analysis for Params & Locals
+                            // 1. Params
+                            var paramsList = [];
+                            Object.keys(item.varMap).forEach(function (off) {
+                                var v = item.varMap[off];
+                                if (v.isParam) {
+                                    var type = 'Float';
+                                    var isArray = v.arrayLen > 0;
+                                    if (v.type === 2) { type = isArray ? 'StringArray' : 'String'; }
+                                    else if (v.type === 0) { type = isArray ? 'IntegerArray' : 'Integer'; }
+                                    else if (v.type === 1) { type = isArray ? 'FloatArray' : 'Float'; }
+                                    else if (v.type === 3) { type = 'IntegerArray'; }
+                                    else if (v.type === 4) { type = 'FloatArray'; }
+                                    else if (v.type === 5) { type = 'StringArray'; }
+                                    paramsList.push({ name: v.name, type: type });
                                 }
+                            });
+                            // Sort by P1, P2 etc.
+                            paramsList.sort(function (a, b) {
+                                var na = parseInt(a.name.replace(/^[P]/, ''));
+                                var nb = parseInt(b.name.replace(/^[P]/, ''));
+                                if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                                return a.name.localeCompare(b.name);
+                            });
+                            node.params = paramsList;
 
-                                if (lnsrc > 0 && data.length >= lncode + 4 + lnsrc) {
-                                    // Extract Source from Data
-                                    var srcBytes = data.slice(lncode + 4, lncode + 4 + lnsrc);
-                                    fullCode = "";
-                                    for (var i = 0; i < srcBytes.length; i++) {
-                                        var c = srcBytes[i];
-                                        fullCode += (c === 0 ? '\n' : String.fromCharCode(c));
+                            // 2. Locals
+                            var localCount = 0;
+                            Object.keys(item.varMap).forEach(function (off) {
+                                var v = item.varMap[off];
+                                if (v.isLocal && localCount < 50) {
+                                    var display = v.name;
+                                    if (v.arrayLen) {
+                                        display += "(" + v.arrayLen;
+                                        if (v.type === 2 && v.maxLen) display += "," + v.maxLen;
+                                        display += ")";
+                                    } else if (v.type === 2 && v.maxLen) {
+                                        display += "(" + v.maxLen + ")";
                                     }
-                                } else if (item.text) {
-                                    fullCode = item.text; // Fallback to item.text if populated
-                                } else {
-                                    fullCode = decompiler.decompile(objCode, item.name, analysisOptions); // Decompiled OPL
+                                    node.locals.push(display);
+                                    localCount++;
                                 }
+                            });
 
-                                var node = system.nodes[item.name.toUpperCase()];
-                                if (node) {
-                                    node.code = fullCode;
+                        } else {
+                            // Legacy: Extract from Text (Source or Decompiled Body)
+                            // Extract Params
+                            var procMatch = fullCode.match(/PROC\s+[A-Z0-9_$]+\s*:\s*\(([^)]*)\)/i);
+                            if (procMatch && procMatch[1]) {
+                                var rawParams = procMatch[1].split(',').map(s => s.trim()).filter(s => s);
+                                node.params = rawParams.map(p => {
+                                    var type = 'Float';
+                                    if (p.endsWith('$')) type = 'String';
+                                    else if (p.endsWith('%')) type = 'Integer';
 
-                                    var hasSource = (lnsrc > 0 && data.length >= lncode + 4 + lnsrc) || (item.text ? true : false);
-
-                                    if (!hasSource && variableMap) {
-                                        // Fallback: Use Decompiler Analysis for Params & Locals
-                                        // 1. Params
-                                        var paramsList = [];
-                                        Object.keys(variableMap).forEach(function (off) {
-                                            var v = variableMap[off];
-                                            if (v.isParam) {
-                                                var type = 'Float';
-                                                var isArray = v.arrayLen > 0;
-                                                if (v.type === 2) { type = isArray ? 'StringArray' : 'String'; }
-                                                else if (v.type === 0) { type = isArray ? 'IntegerArray' : 'Integer'; }
-                                                else if (v.type === 1) { type = isArray ? 'FloatArray' : 'Float'; }
-                                                else if (v.type === 3) { type = 'IntegerArray'; }
-                                                else if (v.type === 4) { type = 'FloatArray'; }
-                                                else if (v.type === 5) { type = 'StringArray'; }
-                                                paramsList.push({ name: v.name, type: type });
-                                            }
-                                        });
-                                        // Sort by P1, P2 etc.
-                                        paramsList.sort(function (a, b) {
-                                            var na = parseInt(a.name.replace(/^[P]/, ''));
-                                            var nb = parseInt(b.name.replace(/^[P]/, ''));
-                                            if (!isNaN(na) && !isNaN(nb)) return na - nb;
-                                            return a.name.localeCompare(b.name);
-                                        });
-                                        node.params = paramsList;
-
-                                        // 2. Locals
-                                        var localCount = 0;
-                                        Object.keys(variableMap).forEach(function (off) {
-                                            var v = variableMap[off];
-                                            if (v.isLocal && localCount < 50) {
-                                                var display = v.name;
-                                                if (v.arrayLen) {
-                                                    display += "(" + v.arrayLen;
-                                                    if (v.type === 2 && v.maxLen) display += "," + v.maxLen;
-                                                    display += ")";
-                                                } else if (v.type === 2 && v.maxLen) {
-                                                    display += "(" + v.maxLen + ")";
-                                                }
-                                                node.locals.push(display);
-                                                localCount++;
-                                            }
-                                        });
-
-                                    } else {
-                                        // Legacy: Extract from Text (Source or Decompiled Body)
-                                        // Extract Params
-                                        var procMatch = fullCode.match(/PROC\s+[A-Z0-9_$]+\s*:\s*\(([^)]*)\)/i);
-                                        if (procMatch && procMatch[1]) {
-                                            var rawParams = procMatch[1].split(',').map(s => s.trim()).filter(s => s);
-                                            node.params = rawParams.map(p => {
-                                                var type = 'Float';
-                                                if (p.endsWith('$')) type = 'String';
-                                                else if (p.endsWith('%')) type = 'Integer';
-
-                                                // Array Check
-                                                if (p.includes('(')) {
-                                                    if (p.includes('$')) type = 'StringArray';
-                                                    else if (p.includes('%')) type = 'IntegerArray';
-                                                    else type = 'FloatArray';
-                                                    // Strip dimensions for name matching
-                                                    p = p.substring(0, p.indexOf('('));
-                                                }
-                                                return { name: p, type: type };
-                                            });
-                                        }
-
-                                        // Extract Locals
-                                        // Fix: Stop capturing at ':', 'REM', or newline to avoid capturing subsequent commands
-                                        var localRegex = /LOCAL\s+([^:\r\n]+)/ig;
-                                        var localMatch;
-                                        while ((localMatch = localRegex.exec(fullCode)) !== null) {
-                                            // Robustness: Strip REM comments and spaces
-                                            var content = localMatch[1].replace(/REM\s+.*/i, "");
-                                            var locals = content.split(',').map(s => s.trim()).filter(s => s);
-                                            // Keep dimensions for display
-                                            node.locals = node.locals.concat(locals);
-                                        }
+                                    // Array Check
+                                    if (p.includes('(')) {
+                                        if (p.includes('$')) type = 'StringArray';
+                                        else if (p.includes('%')) type = 'IntegerArray';
+                                        else type = 'FloatArray';
+                                        // Strip dimensions for name matching
+                                        p = p.substring(0, p.indexOf('('));
                                     }
-                                }
-
-                                instructions.forEach(function (inst) {
-                                    // Find all calls in the instruction text (including within expressions)
-                                    // Find all calls in the instruction text (including within expressions)
-                                    // Modified: Capture identifier, handle optional colon manually.
-                                    var callRegex = /([A-Z0-9_$]+)/gi;
-                                    var match;
-                                    while ((match = callRegex.exec(inst.text)) !== null) {
-                                        var target = match[1].toUpperCase();
-
-                                        // Check following characters for Labels (::)
-                                        var idxAfter = match.index + match[0].length;
-                                        if (inst.text[idxAfter] === ':' && inst.text[idxAfter + 1] === ':') {
-                                            continue; // Ignore Labels (e.g. LABEL::)
-                                        }
-
-                                        if (system.nodes[target] && system.nodes[target].type === 'PROC') {
-                                            // Try to extract args for label
-                                            var args = '';
-                                            var afterColon = inst.text.substring(match.index + match[0].length).trim();
-                                            if (afterColon.startsWith('(')) {
-                                                // Simple attempt to get args: content inside first set of parens
-                                                // This is imperfect for nested calls but better than nothing
-                                                var closeParen = afterColon.indexOf(')');
-                                                if (closeParen !== -1) {
-                                                    args = afterColon.substring(1, closeParen);
-                                                }
-                                            }
-
-                                            var type = 'Float';
-                                            if (target.endsWith('$')) type = 'String';
-                                            else if (target.endsWith('%')) type = 'Integer';
-
-                                            /* Fix: Add explicit tooltip for Calls to avoid confusion */
-                                            var tooltip = item.name.toUpperCase() + " -> " + target;
-                                            system.links.push({ from: item.name.toUpperCase(), to: target, type: 'CALL', label: args, dataType: type, tooltip: tooltip });
-                                            if (system.nodes[item.name.toUpperCase()]) system.nodes[item.name.toUpperCase()].degree++;
-                                            system.nodes[target].degree++;
-                                        }
-                                    }
-
-
+                                    return { name: p, type: type };
                                 });
+                            }
 
-                                // 3. Consolidated Global Usage Logic
-                                // STAGE 1: Explicit Externals from Header (The Truth)
-                                // We rely SOLELY on the OPL Header Externals for this feature as requested.
+                            // Extract Locals
+                            // Fix: Stop capturing at ':', 'REM', or newline to avoid capturing subsequent commands
+                            var localRegex = /LOCAL\s+([^:\r\n]+)/ig;
+                            var localMatch;
+                            while ((localMatch = localRegex.exec(fullCode)) !== null) {
+                                // Robustness: Strip REM comments and spaces
+                                var content = localMatch[1].replace(/REM\s+.*/i, "");
+                                var locals = content.split(',').map(s => s.trim()).filter(s => s);
+                                // Keep dimensions for display
+                                node.locals = node.locals.concat(locals);
+                            }
+                        }
+                    }
 
-                                var headerUsage = decompiler.parseHeader(objCode, 0);
+                    if (item.instructions) instructions = item.instructions;
 
+                    instructions.forEach(function (inst) {
+                        // Find all calls in the instruction text (including within expressions)
+                        // Find all calls in the instruction text (including within expressions)
+                        // Modified: Capture identifier, handle optional colon manually.
+                        var callRegex = /([A-Z0-9_$]+)/gi;
+                        var match;
+                        while ((match = callRegex.exec(inst.text)) !== null) {
+                            var target = match[1].toUpperCase();
 
-                                if (headerUsage && headerUsage.externals) {
-                                    // DEBUG: Log externals found
+                            // Check following characters for Labels (::)
+                            var idxAfter = match.index + match[0].length;
+                            if (inst.text[idxAfter] === ':' && inst.text[idxAfter + 1] === ':') {
+                                continue; // Ignore Labels (e.g. LABEL::)
+                            }
 
-
-                                    headerUsage.externals.forEach(function (ext) {
-                                        var target = ext.name.toUpperCase();
-                                        var procName = item.name.toUpperCase();
-
-                                        // 1. Ensure Global Node Exists
-                                        if (!system.nodes[target]) {
-                                            system.nodes[target] = {
-                                                type: 'GLOBAL',
-                                                packIndex: pIdx,
-                                                name: ext.name,
-                                                degree: 0,
-                                                isImplicit: true
-                                            };
-                                            // Add to Pack's Global Pool if missing
-                                            if (system.packs[pIdx] && system.packs[pIdx].globals.indexOf(ext.name) === -1) {
-                                                system.packs[pIdx].globals.push(ext.name);
-                                            }
-                                        }
-
-                                        // 2. Create GLOBAL_USAGE Link
-                                        var linkExists = system.links.some(l => l.from === target && l.to === procName && l.type === 'GLOBAL_USAGE');
-
-                                        if (!linkExists) {
-                                            var type = 'Float';
-                                            if (target.endsWith('$')) type = 'String';
-                                            else if (target.endsWith('%')) type = 'Integer';
-
-
-
-                                            system.links.push({
-                                                from: target,
-                                                to: procName,
-                                                type: 'GLOBAL_USAGE',
-                                                dataType: type,
-                                                tooltip: "Global " + target + " used by " + procName,
-                                                isImplicit: true
-                                            });
-
-                                            // Increment degrees
-                                            if (system.nodes[target]) system.nodes[target].degree++;
-                                            if (system.nodes[procName]) system.nodes[procName].degree++;
-                                        }
-                                    });
+                            if (system.nodes[target] && system.nodes[target].type === 'PROC') {
+                                // Try to extract args for label
+                                var args = '';
+                                var afterColon = inst.text.substring(match.index + match[0].length).trim();
+                                if (afterColon.startsWith('(')) {
+                                    // Simple attempt to get args: content inside first set of parens
+                                    // This is imperfect for nested calls but better than nothing
+                                    var closeParen = afterColon.indexOf(')');
+                                    if (closeParen !== -1) {
+                                        args = afterColon.substring(1, closeParen);
+                                    }
                                 }
 
-                                // STAGE 2: Variable Map - Removed for Links
-                                if (variableMap) {
-                                    // No-op
+                                var type = 'Float';
+                                if (target.endsWith('$')) type = 'String';
+                                else if (target.endsWith('%')) type = 'Integer';
+
+                                /* Fix: Add explicit tooltip for Calls to avoid confusion */
+                                var tooltip = item.name.toUpperCase() + " -> " + target;
+                                system.links.push({ from: item.name.toUpperCase(), to: target, type: 'CALL', label: args, dataType: type, tooltip: tooltip });
+                                if (system.nodes[item.name.toUpperCase()]) system.nodes[item.name.toUpperCase()].degree++;
+                                system.nodes[target].degree++;
+                            }
+                        }
+
+
+                    });
+
+                    // 3. Consolidated Global Usage Logic
+                    // STAGE 1: Explicit Externals from Header (The Truth)
+                    // We rely SOLELY on the OPL Header Externals for this feature as requested.
+
+                    var headerUsage = null;
+                    if (typeof decompiler !== 'undefined' && typeof objCode !== 'undefined') {
+                        headerUsage = decompiler.parseHeader(objCode, 0);
+                    }
+
+
+                    if (headerUsage && headerUsage.externals) {
+                        // DEBUG: Log externals found
+
+
+                        headerUsage.externals.forEach(function (ext) {
+                            var target = ext.name.toUpperCase();
+                            var procName = item.name.toUpperCase();
+
+                            // 1. Ensure Global Node Exists
+                            if (!system.nodes[target]) {
+                                system.nodes[target] = {
+                                    type: 'GLOBAL',
+                                    packIndex: pIdx,
+                                    name: ext.name,
+                                    label: ext.name, // Fix: Ensure label exists for display
+                                    degree: 0,
+                                    isImplicit: true
+                                };
+                                // Add to Pack's Global Pool if missing
+                                if (system.packs[pIdx] && system.packs[pIdx].globals.indexOf(ext.name) === -1) {
+                                    system.packs[pIdx].globals.push(ext.name);
                                 }
                             }
-                        } catch (e) { console.error("Visualizer Error:", e); }
+
+                            // 2. Create GLOBAL_USAGE Link
+                            var linkExists = system.links.some(l => l.from === target && l.to === procName && l.type === 'GLOBAL_USAGE');
+
+                            if (!linkExists) {
+                                var type = 'Float';
+                                if (target.endsWith('$')) type = 'String';
+                                else if (target.endsWith('%')) type = 'Integer';
+
+
+
+                                system.links.push({
+                                    from: target,
+                                    to: procName,
+                                    type: 'GLOBAL_USAGE',
+                                    dataType: type,
+                                    tooltip: "Global " + target + " used by " + procName,
+                                    isImplicit: true
+                                });
+
+                                // Increment degrees
+                                if (system.nodes[target]) system.nodes[target].degree++;
+                                if (system.nodes[procName]) system.nodes[procName].degree++;
+                            }
+                        });
                     }
+
+
+                    // STAGE 2: Explicit Globals from Header (Definitions)
+                    if (headerUsage && headerUsage.globals) {
+                        headerUsage.globals.forEach(function (g) {
+                            var gName = g.name.toUpperCase();
+                            var procName = item.name.toUpperCase();
+
+                            // 1. Ensure Global Node Exists (Definition)
+                            if (!system.nodes[gName]) {
+                                var displayName = g.name;
+                                // Reconstruct Display Name logic locally for robustness
+                                if (g.arrayLen) {
+                                    if (g.name.endsWith('$') && g.maxLen) displayName += "(" + g.arrayLen + "," + g.maxLen + ")";
+                                    else displayName += "(" + g.arrayLen + ")";
+                                } else if (g.name.endsWith('$') && g.maxLen) {
+                                    displayName += "(" + g.maxLen + ")";
+                                }
+
+                                system.nodes[gName] = {
+                                    type: 'GLOBAL',
+                                    packIndex: pIdx,
+                                    name: g.name,
+                                    label: displayName,
+                                    degree: 0,
+                                    addr: g.addr
+                                };
+                                if (system.packs[pIdx] && system.packs[pIdx].globals.indexOf(g.name) === -1) {
+                                    system.packs[pIdx].globals.push(g.name);
+                                }
+                            }
+
+                            // 2. Register Ownership/Definition on Procedure Node
+                            var procNode = system.nodes[procName];
+                            if (procNode) {
+                                if (!procNode.globals) procNode.globals = [];
+                                if (procNode.globals.indexOf(g.name) === -1) {
+                                    procNode.globals.push(g.name);
+                                }
+                            }
+                            // Note: ACCESS link will be created by Post-Process based on procNode.globals list
+                        });
+                    }
+
+
                 }
             });
         });
 
         // 3. Post-Process: Sync Links and List
-        // 3. Post-Process: Sync Links and List
-        // REMOVED: Do not auto-add implicit globals to procedure's global list. 
-        // We want to distinguish them visually via the new link type.
-        /*
+        // Restore: Add detected global access to procedure's global list for display in the card
         system.links.forEach(function (link) {
             if (link.type === 'ACCESS') {
                 var procNode = system.nodes[link.from];
-                if (procNode && procNode.globals) {
+                if (procNode) {
+                    if (!procNode.globals) procNode.globals = [];
                     if (procNode.globals.indexOf(link.to) === -1) {
                         procNode.globals.push(link.to);
                     }
                 }
             }
         });
-        */
 
         // Ensure reverse sync (List -> Link)
         Object.values(system.nodes).forEach(function (node) {
@@ -729,10 +830,11 @@ var CodeVisualizer = (function () {
                         h: h,
                         type: 'GLOBAL',
                         id: gName.toUpperCase(),
-                        label: nodeData ? nodeData.label : gName,
+                        label: (nodeData && nodeData.label && nodeData.label !== 'undefined') ? nodeData.label : gName, // Robust fallback
                         code: null,
                         packName: pack.name, // Added for collapse filtering
-                        collapsed: isCollapsed
+                        collapsed: isCollapsed,
+                        rank: gCol // Assign Rank based on Column for Routing Collision Detection
                     };
                 });
             }
@@ -844,7 +946,8 @@ var CodeVisualizer = (function () {
                             id: dfName.toUpperCase(),
                             label: fileNode.label,
                             packName: pack.name, // Added for collapse filtering
-                            collapsed: collapsedState[dfName.toUpperCase()]
+                            collapsed: collapsedState[dfName.toUpperCase()],
+                            rank: col // Assign Rank based on Column
                         };
 
                         // Layout Records (Inside the File Card visually)
@@ -861,7 +964,7 @@ var CodeVisualizer = (function () {
                                     label: data.nodes[recName].label,
                                     parent: dfName.toUpperCase(),
                                     packName: pack.name, // Added for collapse filtering
-                                    rank: 999 // Ensure it passes any logic filtering
+                                    rank: col // Inherit Rank from File
                                 };
                             });
                         }
@@ -1250,6 +1353,18 @@ var CodeVisualizer = (function () {
                     .link.access { stroke-dasharray: 3,3; stroke-opacity: 0.5; }
                     .link.global_usage { stroke-dasharray: 3,3; stroke-opacity: 0.5; }
                     
+                    /* Highlight Effect */
+                    .link.highlighted {
+                        stroke-width: 3 !important;
+                        stroke-opacity: 1 !important;
+                        animation: pulse-path 0.33s ease-in-out infinite;
+                    }
+                    @keyframes pulse-path {
+                        0% { stroke-opacity: 1; stroke-width: 3; filter: drop-shadow(0 0 2px currentColor); }
+                        50% { stroke-opacity: 1; stroke-width: 5; filter: drop-shadow(0 0 6px currentColor); }
+                        100% { stroke-opacity: 1; stroke-width: 3; filter: drop-shadow(0 0 2px currentColor); }
+                    }
+                    
                     .link-label {
                         fill: var(--text-color);
                         font-size: 10px;
@@ -1576,7 +1691,8 @@ var CodeVisualizer = (function () {
             var obstacles = [];
             for (var key in layout.nodes) {
                 var n = layout.nodes[key];
-                if (n.packName === currentPackName && n.type === 'PROC' && n.rank >= startRank && n.rank <= endRank) {
+                // Check ALL node types for collisions (PROC, GLOBAL, DATA_FILE, etc.)
+                if (n.packName === currentPackName && n.rank >= startRank && n.rank <= endRank) {
                     obstacles.push({ y1: n.y, y2: n.y + n.h });
                 }
             }
@@ -1613,6 +1729,25 @@ var CodeVisualizer = (function () {
                 return (Math.abs(topRoute - targetY) < Math.abs(bottomRoute - targetY)) ? topRoute : bottomRoute;
             }
             return targetY;
+        }
+
+        // Helper: Find maximum Right X (x + w) for nodes in a rank range
+        // Used to prevent vertical path segments from cutting through wide nodes
+        function findMaxRightX(layout, startRank, endRank, currentPackName) {
+            var maxX = 0;
+            // Normalize Ranks
+            var r1 = Math.min(startRank, endRank);
+            var r2 = Math.max(startRank, endRank);
+
+            for (var key in layout.nodes) {
+                var n = layout.nodes[key];
+                // Check ALL node types (PROC, GLOBAL, etc) to ensure we route around them
+                if (n.packName === currentPackName && n.rank >= r1 && n.rank <= r2) {
+                    var rightEdge = n.x + n.w;
+                    if (rightEdge > maxX) maxX = rightEdge;
+                }
+            }
+            return maxX;
         }
 
         // Helper: Get vertical center of a section relative to node Y
@@ -1934,9 +2069,12 @@ var CodeVisualizer = (function () {
                         if (link.type === 'CALL') {
                             var rankDiff = dst.rank - src.rank;
                             if (x2 > x1 && rankDiff > 1) {
-                                // Smart Step-Over
+                                // Smart Step-Over (Forward, skipping nodes)
                                 var safeY = findHorizontalGap(layout, y1, src.rank + 1, dst.rank - 1, src.packName);
-                                var midX1 = x1 + 20; // Step out
+
+                                // Calculate Safe Vertical Channel (Right Gutter)
+                                var maxX = findMaxRightX(layout, src.rank, dst.rank, src.packName);
+                                var midX1 = maxX + 25; // 25px buffer relative to WIDEST node
                                 var midX2 = x2 - 20; // Step in
 
                                 points.push({ x: midX1, y: y1 });
@@ -1944,20 +2082,34 @@ var CodeVisualizer = (function () {
                                 points.push({ x: midX2, y: safeY });
                                 points.push({ x: midX2, y: y2 });
 
-                            } else if (x2 > x1) {
-                                // Direct forward
+                            } else if (x2 > x1 && rankDiff === 1) {
+                                // Direct neighbor forward (simple dogleg)
                                 var midX = (x1 + x2) / 2;
+                                // Verify midX isn't inside src or dst (unlikely given x2 > x1 structure, but safe check)
+                                if (midX < x1 + 10) midX = x1 + 10;
+
                                 points.push({ x: midX, y: y1 });
                                 points.push({ x: midX, y: y2 });
                             } else {
-                                // Backwards (Cycle)
-                                var midX = x1 + 20;
-                                var loopY = y1 + 100;
+                                // Backwards (Cycle) or Local
+                                // Route: Out Right -> Down (Safe) -> Left -> Up -> In Left
+
+                                // 1. Calculate safe channel to the right of ALL nodes involved in the loop
+                                var maxX = findMaxRightX(layout, Math.min(src.rank, dst.rank), Math.max(src.rank, dst.rank), src.packName);
+                                var midX = maxX + 30; // 30px buffer for Loop
+
+                                // 2. Calculate safe bottom turning point
+                                // Instead of arbitrary +100, find gap below current node
+                                var safeLoopY = findHorizontalGap(layout, y1 + 50, src.rank, src.rank + 1, src.packName);
+                                // Ensure it's at least below the current node
+                                if (safeLoopY < y1 + 20) safeLoopY = y1 + 40;
+
                                 points.push({ x: midX, y: y1 });
-                                points.push({ x: midX, y: loopY });
-                                points.push({ x: x2 - 20, y: loopY });
+                                points.push({ x: midX, y: safeLoopY });
+                                points.push({ x: x2 - 20, y: safeLoopY });
                                 points.push({ x: x2 - 20, y: y2 });
                             }
+
                             points.push({ x: x2 - 20, y: y2 });
                         } else if (link.type === 'ACCESS') {
                             // ACCESS (Global) - Left Entry Strategy
@@ -1991,16 +2143,16 @@ var CodeVisualizer = (function () {
                                 busY = (logicCard.y + logicCard.h + globalPool.y) / 2;
                             }
 
-                            var leftGutterX = x2 - 25; // 25px into margin
-                            var rightExitX = leftGutterX; // Align perfectly
+                            var leftGutterX = x2 - 25; // 25px into margin (Destination Entry Channel)
+                            var stepOutX = x1 + 20;    // Step out to the RIGHT of the Global Node
 
                             points = [];
-                            points.push({ x: x1, y: y1 });             // Start (Global Right)
-                            points.push({ x: rightExitX, y: y1 });     // Out Right
-                            points.push({ x: rightExitX, y: busY });   // Vertical to Bus
-                            points.push({ x: leftGutterX, y: busY });  // Horizontal to Left Gutter (Redundant if aligned)
-                            points.push({ x: leftGutterX, y: y2 });    // Vertical to Proc Y
-                            points.push({ x: x2, y: y2 });             // In Right to Proc Left
+                            points.push({ x: x1, y: y1 });             // Start (Global Right Edge)
+                            points.push({ x: stepOutX, y: y1 });       // 1. Exit Right (Clear Node)
+                            points.push({ x: stepOutX, y: busY });     // 2. Vertical to Bus
+                            points.push({ x: leftGutterX, y: busY });  // 3. Horizontal along Bus to Detination Gutter
+                            points.push({ x: leftGutterX, y: y2 });    // 4. Vertical to Proc Y
+                            points.push({ x: x2, y: y2 });             // 5. Enter Procedure from Left
 
                             // Filter duplicate points to prevent zero-length segments causing NaN in drawOrthogonalPath
                             points = points.filter(function (p, i, a) {
@@ -2025,6 +2177,7 @@ var CodeVisualizer = (function () {
 
                         path.setAttribute("class", "link " + link.type.toLowerCase());
                         path.style.stroke = strokeColor;
+                        path.style.color = strokeColor; // For currentColor in drop-shadow
                         path.setAttribute("stroke-width", "1.5");
                         path.setAttribute("d", d);
                         path.setAttribute("fill", "none");
@@ -2040,6 +2193,20 @@ var CodeVisualizer = (function () {
                         var title = doc.createElementNS(svgNS, "title");
                         title.textContent = link.to + ":(" + (link.label || "") + ")";
                         pathHit.appendChild(title);
+
+                        /* Interactive Highlight */
+                        pathHit.addEventListener('click', function (e) {
+                            e.stopPropagation();
+                            // Toggle class on visible path
+                            path.classList.add('highlighted');
+
+                            // Remove after 2 seconds
+                            if (path._timeout) clearTimeout(path._timeout);
+                            path._timeout = setTimeout(function () {
+                                path.classList.remove('highlighted');
+                                path._timeout = null;
+                            }, 2000);
+                        });
 
                         gLink.appendChild(path);
                         gLink.appendChild(pathHit);

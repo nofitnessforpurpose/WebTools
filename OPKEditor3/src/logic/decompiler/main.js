@@ -136,9 +136,18 @@
 
 
                 if (op === 0x7D) {
-                    // Manual decode for PROC
-                    const args = this.instHandler.getArgs(codeBlock, pc, def);
-                    text = `${args.params.name}:`;
+                    // Manual decode for PROC (Procedure Call/Definition)
+                    // We need to extract the name so CodeVisualizer can link it.
+                    try {
+                        const args = this.instHandler.getArgs(codeBlock, pc, def);
+                        if (args && args.params && args.params.name) {
+                            text = `${args.params.name}:`;
+                        } else {
+                            text = "PROC:";
+                        }
+                    } catch (e) {
+                        text = "PROC:?";
+                    }
                 } else {
                     // Check if it's a function call (Pushes ?)
                     // If so, we might miss it if we don't decode.

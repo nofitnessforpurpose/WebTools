@@ -434,6 +434,7 @@ var DialogManager = {
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-grouprecords"> Group Data Records under Data Files</label></div>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-collapsefiles"> Auto-collapse Data Files</label></div>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-hex-view"> Enable Hex Dump Window</label></div>
+                        <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-restorepacks"> Auto-Restore Opened Packs on Startup</label></div>
                     </div>
                 </div>
                 <hr style="margin: 15px 0; border: 0; border-top: 1px solid var(--border-color);">
@@ -450,7 +451,6 @@ var DialogManager = {
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-show-toolbar"> Show Icon Toolbar</label></div>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-show-menubar"> Show File/Help Menubar</label></div>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-splash"> Show Splash Screen on Startup</label></div>
-                        <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-restorepacks"> Auto-Restore Opened Packs on Startup</label></div>
                     </div>
                     <div>
                         <h4>Icons</h4>

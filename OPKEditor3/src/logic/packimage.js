@@ -95,7 +95,7 @@ PackImage.prototype = {
 
          if (this.items[0].data[0] === 0x7A) {
             var sc = this.items[0].data[1];
-            if (sc >= 1 && sc <= 8) { // Valid Size Codes 1-8 (8KB to 1MB etc)
+            if (sc >= 1 && sc <= 9) { // Valid Size Codes 1-9 (8KB to 2MB)
                // Size = 8KB * 2^(sc-1)
                targetSize = 8192 * Math.pow(2, sc - 1);
                hasFixedSize = true;
