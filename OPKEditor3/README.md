@@ -34,7 +34,7 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 ## Technical Details
 
 *   **Architecture**: Client-side JavaScript application (no server required).
-*   **Editor**: Custom-built `CodeEditor` component replacing Monaco Editor for lightweight, specific OPL support.
+*   **Editor**: Custom-built `CodeEditor` component for lightweight, specific OPL support.
 *   **Theming**: CSS Variable-based theming system managed by `ThemeManager`.
 *   **Storage**: `OptionsManager` persists user preferences to `localStorage`.
 
@@ -44,6 +44,7 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 *   Icons by **Font Awesome**
 *   Implemented by **Antigravity**
 *   Re-imagined by NFfP
+
 
 
 
