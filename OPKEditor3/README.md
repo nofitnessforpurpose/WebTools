@@ -40,10 +40,11 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 
 ## Credits
 
-*   Original OPK Editor by **Jaap Scherphuis**.
+*   Original OPK Editor by **Jaap Scherphuis**
 *   Icons by **Font Awesome**
 *   Implemented by **Antigravity**
 *   Re-imagined by NFfP
+
 
 
 
