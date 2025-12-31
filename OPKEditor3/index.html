@@ -22,7 +22,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Psion OPK Editor v03.00.10</title>
+    <title>Psion OPK Editor v03.00.11</title>
 
     <!-- Stylesheets with cache busting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
@@ -162,12 +162,12 @@
 
     <!-- Scripts -->
     <!-- Logic Scripts -->
-    <script src="src/core/Constants.js"></script>
+    <script src="src/core/Constants.js?v=03.00.11"></script>
     <script src="src/core/AppStore.js"></script>
     <script src="src/logic/binaryfile.js"></script>
     <script src="src/logic/checksums.js"></script>
     <script src="src/logic/intelhex.js"></script>
-    <script src="src/logic/packimage.js?v=size_fix_2"></script>
+    <script src="src/logic/packimage.js?v=std_config_fix"></script>
     <script src="src/logic/decompiler/constants.js?v=fix_conv_2"></script>
     <script src="src/logic/decompiler/system_constants.js"></script>
     <script src="src/logic/decompiler/stack.js"></script>
@@ -180,7 +180,7 @@
     <script src="src/ui/editors/BaseEditor.js?v=cb1"></script>
     <script src="src/ui/editors/HexEditor.js?v=cb1"></script>
     <script src="src/ui/editors/BlockFileEditor.js?v=cb1"></script>
-    <script src="src/ui/editors/HeaderEditor.js?v=cb1"></script>
+    <script src="src/ui/editors/HeaderEditor.js?v=refactor_header_style_complete"></script>
     <script src="src/ui/editors/HeaderlessFileEditor.js?v=cb1"></script>
     <script src="src/ui/editors/DataFileEditor.js?v=cb1"></script>
     <script src="src/ui/editors/CommsSetupEditor.js?v=cb1"></script>
@@ -194,7 +194,7 @@
 
     <script src="src/ui/editors/RecordEditor.js?v=cb1"></script>
     <script src="src/ui/editors/MemoryMapEditor.js?v=cb1"></script>
-    <script src="src/ui/managers/optionsmanager.js"></script>
+    <script src="src/ui/managers/optionsmanager.js?v=03.00.11"></script>
     <script src="src/ui/managers/thememanager.js"></script>
     <script src="src/ui/managers/DialogManager.js?v=force_1"></script>
     <script src="src/ui/managers/tooltipmanager.js"></script>
@@ -205,9 +205,9 @@
     <script src="src/ui/components/codeeditor.js"></script>
     <script src="src/ui/components/modal.js"></script>
     <script src="src/ui/components/dragdroplist.js"></script>
-    <script src="src/ui/components/MemoryMap.js?v=fix_size_exp_1"></script>
+    <script src="src/ui/components/MemoryMap.js?v=fix_canvas_crash"></script>
     <script src="src/ui/components/HexViewer.js"></script>
-    <script src="src/ui/components/CodeVisualizer.js?v=debug45"></script>
+    <script src="src/ui/components/CodeVisualizer.js?v=fix_routing_proc_scope"></script>
     <script src="src/ui/components/PackContents.js?v=type_fix_1"></script>
     <script src="src/ui/components/OPLCommandData.js"></script>
     <script src="src/ui/components/DecompilerLogWindow.js?v=logfix1"></script>
@@ -215,7 +215,7 @@
     <script src="src/ui/components/SpreadsheetDebugWindow.js"></script>
     <script src="src/ui/components/OPLCommandReference.js"></script>
 
-    <script src="src/ui/controllers/opkedit.js?v=placement_fix_1"></script>
+    <script src="src/ui/controllers/opkedit.js?v=03.00.11"></script>
     <script>
         // Controller will handle initialization
     </script>
