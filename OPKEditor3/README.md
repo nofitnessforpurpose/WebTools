@@ -7,12 +7,15 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 *   **Modern UI**: A completely redesigned interface with a dark/light theme system.
 *   **Custom Code Editor**: A built-in code editor for OPL procedures with:
     *   Syntax Highlighting (OPL keywords, strings, comments)
-    *   Code Folding (collapse PROC, IF, DO, WHILE blocks)
+    *   Code Folding (collapse IF, DO, WHILE blocks)
     *   Line Numbers
-*   **Theme Support**: Switch between Dark and Light themes via the Options menu.
+*   **Pack Map**: Visual pack layout tool
+*   **Visualiser**: Procedure & Global Visualisation
+*   **Theme Support**: Switch between themes via the Options menu, also with custom themes support.
 *   **Pack Management**: Create new packs, open existing ones (.opk, .hex, .bin), and save changes.
 *   **Item Management**: Add, delete, and import items (procedures, data files, notepad entries).
 *   **Intel HEX Export**: Export packs to Intel HEX format for burning to EPROMs.
+*   **Chrome, Firefox & IE**: Supports multiple browsers.
 
 ## Usage
 
@@ -26,7 +29,7 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 5.  **Import Items**: Click "Import Item" to load .opl, .odb, or binary files.
 6.  **Save**: Click "Save" to download the modified .opk file.
 7.  **Options**: Click "Options" to configure the editor (Theme, Line Numbers, Code Folding).
-8.  ** Drag and drop pack files directly into the Pack Contents view.
+8.  **Drag and drop**: Supports dropping of pack files directly into the Pack Contents view.
 
 ## Technical Details
 
@@ -39,6 +42,11 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 
 *   Original OPK Editor by **Jaap Scherphuis**.
 *   Icons by **Font Awesome**
-*   Re-imagined by NFfP Implemented by **Antigravity**.
+*   Implemented by **Antigravity**
+*   Re-imagined by NFfP
+
+
+
+
 
 
