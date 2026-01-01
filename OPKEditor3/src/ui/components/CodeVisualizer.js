@@ -143,7 +143,9 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                 // Extract Globals from OPL Header
                 if (item.type === 3) {
                     if (item.child && item.child.child && item.child.child.data) {
-                        var data = item.child.child.data;
+                        // Fix: Use getFullData() on the Type 0 (Long Record) parent to include the 02 80 header
+                        // item.child is the Type 0 record (Header). item.child.child is the Body.
+                        var data = (item.child.getFullData) ? item.child.getFullData() : item.child.child.data;
 
                         // Strict Parsing Helper (Inline/Scope)
                         function parseRec(d) {
@@ -151,7 +153,8 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                             var sync = -1; for (var i = off; i < d.length - 1; i++) { if (d[i] === 0x02 && d[i + 1] === 0x80) { sync = i; break; } }
                             if (sync === -1) return (d.length >= 2 && (2 + ((d[0] << 8) | d[1]) <= d.length)) ? { valid: true, off: 0, len: (d[0] << 8) | d[1], base: 0 } : { valid: false };
                             var lnOff = sync + 2; if (lnOff + 1 >= d.length) return { valid: false };
-                            return { valid: true, off: lnOff, len: (d[lnOff] << 8) | d[lnOff + 1], base: lnOff };
+                            // Changed: Return sync as start offset (to include header)
+                            return { valid: true, off: lnOff, len: (d[lnOff] << 8) | d[lnOff + 1], base: lnOff, sync: sync };
                         }
 
                         if (data.length >= 2) {
@@ -159,11 +162,16 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                             var obLen = struct.valid ? struct.len : 0;
                             var base = struct.valid ? struct.base : 2;
 
-                            if (obLen > 0 && data.length >= base + obLen) {
-                                var objCode = data.slice(base, base + obLen);
+                            // Fix: Include '02 80' header in slice if valid container found
+                            var startOff = (struct.valid && struct.sync !== undefined) ? struct.sync : base;
+                            var totalLen = (struct.valid && struct.sync !== undefined) ? (obLen + 2) : obLen;
+
+                            if (obLen > 0 && data.length >= startOff + totalLen) {
+                                var objCode = data.slice(startOff, startOff + totalLen);
                                 try {
                                     if (typeof OPLDecompiler !== 'undefined') {
                                         var decompiler = new OPLDecompiler();
+                                        // objCode now includes '02 80' so parseHeader handles alignment correctly
                                         var header = decompiler.parseHeader(objCode, 0);
                                         // Run variable scan to populate inferred dimensions/lengths
                                         decompiler.scanVariables(objCode, header);
@@ -233,7 +241,8 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
 
                 var instructions = []; // Ensure defined
                 if (item.child && item.child.child && item.child.child.data) {
-                    var data = item.child.child.data;
+                    // Fix: Use getFullData() to ensure OPLDecompiler receives the full Long Record (Header + Body)
+                    var data = (item.child.getFullData) ? item.child.getFullData() : item.child.child.data;
 
                     // Helper: Detect Endianness / Structure (Strict)
                     // Updated 2025-12-29 to return start index for header inclusion.
@@ -1032,18 +1041,63 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
     var childWindow = null;
     var lastData = null; // Store data for delayed render
 
-    function handleChildReady(win) {
-        // 
+    function handleChildReady(winUrlOrMsg) {
+        // Support both Direct Window Reference (Legacy/Firefox) and Message Event (Chrome)
+        // If passed a Window object:
+        if (winUrlOrMsg && winUrlOrMsg.postMessage) {
+            childWindow = winUrlOrMsg;
+        }
+        // If passed an Event object (from message listener):
+        else if (winUrlOrMsg && winUrlOrMsg.source) {
+            childWindow = winUrlOrMsg.source;
+        }
 
-        childWindow = win;
-        setupChildWindow(win);
-        if (lastData) {
-            // Delay slightly to ensure DOM is digested
-            setTimeout(function () {
-                renderSystemMap(lastData, win);
-            }, 100);
+        if (childWindow) {
+            // setupChildWindow(childWindow); // REMOVED: Parent cannot access Child DOM in Chrome
+
+            // Send Data Back
+            if (lastData) {
+                // Delay slightly to ensure DOM is digested
+                setTimeout(function () {
+                    // Try PostMessage First (Secure/Chrome)
+                    childWindow.postMessage({ type: 'RENDER_GRAPH', data: lastData }, '*');
+
+                    // Fallback to Direct Access (if same origin and allowed)
+                    try {
+                        if (childWindow.renderSystemMap) {
+                            childWindow.renderSystemMap(lastData, childWindow);
+                        }
+                    } catch (e) { /* Expected in Chrome local file */ }
+                }, 100);
+            }
         }
     }
+
+    // --- Message Listner Upgrade ---
+    function setupMessageListeners() {
+        window.addEventListener('message', function (event) {
+            if (!event.data) return;
+
+            // Parent Logic: Receive Ready signal from Child
+            if (event.data.type === 'VISUALIZER_READY') {
+                handleChildReady(event);
+            }
+
+            // Child Logic: Receive Graph Data from Parent
+            if (event.data.type === 'RENDER_GRAPH') {
+                var data = event.data.data;
+                // We are the child. We need to render.
+                // renderSystemMap expects (data, win). 'win' is us (window).
+                if (window.document.getElementById('graph-container')) {
+                    renderSystemMap(data, window);
+                } else {
+                    // Stash it?
+                    // CodeVisualizer logic usually assumes we ARE the visualizer window if we have graph-container.
+                }
+            }
+        });
+    }
+    setupMessageListeners();
 
     function openWindow() {
         var width = 1400;
@@ -1068,7 +1122,8 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
         return win;
     }
 
-    function setupChildWindow(win) {
+    function initChildEnvironment() {
+        var win = window;
         if (!win || !win.document) return;
 
         // 1. Calculate Theme Vars
@@ -2701,7 +2756,8 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
         showSystemMap: showSystemMap,
         childWindowReady: function (win) {
             handleChildReady(win);
-        }
+        },
+        initChildEnvironment: initChildEnvironment
     };
 
 })();

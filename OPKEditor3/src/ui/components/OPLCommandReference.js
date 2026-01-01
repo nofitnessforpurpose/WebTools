@@ -20,12 +20,9 @@ class OPLCommandReference {
         const win = window.open("index.html?mode=child&feature=command_ref", "OPLCommandRef", `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`);
 
         if (win) {
-            // If window is already open/loaded, render immediately
-            if (win.document && win.document.readyState === 'complete' && win.document.body.classList.contains('child-window')) {
-                this.render(win);
-            }
             win.focus();
         }
+
     }
 
     static childWindowReady(win) {

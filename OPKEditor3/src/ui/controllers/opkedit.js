@@ -2463,17 +2463,28 @@ function initChildMode(feature) {
 
    if (feature === 'visualizer') {
       document.title = "Code Visualizer";
-      // 
-      // 
+      // Setup Visualizer DOM (Chrome Safe)
+      if (CodeVisualizer && CodeVisualizer.initChildEnvironment) {
+         CodeVisualizer.initChildEnvironment();
+      }
 
 
       // Notify opener that we are ready
-      if (window.opener && window.opener.CodeVisualizer && window.opener.CodeVisualizer.childWindowReady) {
-         window.opener.CodeVisualizer.childWindowReady(window);
+      // Chrome Fix: Use postMessage instead of direct access
+      if (window.opener) {
+         window.opener.postMessage({ type: 'VISUALIZER_READY' }, '*');
+
+         // Legacy Fallback (Firefox / Non-Blocked)
+         try {
+            if (window.opener.CodeVisualizer && window.opener.CodeVisualizer.childWindowReady) {
+               window.opener.CodeVisualizer.childWindowReady(window);
+            }
+         } catch (e) { /* Expected */ }
       }
    } else if (feature === 'command_ref') {
-      if (window.opener && window.opener.OPLCommandReference && window.opener.OPLCommandReference.childWindowReady) {
-         window.opener.OPLCommandReference.childWindowReady(window);
+      if (typeof OPLCommandReference !== 'undefined') {
+         new OPLCommandReference().render(window);
       }
    }
+
 }

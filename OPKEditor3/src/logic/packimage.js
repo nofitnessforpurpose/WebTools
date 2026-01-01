@@ -54,7 +54,7 @@ function PackImage(inputData, sizeCode) {
    this.items.push(terminator);
 
    // merge related items
-   for (var ix = this.items.length - 1; ix > 1; ix--) {
+   for (var ix = this.items.length - 1; ix > 0; ix--) {
       var tp1 = this.items[ix - 1].type;
       var tp2 = this.items[ix].type;
       if (tp1 >= 2 && tp1 <= 15 && tp2 == 0) {

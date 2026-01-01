@@ -769,7 +769,22 @@
                 // If we are assigning to a float, and the value is explicitly cast with FLT(),
                 // we can hide it because OPL does implicit casting.
                 if (op === 0x80 && typeof val === 'string' && val.startsWith('FLT(') && val.endsWith(')')) {
-                    val = val.slice(4, -1);
+                    // Check if parens are balanced for the *entire* content to ensure it's a wrapper
+                    let depth = 1;
+                    let isWrapped = true;
+                    // Start after 'FLT(' (index 4) and go until before last ')'
+                    for (let i = 4; i < val.length - 1; i++) {
+                        if (val[i] === '(') depth++;
+                        else if (val[i] === ')') depth--;
+
+                        if (depth === 0) {
+                            isWrapped = false;
+                            break;
+                        }
+                    }
+                    if (isWrapped) {
+                        val = val.slice(4, -1);
+                    }
                 }
 
                 // Fix for 0 = MODTYPE$() issue
