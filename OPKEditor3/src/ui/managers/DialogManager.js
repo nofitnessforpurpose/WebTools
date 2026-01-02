@@ -177,7 +177,7 @@ var DialogManager = {
             setChecked('#opt-restorepacks', 'restorePacks');
             setChecked('#opt-show-toolbar', 'showIconToolbar');
             setChecked('#opt-show-menubar', 'showMenuBar');
-            setChecked('#opt-show-menubar', 'showMenuBar');
+            setChecked('#opt-enable-fkeys', 'enableFunctionKeys');
             setChecked('#opt-stickyproc', 'stickyProcedureHeader');
             setChecked('#opt-autocaps', 'autoUppercaseKeywords');
             setChecked('#opt-confirmations', 'suppressConfirmations');
@@ -247,6 +247,7 @@ var DialogManager = {
                     OptionsManager.setOption('showIconToolbar', true);
                 }
             });
+            addListener('#opt-enable-fkeys', 'enableFunctionKeys');
             addListener('#opt-stickyproc', 'stickyProcedureHeader', () => {
                 if (AppStore.state.currentItem && AppStore.state.currentItem.type === 3) {
                     if (typeof closeEditor === 'function' && closeEditor()) {
@@ -405,6 +406,33 @@ var DialogManager = {
         }
     },
 
+    showKeyMapDialog: function () {
+        var element = document.createElement('div');
+        element.innerHTML = `
+            <div style="text-align: center; padding: 10px; font-family: sans-serif;">
+                <h2 style="margin-top: 5px;">Key Map</h2>
+                <div style="text-align: left; margin-top: 15px; display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; font-size: 14px;">
+                    <div style="font-weight: bold;">F1</div><div>Help / About</div>
+                    <div style="font-weight: bold;">F2</div><div>New Pack</div>
+                    <div style="font-weight: bold;">F3</div><div>Open Pack</div>
+                    <div style="font-weight: bold;">F4</div><div>Save Pack</div>
+                    <div style="font-weight: bold;">F5</div><div>Toggle File Menu</div>
+                    <div style="font-weight: bold;">F6</div><div>Delete Item</div>
+                    <div style="font-weight: bold;">F7</div><div>Import Item</div>
+                    <div style="font-weight: bold;">F8</div><div>Export Hex</div>
+                    <div style="font-weight: bold;">F9</div><div>Apply Changes</div>
+                    <div style="font-weight: bold;">F10</div><div>Discard Changes</div>
+                    <div style="font-weight: bold;">F11</div><div>Options</div>
+                    <div style="font-weight: bold;">F12</div><div>Key Map (This Dialog)</div>
+                </div>
+                <hr style="margin: 15px auto; width: 100%; border: 0; border-top: 1px solid #ccc;">
+                <p style="font-size: 12px; opacity: 0.8;">Function keys are enabled in <b>Options > Visuals</b>.</p>
+            </div>`;
+
+        var dialog = new ModalDialog(element, null);
+        dialog.start();
+    },
+
     _getOptionsTemplate: function () {
         return `
         <div class="tabs-container">
@@ -450,6 +478,7 @@ var DialogManager = {
                         <h4>UI Visibility</h4>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-show-toolbar"> Show Icon Toolbar</label></div>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-show-menubar"> Show File/Help Menubar</label></div>
+                        <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-enable-fkeys"> Enable Function Keys (F1-F12)</label></div>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-splash"> Show Splash Screen on Startup</label></div>
                     </div>
                     <div>
@@ -550,6 +579,9 @@ var DialogManager = {
                 <div style="margin-bottom: 15px;"><label>Orientation: <select id="opt-mm-orientation" style="margin-left: 5px; padding: 2px;"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label></div>
                 <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-mm-pagebreaks"> Show Page Boundary Markers</label></div>
                 <div style="margin-bottom: 10px;"><label>Memory Map Display Size: <select id="opt-mm-size" style="margin-left: 5px; padding: 2px;">
+                    <option value="1024">1 kB</option>
+                    <option value="2048">2 kB</option>
+                    <option value="4096">4 kB</option>
                     <option value="8192">8 kB</option>
                     <option value="16384">16 kB</option>
                     <option value="32768">32 kB</option>

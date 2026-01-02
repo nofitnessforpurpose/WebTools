@@ -335,7 +335,7 @@ class PackContentsView {
                 // Ensure this pack is selected before erasing
                 selectPack(pIdx);
                 if (typeof eraseItem === 'function') {
-                    eraseItem(e.shiftKey);
+                    eraseItem();
                 }
             } else if (e.key === 'ArrowRight') {
                 if (pack.collapsed) {
@@ -651,7 +651,7 @@ class PackContentsView {
                 e.preventDefault();
                 // Ensure this item is selected before erasing - actually eraseItem handles selection or currentItem
                 if (typeof eraseItem === 'function') {
-                    eraseItem(e.shiftKey);
+                    eraseItem();
                 } else {
                     // Fallback if global not found
                     if (confirm("Are you sure you want to delete '" + item.name + "'?")) {

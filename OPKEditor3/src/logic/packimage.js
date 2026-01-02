@@ -19,8 +19,13 @@ function PackImage(inputData, sizeCode) {
       var now = new Date();
       var ms = (now.getMinutes() * 60 + now.getSeconds()) * 1000 + now.getMilliseconds();
       ms &= 0xffff;
+
+      // Auto-set Paged Mode (Bit 2) for >= 32KB (Size Code 4)
+      var headerByte = 0x7a;
+      if (sc >= 4) headerByte |= 0x04;
+
       inputData = [0, 0, 0, 0, 0, 0,
-         0x7a, sc, now.getFullYear() - 1900, now.getMonth(), now.getDate() - 1, now.getHours(), ms >> 8, ms & 0xff, 0xff, 0xff];
+         headerByte, sc, now.getFullYear() - 1900, now.getMonth(), now.getDate() - 1, now.getHours(), ms >> 8, ms & 0xff, 0xff, 0xff];
       var sum1 = inputData[6] + inputData[8] + inputData[10] + inputData[12];
       var sum2 = inputData[7] + inputData[9] + inputData[11] + inputData[13];
       sum1 += (sum2 >> 8);
@@ -28,7 +33,11 @@ function PackImage(inputData, sizeCode) {
       inputData[15] = sum2 & 0xff;
    }
 
+
+
    this.items[0] = getHeader(inputData);
+
+
 
    // build list of items
    var ix = 16;
@@ -42,6 +51,21 @@ function PackImage(inputData, sizeCode) {
       this.items[this.items.length] = result.item;
       ix = result.nextIx;
    }
+
+   // Inject Default MAIN Record if new (empty) pack
+   if (!arguments[0]) {
+      // Create Header for MAIN (Type 1 / 0x81 Data File)
+      // Name "MAIN" + 4 spaces
+      // ID: 0x90
+      var mainHdrBytes = [0x09, 0x81, 77, 65, 73, 78, 32, 32, 32, 32, 0x90];
+      var headerItem = new PackItem(mainHdrBytes, 0, 11);
+      headerItem.setDescription();
+
+      // Only add the Header, no data body.
+      this.items.push(headerItem);
+   }
+
+
    // Remove any existing terminators (sanity check)
    for (var i = this.items.length - 1; i >= 0; i--) {
       if (this.items[i].type === 255) this.items.splice(i, 1);
@@ -94,9 +118,9 @@ PackImage.prototype = {
 
          if (this.items[0].data[0] === 0x7A) {
             var sc = this.items[0].data[1];
-            if (sc >= 1 && sc <= 9) { // Valid Size Codes 1-9 (8KB to 2MB)
-               // Size = 8KB * 2^(sc-1)
-               targetSize = 8192 * Math.pow(2, sc - 1);
+            if (sc >= 1) { // Valid Size Codes (Count of 8KB blocks)
+               // Size = 8KB * sc
+               targetSize = 8192 * sc;
                hasFixedSize = true;
             }
          }

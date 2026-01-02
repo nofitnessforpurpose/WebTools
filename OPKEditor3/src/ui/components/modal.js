@@ -1,16 +1,18 @@
 
-function ModalDialog(contentElement, okcallback, cancelcallback) {
+function ModalDialog(contentElement, okcallback, cancelcallback, okLabel, cancelLabel) {
    this.dialog = document.createElement('div');
    this.okcallback = okcallback;
    this.cancelcallback = cancelcallback;
+   var okText = okLabel || "Ok";
+   var cancelText = cancelLabel || "Cancel";
    this.dialog.innerHTML =
       "<div class='modal-overlay'>" +
       "<div class='modal-content'>" +
       "<div class='modal-header'><span id=closebutton class='close'>&times;</span></div>" +
       "<div class='modal-body' id='usercontent'></div>" +
       "<div class='modal-footer'>" +
-      "<button id=okbutton class='modal-btn'>Ok</button>&nbsp;&nbsp;" +
-      "<button id=cancelbutton class='modal-btn'>Cancel</button>" +
+      "<button id=okbutton class='modal-btn'>" + okText + "</button>&nbsp;&nbsp;" +
+      "<button id=cancelbutton class='modal-btn'>" + cancelText + "</button>" +
       "</div>" +
       "</div>" +
       "</div>";

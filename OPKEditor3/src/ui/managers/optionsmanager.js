@@ -38,6 +38,7 @@ var OptionsManager = {
         showVariableStorageWindow: false,
         showIconToolbar: true,
         showMenuBar: true,
+        enableFunctionKeys: false, // Legacy F1-F12 shortcuts
         decompileInlineAssembly: true,
         stickyProcedureHeader: false,
         suppressConfirmations: false,

@@ -29,7 +29,8 @@ ProcedureFileEditor.prototype.initialise = function (item) {
     if (this.item.deleted) {
         var ta = document.getElementById('sourcecode');
         if (ta) ta.disabled = true;
-        if (this.codeEditorInstance) {// 
+        if (this.codeEditorInstance) {
+            // 
             // console.log("ProcedureFileEditor: Item Deleted. Setting ReadOnly=TRUE");
             this.codeEditorInstance.setReadOnly(true);
         }
@@ -683,15 +684,14 @@ ProcedureFileEditor.prototype.copyObjectCode = function () {
 };
 
 // Helper: Process Single Item (Decoupled from Editor UI)
-// Helper: Process Single Item (Decoupled from Editor UI)
 ProcedureFileEditor.prototype.processItemCopyObject = function (targetItem, pack) {
     if (targetItem.deleted) return { success: false, error: "Item is already deleted" };
 
     // Helper: Parse Record Structure
     function parseRecordStructure(data, itemType) {
         var offset = 0;
-        // Skip leading nulls (Alignment Correction)
-        while (offset < data.length && data[offset] === 0) { offset++; }
+        // [Fix] Removed dangerous "Skip leading nulls" loop (Alignment Correction)
+        // which caused corruption on Raw/Bare records starting with 00.
 
         // 1. Try Standard Long Record Header (02 80) - Used by Type 3
         var syncFound = -1;
@@ -740,9 +740,18 @@ ProcedureFileEditor.prototype.processItemCopyObject = function (targetItem, pack
     if (chld.child && chld.child.data) {
         // Hierarchical (Standard Type 3)
         srcData = chld.child.data;
-        qcodeOffset = 0;
-        if (srcData.length >= 2) {
-            qcodeLen = (srcData[0] << 8) | srcData[1];
+
+        // [Fix] Check for Inner Wrapper (Double Wrap) which causes Variable Storage corruption
+        // If import wrapped an existing OB3/LongRecord, inner data has 02 80 header.
+        var innerStruct = parseRecordStructure(srcData, 0);
+        if (innerStruct.valid && innerStruct.type === 'long') {
+            qcodeOffset = innerStruct.offset + 2; // Skip LenLen
+        } else {
+            qcodeOffset = 0;
+        }
+
+        if (srcData.length >= qcodeOffset + 2) {
+            qcodeLen = (srcData[qcodeOffset] << 8) | srcData[qcodeOffset + 1];
         } else {
             return { success: false, error: "Payload too short (Hierarchical)" };
         }
@@ -881,14 +890,16 @@ ProcedureFileEditor.prototype.translateAndSave = function () {
 
     // [Fix] Remove setTimeout to run synchronous batch loop (matches copyObjectCode behavior)
     // Prevents potential race conditions or closure updates
-    // setTimeout(function () { // 
+    // setTimeout(function () { 
+    // 
 
     // console.log("Translate Batch: " + targets.length + " targets.");
 
     // [Fix] Determine suppressUpdate flag (true for batch mode, false for single item interactive)
     var isBatch = (targets.length > 1);
 
-    targets.forEach(function (targetItem) {// 
+    targets.forEach(function (targetItem) {
+        // 
         // console.log("Processing: " + (targetItem.name || "Unnamed"));
         var sourceCode = "";
 
@@ -1091,7 +1102,8 @@ ProcedureFileEditor.prototype.getDecompiledSource = function (item) {
         // Use empty procMap to avoid side-effects from dirty pack state
         var analysis = decomp.getRawAnalysis(stamped, procName, { procMap: {} });
         return decomp.sourceGen.generateSource(analysis.header, analysis.varMap, analysis.flow, stamped, analysis.finalProcName, { oplBase: decomp.oplBase });
-    } catch (e) {// 
+    } catch (e) {
+        // 
         // console.warn("Decompile failed for " + procName, e);
         return "";
     }

@@ -335,7 +335,7 @@ class PackContentsView {
                 // Ensure this pack is selected before erasing
                 selectPack(pIdx);
                 if (typeof eraseItem === 'function') {
-                    eraseItem(e.shiftKey);
+                    eraseItem();
                 }
             } else if (e.key === 'ArrowRight') {
                 if (pack.collapsed) {
@@ -651,7 +651,7 @@ class PackContentsView {
                 e.preventDefault();
                 // Ensure this item is selected before erasing - actually eraseItem handles selection or currentItem
                 if (typeof eraseItem === 'function') {
-                    eraseItem(e.shiftKey);
+                    eraseItem();
                 } else {
                     // Fallback if global not found
                     if (confirm("Are you sure you want to delete '" + item.name + "'?")) {
@@ -749,14 +749,14 @@ class PackContentsView {
     handleDragStart(e, packIndex, itemIndex) {
         // e.stopPropagation();
         this.dragSrcInfo = { packIndex: packIndex, itemIndex: itemIndex };
-        e.dataTransfer.effectAllowed = 'copyMove';
+        e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/html', e.currentTarget.outerHTML);
         e.currentTarget.classList.add('dragElem');
     }
 
     handleDragOver(e) {
         if (e.preventDefault) e.preventDefault(); // Essential for Drop
-        e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
+        e.dataTransfer.dropEffect = 'move';
         e.currentTarget.classList.add('over');
         return false;
     }

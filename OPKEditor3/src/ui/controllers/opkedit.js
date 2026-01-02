@@ -372,6 +372,28 @@ if (menuOplRef) {
       closeAllMenus();
    });
 }
+
+var menuOplTemplates = document.getElementById('menu-opl-templates');
+if (menuOplTemplates) {
+   menuOplTemplates.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (typeof OPLContentViewer !== 'undefined' && typeof OPL_TEMPLATES !== 'undefined') {
+         new OPLContentViewer("OPL Coding Templates", OPL_TEMPLATES).open();
+      }
+      closeAllMenus();
+   });
+}
+
+var menuOplLibrary = document.getElementById('menu-opl-library');
+if (menuOplLibrary) {
+   menuOplLibrary.addEventListener('click', function (e) {
+      e.preventDefault();
+      if (typeof OPLContentViewer !== 'undefined' && typeof OPL_LIBRARY_ROUTINES !== 'undefined') {
+         new OPLContentViewer("OPL Library Routines", OPL_LIBRARY_ROUTINES).open();
+      }
+      closeAllMenus();
+   });
+}
 // Dialog Functions
 // Delegated to DialogManager.js
 
@@ -521,7 +543,7 @@ function createNew(e) {
 
    // Helper to perform creation
    function doCreate(sizeCode) {
-      if (sizeCode >= 1 && sizeCode <= 8) { // 9 (2MB) Removed/Invalid
+      if (sizeCode >= 1 && sizeCode <= 128) {
          var newPack = new PackImage(null, sizeCode);
          newPack.filename = "Pack" + (packs.length + 1) + ".opk";
          packs.push(newPack);
@@ -530,7 +552,7 @@ function createNew(e) {
          updateInventory();
          // Persist selection
          OptionsManager.setOption('lastPackSize', sizeCode);
-         setStatus("New " + (8 * Math.pow(2, sizeCode - 1)) + "KB pack created");
+         setStatus("New " + (sizeCode * 8) + "KB pack created");
       }
    }
 
@@ -547,13 +569,12 @@ function createNew(e) {
    var sizes = [
       { v: 1, l: "8 KB (Standard)" },
       { v: 2, l: "16 KB" },
-      { v: 3, l: "32 KB" },
-      { v: 4, l: "64 KB" },
-      { v: 5, l: "128 KB" },
-      { v: 6, l: "256 KB" },
-      { v: 7, l: "512 KB" },
-      { v: 8, l: "1 MB" }
-      // 2 MB Removed
+      { v: 4, l: "32 KB" }, // 4 * 8 = 32
+      { v: 8, l: "64 KB" }, // 8 * 8 = 64
+      { v: 16, l: "128 KB" },
+      { v: 32, l: "256 KB" },
+      { v: 64, l: "512 KB" },
+      { v: 128, l: "1 MB" }
    ];
 
    sizes.forEach(function (opt) {
@@ -978,11 +999,12 @@ function handleDragStart(e, packIndex, itemIndex) {
 function closeEditor() {
    if (currentEditor) {
       if (currentEditor.hasUnsavedChanges()) {
-         var suppress = OptionsManager.getOption('suppressConfirmations');
-         if (!suppress) {
-            var discard = window.confirm("Not all changes have been saved.\nIs it ok to discard those changes?");
-            if (!discard) return false;
-         }
+         // Suppressed per user request
+         // var suppress = OptionsManager.getOption('suppressConfirmations');
+         // if (!suppress) {
+         //    var discard = window.confirm("Not all changes have been saved.\nIs it ok to discard those changes?");
+         //    if (!discard) return false;
+         // }
       }
       currentEditor.finish();
       currentEditor = null;
@@ -1021,6 +1043,68 @@ function itemMoved(fromPackIx, fromItemIx, toPackIx, toItemIx, isCopy) {
    var toPack = packs[toPackIx];
 
    if (!fromPack || !toPack) return;
+
+   // 1. Top MAIN Lock Check
+   // Find actual index of the FIRST "MAIN" item in destination pack
+   var topMainIdx = -1;
+   for (var i = 0; i < toPack.items.length; i++) {
+      if (toPack.items[i].name === "MAIN") {
+         topMainIdx = i;
+         break;
+      }
+   }
+
+   // If we found a MAIN, and we are trying to insert BEFORE or AT it
+   // (Assuming 'toItemIx' is the insertion index, i.e., "insert before this index")
+   if (topMainIdx !== -1 && toItemIx <= topMainIdx) {
+      // Allow if we are just moving the item around within the restricted area? 
+      // User said: "items can not be dragged above the top MAIN item"
+      // So effectively, Index must be > topMainIdx
+      // EXCEPT if we are moving the MAIN item itself? (Blocked by DragStart usually)
+      return;
+   }
+
+   // 2. Bootable Conflict Check
+   var hdata = toPack.items[0].data;
+   // Check if Bootable (Bit 4 of Byte 0 is CLEAR)
+   if ((hdata[0] & 0x10) === 0) {
+      var bootAddr = (hdata[6] << 8) + hdata[7];
+
+      // Calculate Target Address of the insertion point
+      // This is the sum of lengths of all items BEFORE toItemIx
+      var targetAddr = 0;
+      for (var i = 0; i < toItemIx; i++) {
+         // If we are moving within the same pack, we must exclude the item being moved 
+         // from the calculation IF it is currently *before* the target, 
+         // because it will be removed.
+         // BUT 'itemMoved' logic typically implies 'toItemIx' is the target index *before* modification?
+         // Actually, standard logic: remove then insert. 
+         // If moving down (src < dest): 
+         //   Items 0..src-1 stay. Item src removed. Items src+1..dest-1 shift down. 
+         //   Target address is sum of 0..dest-1 (excluding src).
+
+         // If moving up (src > dest):
+         //   Items 0..dest-1 stay. Item inserted at dest.
+         //   Target address is sum of 0..dest-1.
+
+         // SIMPLIFICATION:
+         // If same pack:
+         if (fromPackIx === toPackIx && i === fromItemIx) continue; // Skip the item being moved (it won't be there)
+
+         targetAddr += toPack.items[i].getLength();
+      }
+
+      // Note: If we are inserting a NEW item (copy/external), 'fromPackIx !== toPackIx', 
+      // so simple sum is correct.
+
+      // Check Conflict
+      // User said: "if the item drag would occur to a pack address 'before' the bootable item address"
+      // Meaning: If the NEW position's address < Boot Address.
+      if (targetAddr < bootAddr) {
+         alert("Bootable pack address conflict!");
+         return;
+      }
+   }
 
    var draggedItem = fromPack.items[fromItemIx];
    var multiActive = (selectedItems.indexOf(draggedItem) !== -1);
@@ -1393,20 +1477,14 @@ function loadPackFromFiles(files) {
          reader.onload = function (e) {
             try {
                var binary = parseIntelHexToBinary(e.target.result);
-               var len = binary.length;
-               var header = new Uint8Array(6);
-               header[0] = 0x4F; header[1] = 0x50; header[2] = 0x4B;
-               header[3] = (len >> 16) & 0xFF;
-               header[4] = (len >> 8) & 0xFF;
-               header[5] = len & 0xFF;
 
-               var opkData = new Uint8Array(6 + len + 2);
-               opkData.set(header, 0);
-               opkData.set(binary, 6);
-               opkData[6 + len] = 0xFF;
-               opkData[6 + len + 1] = 0xFF;
+               // Validation: Must start with OPK
+               if (binary.length < 3 || binary[0] !== 0x4F || binary[1] !== 0x50 || binary[2] !== 0x4B) {
+                  alert("Error: Imported HEX file does not contain a valid Psion Pack header (OPK).");
+                  return;
+               }
 
-               var newPack = new PackImage(opkData);
+               var newPack = new PackImage(binary);
                newPack.unsaved = false;
                newPack.filename = file.name.replace(/\.[^/.]+$/, "") + ".opk";
 
@@ -1446,19 +1524,10 @@ function loadPackFromFiles(files) {
                // Check if WRAPPED (OPK Header present)
                var isWrapped = (data.length >= 3 && data[0] === 79 && data[1] === 80 && data[2] === 75);
 
-               // Check for OPK Header, if missing assume raw binary and wrap it
+               // Strict Validation: Reject if OPK Header is missing
                if (!isWrapped) {
-                  // Create 6-byte header: OPK + 3-byte Length
-                  var ln = data.byteLength;
-                  var wrapped = new Uint8Array(ln + 6);
-                  wrapped[0] = 79; // O
-                  wrapped[1] = 80; // P
-                  wrapped[2] = 75; // K
-                  wrapped[3] = (ln >> 16) & 0xff;
-                  wrapped[4] = (ln >> 8) & 0xff;
-                  wrapped[5] = ln & 0xff;
-                  wrapped.set(data, 6);
-                  data = wrapped; // Reassign data to wrapped buffer
+                  alert("Error: File is not a valid Psion Pack (missing OPK header).");
+                  return;
                }
 
                var newPack = new PackImage(data);
@@ -1524,7 +1593,16 @@ function loadPackFromFiles(files) {
    }
 }
 
-function eraseItem() {
+// Erase Item: Supports "Hard Delete" (Default) and "Recycle" (Shift+Delete)
+function eraseItem(arg) {
+   // Determine context: arg could be MouseEvent, Boolean (shiftKey from PackContents), or undefined
+   var isRecycle = false;
+   if (typeof arg === 'boolean') {
+      isRecycle = arg;
+   } else if (arg && arg.type && arg.shiftKey) {
+      isRecycle = true; // Button click with Shift
+   }
+
    if (selectedPackIndex >= 0) {
       var suppress = OptionsManager.getOption('suppressConfirmations');
       if (!suppress) {
@@ -1603,97 +1681,94 @@ function eraseItem() {
    if (selectedItems.length > 0) {
       // Filter out non-deletable items (Header/EOP/MAIN are special)
       var toDelete = selectedItems.filter(function (it) {
-         return it.type > 0 && it.type !== 255;
+         return it.type >= 0 && it.type !== 255;
       });
 
       if (toDelete.length === 0) return;
 
-      var suppress = OptionsManager.getOption('suppressConfirmations');
-      if (!suppress) {
-         var msg = toDelete.length === 1 ?
-            "Are you sure you want to erase '" + toDelete[0].name + "'?" :
-            "Are you sure you want to erase these " + toDelete.length + " items?";
-         if (!confirm(msg)) return false;
-      }
+      // Check Mode
+      if (isRecycle) {
+         // "Recycle" Mode: Toggle Deleted State (Soft Delete)
+         // No Confirmation (Matches existing Recycle button behavior)
+         // Or should we confirm? User said "acting as the key binding for the Recycle feature". 
+         // The Recycle feature has NO confirmation.
 
-      // Status Feedback
-      var oldStatus = "";
-      if (typeof statusmessageelement !== 'undefined' && statusmessageelement) {
-         oldStatus = statusmessageelement.innerText;
-         statusmessageelement.innerText = "Deleting " + toDelete.length + " items...";
-      }
-
-      // Defer to render status
-      setTimeout(function () {
-         // Sort by index descending to handle splices if needed
-         var indices = toDelete.map(function (it) { return pack.items.indexOf(it); }).sort(function (a, b) { return b - a; });
-
-         indices.forEach(function (idx) {
-            if (idx >= 0) {
-               var it = pack.items[idx];
-               if (it.deleted) {
-                  // Already deleted? Hard delete (Remove)
-                  pack.items.splice(idx, 1);
-               } else {
-                  // Soft Delete (Mark as deleted)
-                  it.deleted = true;
-                  if (it.data && it.data.length > 1) it.data[1] &= 0x7F; // Clear bit 7
-                  it.setDescription();
-               }
+         var changed = false;
+         toDelete.forEach(function (it) {
+            it.deleted = !it.deleted; // Toggle
+            if (it.data && it.data.length > 1) {
+               if (it.deleted) it.data[1] &= 0x7F; // Clear bit 7
+               else it.data[1] |= 0x80; // Set bit 7
             }
+            it.setDescription();
+            changed = true;
          });
 
-         selectedItems = [];
-         currentItem = null;
-
-         pack.unsaved = true;
-         updateInventory();
-         saveSession();
-
-         // Restore Status
-         if (typeof statusmessageelement !== 'undefined' && statusmessageelement) {
-            statusmessageelement.innerText = oldStatus;
+         if (changed) {
+            pack.unsaved = true;
+            updateInventory();
+            saveSession();
          }
-      }, 20);
 
-      return; // Exit sync flow
-   } else if (currentItem) {
-      // Single Item Deletion (Legacy Path or Fallback)
-      // Check if it's special
-      var type = currentItem.type;
-      if (type <= 0 || type === 255) return;
-
-      if (!currentItem.deleted) {
-         var suppress = OptionsManager.getOption('suppressConfirmations');
-         if (!suppress) {
-            var discard = window.confirm("Are you sure you want to erase " + (currentItem.name ? currentItem.name : "this item") + " from the pack?");
-            if (!discard) return false;
-         }
-         // Soft Delete
-         currentItem.deleted = true;
-         if (currentItem.data && currentItem.data.length > 1) currentItem.data[1] &= 0x7F;
-         currentItem.setDescription();
       } else {
-         // Already deleted -> Hard Delete confirm?
+         // "Standard" Mode: Hard Delete (Remove from list)
          var suppress = OptionsManager.getOption('suppressConfirmations');
          if (!suppress) {
-            var discard = window.confirm("This item is already deleted. Permanently remove it (reclaim space)?");
-            if (!discard) return false;
+            var msg = toDelete.length === 1 ?
+               "Are you sure you want to permanently erase '" + toDelete[0].name + "'?" :
+               "Are you sure you want to permanently erase these " + toDelete.length + " items?";
+            if (!confirm(msg)) return false;
          }
 
-         var items = pack.items;
-         var i = items.indexOf(currentItem);
-         if (i >= 0) items.splice(i, 1);
+         // Status Feedback
+         var oldStatus = "";
+         if (typeof statusmessageelement !== 'undefined' && statusmessageelement) {
+            oldStatus = statusmessageelement.innerText;
+            statusmessageelement.innerText = "Deleting " + toDelete.length + " items...";
+         }
+
+         // Defer to render status
+         setTimeout(function () {
+            // Sort by index descending to handle splices if needed
+            // Note: items.indexOf might be slow for large packs, but okay here.
+            var indices = toDelete.map(function (it) { return pack.items.indexOf(it); }).sort(function (a, b) { return b - a; });
+
+            indices.forEach(function (idx) {
+               if (idx >= 0) {
+                  pack.items.splice(idx, 1);
+               }
+            });
+
+            selectedItems = [];
+            currentItem = null;
+
+            pack.unsaved = true;
+            updateInventory();
+            saveSession();
+
+            // Restore Status
+            if (typeof statusmessageelement !== 'undefined' && statusmessageelement) {
+               statusmessageelement.innerText = oldStatus;
+            }
+         }, 20);
       }
 
-      currentItem = null;
+      return; // Exit sync flow
+   } else if (currentItem) { // Fallback, single item selection (if selectedItems was empty but currentItem is set)
+
+      // Logic: if selectedItems is empty but currentItem is set, treat it as a selection of 1.
+      // But above we check selectedItems.length > 0.
+      // It's possible currentItem is set but not in selectedItems? 
+      // Yes, if selection cleared but focus remains? Usually they are synced.
+
+      // Let's invoke the same logic.
+      selectedItems = [currentItem];
+      // Recursive call to handle it (simplifies logic)
+      eraseItem(arg);
+      return;
    } else {
       return;
    }
-
-   pack.unsaved = true;
-   updateInventory();
-   saveSession();
 }
 
 
@@ -1800,6 +1875,8 @@ function createNewRecord() {
          hdritem.setDescription();
          addItemToPack(hdritem);
          updateInventory();
+         var idx = packs[currentPackIndex].items.indexOf(hdritem);
+         if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
       }
    });
 
@@ -1949,14 +2026,7 @@ function itemChosen() {
    if (!fileInput) return;
 
    var files = fileInput.files;
-   for (var i = 0; i < files.length; i++) {
-      var fn = files[i].name;
-      if (fn.match(/\.((ODB)|(OPL)|(NTS))$/i)) {
-         LoadLocalTextFile(files[i], createItemFromFileData);
-      } else {
-         LoadLocalBinaryFile(files[i], createItemFromFileData);
-      }
-   }
+   importFilesToPack(currentPackIndex, files);
    // Reset input to allow re-selecting same file
    fileInput.value = '';
 }
@@ -1972,6 +2042,7 @@ function getFreeFileId() {
 }
 
 function createItemFromFileData(filedata, name) {
+   // alert("DEBUG: createItemFromFileData called for " + name);
    // ... (logic preserved) ...
    // check if it is a valid binary file, "ORG"+type
    if (filedata[0] == 79 && filedata[1] == 82 && filedata[2] == 71 && filedata[5] >= 0x82 && filedata[5] <= 0x8f) {
@@ -1979,7 +2050,7 @@ function createItemFromFileData(filedata, name) {
       var ln = (filedata[3] << 8) + filedata[4];
       if (filedata.length < 6 + ln) {
          alert("The file " + name + " seems to be truncated!");
-         return;
+         return false;
       }
       var hdritem = createFileHeader(name, type, 0);
       var blkhdr = new Uint8Array(4);
@@ -1991,20 +2062,22 @@ function createItemFromFileData(filedata, name) {
       hdritem.child = blkhdritem;
       addItemToPack(hdritem);
       updateInventory();
+      var idx = packs[currentPackIndex].items.indexOf(hdritem);
+      if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
    } else if (filedata[0] == 79 && filedata[1] == 82 && filedata[2] == 71 && filedata[5] == 0xFF) {
       var ln = (filedata[3] << 8) + filedata[4];
       if (filedata.length < 6 + ln || ln < 0x1d) {
          alert("The file " + name + " seems to be truncated!");
-         return;
+         return false;
       }
       if (filedata[0x1b] != 0x02 || filedata[0x1c] != 0x80) {
          alert("The file " + name + " does not seem to have\na standard headerless block format!");
-         return;
+         return false;
       }
       var ln2 = (filedata[0x1d] << 8) + filedata[0x1e];
       if (filedata.length < 0x1f + ln2) {
          alert("The file " + name + " seems to be truncated!");
-         return;
+         return false;
       }
       var blkhdr = new Uint8Array(4);
       blkhdr[0] = 2; blkhdr[1] = 0x80; blkhdr[2] = filedata[0x1d]; blkhdr[3] = filedata[0x1e];
@@ -2014,24 +2087,133 @@ function createItemFromFileData(filedata, name) {
       blkhdritem.setDescription();
       addItemToPack(blkhdritem);
       updateInventory();
+      var idx = packs[currentPackIndex].items.indexOf(blkhdritem);
+      if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
 
       var pack = packs[currentPackIndex];
-      if (pack.items.length == 3) {
-         var makeBoot = window.confirm("Do you want this to be used as boot code?");
-         if (makeBoot) {
-            var hdata = pack.items[0].data;
-            hdata[2] = 0; hdata[3] = filedata[9]; hdata[4] = filedata[10]; hdata[5] = filedata[11];
-            hdata[6] = filedata[12]; hdata[7] = filedata[13];
-            hdata[0] &= 0xEF;
-            var sum1 = hdata[0] + hdata[2] + hdata[4] + hdata[6];
-            var sum2 = hdata[1] + hdata[3] + hdata[5] + hdata[7];
-            sum1 += (sum2 >> 8);
-            hdata[9] = sum2 & 0xff;
-            if ((hdata[0] & 0x40) == 0) {
-               hdata[8] &= 0x80;
-               hdata[8] += sum1 & 0x7f;
-            } else {
-               hdata[8] = sum1 & 0xff;
+
+      // alert("DEBUG: Inside Headerless Block handler");
+
+      // Boot Code Logic (Relaxed)
+      var itemIdx = pack.items.indexOf(blkhdritem);
+      if (pack && itemIdx > 0) {
+         var bootAddr = getItemAddres(pack, itemIdx);
+
+         // Only prompt if address is valid
+         if (bootAddr <= 0xFFFF) {
+            // Adjust for Header (4 bytes)
+            var targetBootAddr = bootAddr + 4;
+            // alert("DEBUG: targetBootAddr=" + targetBootAddr);
+
+            // Create content for dialog
+            var content = document.createElement('div');
+            content.style.textAlign = 'center';
+            content.innerHTML = "<div>Do you want this to be used as boot code?</div>" +
+               "<div style='font-weight:bold; margin:10px 0;'>Boot Address: 0x" + targetBootAddr.toString(16).toUpperCase().padStart(4, '0') + "</div>";
+
+            var onYes = function () {
+               var hdata = pack.items[0].data;
+               hdata[2] = 0; hdata[3] = filedata[9]; hdata[4] = filedata[10]; hdata[5] = filedata[11];
+
+               // Use Calculated Address + 4
+               hdata[6] = (targetBootAddr >> 8) & 0xff;
+               hdata[7] = targetBootAddr & 0xff;
+
+               hdata[0] &= 0xEF; // bootable
+               var sum1 = hdata[0] + hdata[2] + hdata[4] + hdata[6];
+               var sum2 = hdata[1] + hdata[3] + hdata[5] + hdata[7];
+               sum1 += (sum2 >> 8);
+               hdata[9] = sum2 & 0xff;
+               if ((hdata[0] & 0x40) == 0) {
+                  hdata[8] &= 0x80;
+                  hdata[8] += sum1 & 0x7f;
+               } else {
+                  hdata[8] = sum1 & 0xff;
+               }
+
+               pack.unsaved = true;
+               updateInventory();
+            };
+
+            // Use Custom Modal with Yes/No
+            // Dummy assignment to keep syntax valid if needed by parser, though not used here
+            var makeBoot = false;
+            new ModalDialog(content, onYes, null, "Yes", "No").start();
+
+
+            if (makeBoot) {
+               var hdata = pack.items[0].data;
+               hdata[2] = 0; hdata[3] = filedata[9]; hdata[4] = filedata[10]; hdata[5] = filedata[11]; // Wait, filedata indices might differ for header?
+               // The original code used filedata[9]..[13] for boot address in header?
+               // Original: hdata[3]=filedata[9]... hdata[6]=filedata[12].
+               // BUT we need to OVERWRITE hdata[6..7] with calculated address if we want it to point to *this* item?
+               // OR does the headerless block format imply something specific?
+               // Original code: hdata[6] = filedata[12]; hdata[7] = filedata[13];
+               // It was taking address FROM THE FILE CONTENT?!
+
+               // If it's a "Headerless Block", maybe it *contains* the boot info?
+               // The previous code COPIED bytes 9-13 from filedata to Pack Header.
+               // It did NOT calculate the address.
+
+               // User said: "Provided the boot code address is within a 64k space."
+               // If I overwrite it with `bootAddr` (calculated), is that correct?
+               // For .BIN (Raw), yes.
+               // For "Headerless Block" (ORG), maybe the file SAYS where it should load?
+               // BUT getting it to RUN as boot code requires the PACK HEADER to point to it (in the Pack).
+
+               // The Pack Header Boot Address (Bytes 6,7) is "Address of code" (offset in pack).
+               // Existing code: `hdata[6] = filedata[12]; hdata[7] = filedata[13];`
+               // This implies the file *already knew* its offset? That seems unlikely for a relocatable item.
+               // OR maybe it was copying the Execution Address?
+               // The Pack Header Boot Vector is:
+               // 02-05: Timestamp
+               // 06-07: Address of code to run (Offset from start of pack).
+
+               // If existing code copied it from filedata, maybe that file format HAS the address?
+               // BUT if we drop it into a non-empty pack, the offset CHANGES.
+               // So copying from filedata is WRONG if it moves.
+               // We MUST use `bootAddr` (calculated offset).
+
+               // I will use `bootAddr` for bytes 6,7.
+               // Bytes 3,4,5 are Reserved/Checksum related?
+               // Header Byte 8 is Checksum adjustment.
+
+               hdata[6] = (bootAddr >> 8) & 0xff;
+               hdata[7] = bootAddr & 0xff;
+
+               // What about bytes 3,4,5 (hdata[3,4,5])?
+               // Original: hdata[3] = filedata[9]; hdata[4] = filedata[10]; hdata[5] = filedata[11];
+               // Do we still copy those? 
+               // If they are specific to the bootable status, maybe?
+               // Byte 0 bit 4 is "Bootable".
+               // Bytes 3-5 are usually part of Timestamp?
+               // Pack Header:
+               // 00: ...
+               // 02-05: Timestamp
+               // 06-07: Boot Address
+
+               // Why would it overwrite timestamp with filedata[9..11]?
+               // Maybe the ORG file contains the timestamp?
+               // I'll preserve the "copy extra bytes" logic but OVERRIDE the address.
+
+               hdata[2] = 0;
+               hdata[3] = filedata[9];
+               hdata[4] = filedata[10];
+               hdata[5] = filedata[11];
+
+               hdata[0] &= 0xEF; // bootable
+               var sum1 = hdata[0] + hdata[2] + hdata[4] + hdata[6];
+               var sum2 = hdata[1] + hdata[3] + hdata[5] + hdata[7];
+               sum1 += (sum2 >> 8);
+               hdata[9] = sum2 & 0xff;
+               if ((hdata[0] & 0x40) == 0) {
+                  hdata[8] &= 0x80;
+                  hdata[8] += sum1 & 0x7f;
+               } else {
+                  hdata[8] = sum1 & 0xff;
+               }
+
+               pack.unsaved = true;
             }
          }
       }
@@ -2049,7 +2231,7 @@ function createItemFromFileData(filedata, name) {
       itemdata[2] = (srclen >> 8) & 0xff; itemdata[3] = srclen & 0xff;
 
       for (var i = 0; i < filedata.length; i++) {
-         var c = filedata.charCodeAt(i);
+         var c = (typeof filedata === 'string') ? filedata.charCodeAt(i) : filedata[i];
          itemdata[4 + i] = c == 10 ? 0 : c;
       }
       // Null Terminator
@@ -2062,6 +2244,8 @@ function createItemFromFileData(filedata, name) {
       hdritem.child = blkhdritem;
       addItemToPack(hdritem);
       updateInventory();
+      var idx = packs[currentPackIndex].items.indexOf(hdritem);
+      if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
    } else if (name.substr(-4).toUpperCase() == ".ODB") {
       var id = getFreeFileId();
       if (id <= 0) return;
@@ -2081,8 +2265,10 @@ function createItemFromFileData(filedata, name) {
          }
          var ln = Math.min(endix - startix, 255);
          var itemdata = new Uint8Array(2 + ln);
-         for (var i = 0; i < ln; i++)
-            itemdata[2 + i] = filedata.charCodeAt(startix + i);
+         for (var i = 0; i < ln; i++) {
+            var val = (typeof filedata === 'string') ? filedata.charCodeAt(startix + i) : filedata[startix + i];
+            itemdata[2 + i] = val;
+         }
          itemdata[0] = ln;
          itemdata[1] = id + 0x8f;
          var recitem = new PackItem(itemdata, 0, ln + 2);
@@ -2092,6 +2278,8 @@ function createItemFromFileData(filedata, name) {
          startix = endix + 1;
       }
       updateInventory();
+      var idx = packs[currentPackIndex].items.indexOf(hdritem);
+      if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
    } else if (name.substr(-4).toUpperCase() == ".NTS") {
       var hdritem = createFileHeader(name, 7, 0);
       var ln = filedata.length + 6;
@@ -2101,7 +2289,7 @@ function createItemFromFileData(filedata, name) {
       itemdata[0] = 0; itemdata[1] = 2; itemdata[2] = 8; itemdata[3] = 0;
       itemdata[4] = (filedata.length >> 8) & 0xff; itemdata[5] = filedata.length & 0xff;
       for (var i = 0; i < filedata.length; i++) {
-         var c = filedata.charCodeAt(i);
+         var c = (typeof filedata === 'string') ? filedata.charCodeAt(i) : filedata[i];
          itemdata[6 + i] = c == 10 ? 0 : c;
       }
       var dataitem = new PackItem(itemdata, 0, itemdata.length);
@@ -2111,6 +2299,8 @@ function createItemFromFileData(filedata, name) {
       hdritem.child = blkhdritem;
       addItemToPack(hdritem);
       updateInventory();
+      var idx = packs[currentPackIndex].items.indexOf(hdritem);
+      if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
    } else if (name.match(/\.OB([0-9A-F])$/i)) {
       // Generic Handler for .OBx files (OB2 - OBF)
       var match = name.match(/\.OB([0-9A-F])$/i);
@@ -2128,17 +2318,22 @@ function createItemFromFileData(filedata, name) {
 
       if (!validHeader) {
          alert("File " + name + " is missing required 'ORG' header.");
-         return;
+         return false;
       }
 
-      // Convert to Uint8Array if needed (createItemFromFileData receives binary string usually)
-      var rawBytes = new Uint8Array(filedata.length);
-      for (var i = 0; i < filedata.length; i++) rawBytes[i] = filedata.charCodeAt(i);
+      // Convert to Uint8Array if needed
+      var rawBytes;
+      if (typeof filedata === 'string') {
+         rawBytes = new Uint8Array(filedata.length);
+         for (var i = 0; i < filedata.length; i++) rawBytes[i] = filedata.charCodeAt(i);
+      } else {
+         rawBytes = filedata;
+      }
 
       var ln = (rawBytes[3] << 8) | rawBytes[4];
       if (rawBytes.length < 6 + ln) {
          alert("The file " + name + " seems to be truncated!");
-         return;
+         return false;
       }
 
       // Use internal type from file if present, otherwise trust extension or just use byte 5
@@ -2155,9 +2350,107 @@ function createItemFromFileData(filedata, name) {
       hdritem.child = blkhdritem;
       addItemToPack(hdritem);
       updateInventory();
+      var idx = packs[currentPackIndex].items.indexOf(hdritem);
+      if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
+   } else if (name.substr(-4).toUpperCase() == ".BIN") {
+      // Long Record (Type 0 / 0x80)
+      // This allows larger files (up to 64KB) compared to standard records.
+      var ln = filedata.length;
+
+      // Convert to Uint8Array if needed
+      var rawBytes;
+      if (typeof filedata === 'string') {
+         rawBytes = new Uint8Array(ln);
+         for (var i = 0; i < ln; i++) rawBytes[i] = filedata.charCodeAt(i);
+      } else {
+         rawBytes = filedata;
+      }
+
+      // Create "Long Record" structure: 
+      // Header Item (4 bytes) -> Child (Data Item)
+      // Header: [0x02, 0x80, LenHigh, LenLow]
+      var blkhdr = new Uint8Array(4);
+      blkhdr[0] = 2;
+      blkhdr[1] = 0x80; // Type 0 (Active)
+      blkhdr[2] = (ln >> 8) & 0xFF;
+      blkhdr[3] = ln & 0xFF;
+
+      var blkhdritem = new PackItem(blkhdr, 0, 4);
+      var dataitem = new PackItem(rawBytes, 0, ln);
+
+      blkhdritem.child = dataitem;
+      blkhdritem.setDescription();
+
+      addItemToPack(blkhdritem);
+      updateInventory();
+      var idx = packs[currentPackIndex].items.indexOf(blkhdritem);
+      if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
+
+      // Boot Code Feature:
+      var pack = packs[currentPackIndex];
+      // Check if this is the first real item (Index 1 or 2)
+      // Check if this is a plausible boot code candidate
+      // Must simply be reachable within 16-bit address space
+      var itemIdx = pack.items.indexOf(blkhdritem);
+
+      alert("DEBUG: inside headerless block handler");
+      alert("DEBUG: itemIdx=" + itemIdx + ", items=" + (pack ? pack.items.length : "null"));
+
+      if (pack && itemIdx > 0) {
+         // Calculate Boot Address BEFORE prompting
+         var bootAddr = getItemAddres(pack, itemIdx);
+
+         alert("DEBUG: BootAddr=" + bootAddr);
+
+         // Only prompt if address is valid (fits in 2 bytes)
+         if (bootAddr <= 0xFFFF) {
+            // Adjust for Header (4 bytes)
+            var targetBootAddr = bootAddr + 4;
+            alert("DEBUG: targetBootAddr=" + targetBootAddr);
+
+            // Create content for dialog
+            var content = document.createElement('div');
+            content.style.textAlign = 'center';
+            content.innerHTML = "<div>Do you want this to be used as boot code?</div>" +
+               "<div style='font-weight:bold; margin:10px 0;'>Boot Address: 0x" + targetBootAddr.toString(16).toUpperCase().padStart(4, '0') + "</div>";
+
+            var onYes = function () {
+               var hdata = pack.items[0].data;
+               // Boot Address = Start of the new Item + 4
+               hdata[6] = (targetBootAddr >> 8) & 0xff;
+               hdata[7] = targetBootAddr & 0xff;
+
+               // Set Bootable (Clear Bit 4 of Byte 0)
+               hdata[0] &= 0xEF;
+
+               // Recalculate Checksum (Standard Logic)
+               var sum1 = hdata[0] + hdata[2] + hdata[4] + hdata[6];
+               var sum2 = hdata[1] + hdata[3] + hdata[5] + hdata[7];
+               sum1 += (sum2 >> 8);
+
+               // Byte 8 Logic from ORG handler
+               if ((hdata[0] & 0x40) == 0) {
+                  hdata[8] &= 0x80;
+                  hdata[8] += sum1 & 0x7f;
+               } else {
+                  hdata[8] = sum1 & 0xff;
+               }
+               hdata[9] = sum2 & 0xff;
+
+               pack.unsaved = true;
+               updateInventory();
+            };
+
+            // Use Custom Modal with Yes/No
+            new ModalDialog(content, onYes, null, "Yes", "No").start();
+         }
+      }
+
    } else {
       alert("File format not recognised!");
+      return false;
    }
+   return true;
 }
 
 function createFileHeader(name, type, id) {
@@ -2279,10 +2572,7 @@ function parseIntelHexToBinary(hexString) {
 
 // Sidebar Resizing Logic
 var sidebar = document.getElementById('sidebar');
-var resizer = document.createElement('div');
-resizer.id = 'sidebar-resizer';
-sidebar.appendChild(resizer);
-
+var resizer = document.getElementById('sidebar-resizer');
 var isResizing = false;
 
 resizer.addEventListener('mousedown', function (e) {
@@ -2307,6 +2597,7 @@ document.addEventListener('mouseup', function (e) {
 });
 
 // Drag and Drop for Packs on Sidebar
+// Use Capture phase to intercept File drops before they reach list items
 // Drag and Drop for Packs on Sidebar
 // Use Capture phase to intercept File drops before they reach list items
 sidebar.addEventListener('dragover', function (e) {
@@ -2352,28 +2643,51 @@ sidebar.addEventListener('drop', function (e) {
       sidebar.classList.remove('drag-over');
 
       var files = e.dataTransfer.files;
-
+      // Identify file type
       var fname = files[0].name.toUpperCase();
-      // Check for .OBx, .OPL, .ODB, .NTS (Item types)
-      var isItem = fname.match(/\.OB[0-9A-F]$/) || fname.endsWith(".OPL") || fname.endsWith(".ODB") || fname.endsWith(".NTS");
+      var isItem = fname.match(/\.OB[0-9A-F]$/) || fname.endsWith(".OPL") || fname.endsWith(".ODB") || fname.endsWith(".NTS") || fname.endsWith(".BIN");
 
       if (isItem) {
          if (packs.length === 0) {
-            // No pack open? Create one automatically.
-            createNew();
+            createNew(); // Create a default new pack
          }
+         // Ensure we target the valid pack
+         if (currentPackIndex < 0 && packs.length > 0) currentPackIndex = 0;
 
-         if (packs.length > 0) {
-            LoadLocalBinaryFile(files[0], function (data, name) {
-               createItemFromFileData(data, name);
-            });
-         }
+         importFilesToPack(currentPackIndex, files); // Async now
       } else {
          // Not an item? Assume it's a Pack file (.OPK, .HEX)
          loadPackFromFiles(files);
       }
    }
-}, true); // useCapture = true
+}, true);
+
+/*
+ var fname = files[0].name.toUpperCase();
+
+ // alert("DEBUG: Drop Detected: " + fname);
+
+ // Check for .OBx, .OPL, .ODB, .NTS, .BIN (Item types)
+ var isItem = fname.match(/\.OB[0-9A-F]$/) || fname.endsWith(".OPL") || fname.endsWith(".ODB") || fname.endsWith(".NTS") || fname.endsWith(".BIN");
+
+ // alert("DEBUG: isItem=" + isItem);
+
+ if (isItem) {
+    if (packs.length === 0) {
+       // No pack open? Create one automatically.
+       createNew();
+    }
+
+    if (packs.length > 0) {
+       importFilesToPack(currentPackIndex, files);
+    }
+ } else {
+    // Not an item? Assume it's a Pack file (.OPK, .HEX)
+    loadPackFromFiles(files);
+ }
+*/
+// */
+// }, true); // useCapture = true
 
 // Keyboard Shortcuts
 function setupKeyboardShortcuts() {
@@ -2404,6 +2718,48 @@ function setupKeyboardShortcuts() {
             packSaved();
          }
       } else {
+         // Check for Function Keys (F1-F12)
+         if (OptionsManager.getOption('enableFunctionKeys')) {
+            if (e.key === 'F1') {
+               e.preventDefault();
+               if (typeof DialogManager !== 'undefined' && DialogManager.showAboutDialog) DialogManager.showAboutDialog();
+            } else if (e.key === 'F2') {
+               e.preventDefault();
+               createNew();
+            } else if (e.key === 'F3') {
+               e.preventDefault();
+               if (fileInputPack) fileInputPack.click();
+            } else if (e.key === 'F4') {
+               e.preventDefault();
+               packSaved();
+            } else if (e.key === 'F5') {
+               e.preventDefault();
+               var btn = document.getElementById('btn-file-menu');
+               if (btn) btn.click();
+            } else if (e.key === 'F6') {
+               e.preventDefault();
+               if (typeof eraseItem === 'function') eraseItem();
+            } else if (e.key === 'F7') {
+               e.preventDefault();
+               if (fileInputItem) fileInputItem.click();
+            } else if (e.key === 'F8') {
+               e.preventDefault();
+               exportHex(); // Assuming this global exists or logic can be inferred
+            } else if (e.key === 'F9') {
+               e.preventDefault();
+               applyEdits();
+            } else if (e.key === 'F10') {
+               e.preventDefault();
+               discardEdits();
+            } else if (e.key === 'F11') {
+               e.preventDefault();
+               if (typeof DialogManager !== 'undefined' && DialogManager.showOptionsDialog) DialogManager.showOptionsDialog();
+            } else if (e.key === 'F12') {
+               e.preventDefault();
+               if (typeof DialogManager !== 'undefined' && DialogManager.showKeyMapDialog) DialogManager.showKeyMapDialog();
+            }
+         }
+
          // Navigation Keys (No Ctrl)
          if (activeDropdown) {
             if (e.key === 'Escape') {
@@ -2485,6 +2841,88 @@ function initChildMode(feature) {
       if (typeof OPLCommandReference !== 'undefined') {
          new OPLCommandReference().render(window);
       }
+   } else if (feature === 'opl_content') {
+      if (typeof OPLContentViewer !== 'undefined') {
+         OPLContentViewer.childWindowReady(window);
+      }
    }
 
+}
+
+// Drag-and-Drop Import Handler (from PackContents.js)
+// Drag-and-Drop Import Handler (from PackContents.js)
+async function importFilesToPack(packIndex, files) {
+   var pack = packs[packIndex];
+   if (!pack) return;
+
+   // Temporarily switch context to target pack for creating items
+   // (createItemFromFileData usually uses currentPackIndex)
+   var originalPackIndex = currentPackIndex;
+   currentPackIndex = packIndex;
+
+   for (var i = 0; i < files.length; i++) {
+      var fn = files[i].name;
+      var success = false;
+      try {
+         if (fn.match(/\.((ODB)|(OPL)|(NTS))$/i)) {
+            // Async Load Text
+            if (typeof LoadLocalTextFileAsync === 'function') {
+               var result = await LoadLocalTextFileAsync(files[i]);
+               success = createItemFromFileData(result.data, result.name);
+            } else {
+               // Fallback if Async helper missing (should not happen)
+               alert("Loader error: Sync fallback not supported for batch.");
+               break;
+            }
+         } else {
+            // Async Load Binary
+            if (typeof LoadLocalBinaryFileAsync === 'function') {
+               var result = await LoadLocalBinaryFileAsync(files[i]);
+               success = createItemFromFileData(result.data, result.name);
+            } else {
+               alert("Loader error: Sync fallback not supported for batch.");
+               break;
+            }
+         }
+      } catch (e) {
+         alert("Error importing file " + fn + ": " + e);
+         success = false;
+      }
+
+      if (!success) {
+         // Abort remaining
+         break;
+      }
+   }
+
+   // Restore context (though UI updates might have changed selection)
+   // We'll leave it as is, or rely on updateInventory to refresh view
+   updateInventory();
+}
+
+function LoadLocalBinaryFileAsync(file) {
+   return new Promise((resolve, reject) => {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+         var data = new Uint8Array(e.target.result);
+         resolve({ name: file.name, data: data });
+      };
+      reader.onerror = function (e) {
+         reject(e);
+      };
+      reader.readAsArrayBuffer(file);
+   });
+}
+
+function LoadLocalTextFileAsync(file) {
+   return new Promise((resolve, reject) => {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+         resolve({ name: file.name, data: e.target.result });
+      };
+      reader.onerror = function (e) {
+         reject(e);
+      };
+      reader.readAsText(file);
+   });
 }

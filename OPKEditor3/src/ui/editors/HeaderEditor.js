@@ -14,7 +14,7 @@ HeaderEditor.prototype.initialise = function (item) {
         this.myelement.style.height = "100%";
         this.myelement.style.overflowY = "auto"; // Main Scroll Container
         this.myelement.style.overflowX = "hidden";
-        this.myelement.style.padding = "20px";
+        this.myelement.style.padding = "10px";
         this.myelement.style.boxSizing = "border-box";
 
         // Unified Content Wrapper
@@ -231,6 +231,7 @@ HeaderEditor.prototype.initialise = function (item) {
 
         var bootAddrContent =
             "<div style='display:flex; flex-direction:column; gap:5px; height:100%;'>" +
+            "<div id='grp-boot-rec' style='display:flex; justify-content:space-between; align-items:center; min-height:30px;'><label>Record</label><select id='boot-target-select' style='" + commonSelectStyle + "'></select></div>" +
             "<div id='grp-addr1' style='display:flex; justify-content:space-between; align-items:center; min-height:30px;'><label>Addr 1</label><select id='address1' style='" + commonSelectStyle + "'></select></div>" +
             "<div id='grp-addr2' style='display:flex; justify-content:space-between; align-items:center; min-height:30px;'><label>Addr 2</label><select id='address2' style='" + commonSelectStyle + "'></select></div>" +
             "</div>";
@@ -314,8 +315,8 @@ HeaderEditor.prototype.initialise = function (item) {
     this.item = item;
     var flags = item.data[0];
 
-    var ref = function () { UpdateVisuals(self); };
-    var refFill = function () { FillInHeader(self); UpdateVisuals(self); };
+    var ref = function () { UpdateVisuals(self, true); };
+    var refFill = function () { FillInHeader(self); UpdateVisuals(self, true); };
 
     initialiseForm("bit1", (flags & 0x02) != 0, this, ref);
     initialiseForm("bit2", (flags & 0x04) != 0, this, ref);
@@ -328,11 +329,12 @@ HeaderEditor.prototype.initialise = function (item) {
     var psSelect = document.getElementById("packsize");
     if (psSelect) {
         psSelect.innerHTML = ""; // Clear existing
-        // Standard Options (1-8)
+        // Standard Options (1-8) representing 8K blocks
+        // 8K=1, 16K=2, 32K=4, 64K=8, 128K=16, 256K=32, 512K=64, 1024K=128
         var stdSizes = ["8K", "16K", "32K", "64K", "128K", "256K", "512K", "1024K"];
         for (var k = 0; k < 8; k++) {
             var opt = document.createElement("option");
-            opt.value = k + 1;
+            opt.value = 1 << k;  // 1, 2, 4, 8, 16, 32, 64, 128
             opt.innerText = stdSizes[k];
             psSelect.appendChild(opt);
         }
@@ -340,9 +342,15 @@ HeaderEditor.prototype.initialise = function (item) {
         var sz = item.data[1];
         var targetIndex = -1;
 
-        if (sz >= 1 && sz <= 8) {
-            targetIndex = sz - 1;
-        } else {
+        // Try to find matching value in dropdown
+        for (var i = 0; i < psSelect.options.length; i++) {
+            if (parseInt(psSelect.options[i].value) === sz) {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex === -1) {
             // Non-standard / Linear
             var customOpt = document.createElement("option");
             customOpt.value = sz;
@@ -351,7 +359,20 @@ HeaderEditor.prototype.initialise = function (item) {
             targetIndex = 8; // The 9th option
         }
 
-        initialiseForm("packsize", targetIndex, this, ref);
+        // Expanded Ref for Pack Size change
+        var refSize = function () {
+            var val = parseInt(psSelect.value);
+            // Auto-set Paged Mode for >= 32K (Count 4)
+            if (val >= 4) {
+                var bit2 = document.getElementById("bit2");
+                if (bit2 && !bit2.checked) {
+                    bit2.checked = true;
+                }
+            }
+            UpdateVisuals(self, true);
+        };
+
+        initialiseForm("packsize", targetIndex, this, refSize);
     }
 
     FillInHeader(this);
@@ -387,7 +408,7 @@ function FillInHeader(editor) {
     var bootaddrsection = document.getElementById("bootaddrsection");
     var bootable = document.getElementById("bit4").checked;
 
-    var ref = function () { UpdateVisuals(editor); };
+    var ref = function () { UpdateVisuals(editor, true); };
 
     if (bootable) {
         if (bootsection) bootsection.style.display = "block";
@@ -403,6 +424,56 @@ function FillInHeader(editor) {
         initialiseForm("priority", wasBootable ? item.data[5] : 0x90, editor, ref);
         initialiseForm("address1", wasBootable ? item.data[6] : 0x00, editor, ref);
         initialiseForm("address2", wasBootable ? item.data[7] : 0x19, editor, ref);
+
+        // Feature: Boot Target Dropdown
+        var dropdown = document.getElementById("boot-target-select");
+        if (dropdown && typeof packs !== 'undefined' && typeof currentPackIndex !== 'undefined') {
+            dropdown.innerHTML = "<option value='-1'>Select Boot Record...</option>";
+
+            var pack = packs[currentPackIndex];
+            if (pack && pack.items) {
+                var currentAddr = 0;
+                var bootAddrVal = ((document.getElementById("address1").value & 0xFF) << 8) | (document.getElementById("address2").value & 0xFF);
+
+                for (var i = 0; i < pack.items.length; i++) {
+                    var pItem = pack.items[i];
+                    var itemLen = pItem.getLength();
+
+                    // Filter: Only select records commencing with bytes 0x02, 0x80 (Wrapped Long Records)
+                    if (pItem.data && pItem.data.length >= 2 && pItem.data[0] === 0x02 && pItem.data[1] === 0x80) {
+                        // Address Calculation:
+                        // Standard Type 2 Wrapper (4 byte header) containing code/data.
+                        // Boot Address is Offset + 4.
+                        var targetAddr = currentAddr + 4;
+                        var label = "REC: " + (pItem.name || "Long Record");
+
+                        var opt = document.createElement("option");
+                        opt.value = targetAddr;
+                        opt.innerText = label + " (0x" + targetAddr.toString(16).toUpperCase().padStart(4, '0') + ")";
+                        if (targetAddr === bootAddrVal) {
+                            opt.selected = true;
+                        }
+                        dropdown.appendChild(opt);
+                    }
+
+                    currentAddr += itemLen;
+                }
+            }
+
+            // Handler
+            dropdown.onchange = function () {
+                var val = parseInt(this.value);
+                if (val >= 0) {
+                    var a1 = (val >> 8) & 0xFF;
+                    var a2 = val & 0xFF;
+                    var e1 = document.getElementById('address1');
+                    var e2 = document.getElementById('address2');
+
+                    if (e1) { e1.value = a1; e1.dispatchEvent(new Event('change')); }
+                    if (e2) { e2.value = a2; e2.dispatchEvent(new Event('change')); }
+                }
+            };
+        }
     } else {
         if (timesection) timesection.style.display = "block";
         if (countsection) countsection.style.display = "block";
@@ -498,10 +569,16 @@ function DrawLinks(editor) {
         var el = document.getElementById(id);
         if (!el) return null;
         var r = el.getBoundingClientRect();
+        var y = r.top + r.height / 2 - rect.top;
+        // Compensate for Legend: Move down by ~10px if it's a fieldset on the right
+        if (isRightSide && el.tagName === 'FIELDSET') {
+            y += 10;
+        }
+
         return {
             x: isRightSide ? (r.left - rect.left) : (r.right - rect.left), // Relative to wrapper
             centerX: r.left + r.width / 2 - rect.left,
-            centerY: r.top + r.height / 2 - rect.top,
+            centerY: y,
         };
     };
 

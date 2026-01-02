@@ -14,8 +14,9 @@
     font-size: 13px;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
     color: var(--sidebar-item-text);
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 #pack-list li:hover {
@@ -27,8 +28,13 @@
     color: var(--list-selected-text);
 }
 
-#pack-list li.drag-over {
+#pack-list li.over {
     border-top: 2px solid var(--status-bar-bg);
+}
+
+#pack-list li.dragElem {
+    opacity: 0.4;
+    background-color: var(--list-selected-bg);
 }
 
 /* Deleted Items Style */
@@ -246,6 +252,40 @@
     overflow: hidden;
     text-overflow: ellipsis;
     flex-grow: 1;
+}
+
+/* Utilities for PackContents Refactor */
+.recycle-btn {
+    cursor: pointer;
+    margin-left: auto;
+    float: right;
+    padding-left: 10px;
+}
+
+.pack-wrapper {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pack-title {
+    flex-grow: 1;
+}
+
+.rename-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 2px;
+    font-size: inherit;
+    font-family: inherit;
+}
+
+.pack-overflow-text {
+    color: #ff4500 !important;
+    /* OrangeRed */
+    text-decoration: line-through;
+}
+
+.clickable {
+    cursor: pointer;
 }
 
 /* Modal Styles */
