@@ -9,9 +9,9 @@ function renderMemoryMap(pack) {
 
     // Calculate Total Pack Size (from Header)
     var sizeMultiplier = pack.items[0].data[1];
-    // Fix: Size Code is linear (1=8k, 2=16k, ... 8=64k).
-    // Reference: https://www.jaapsch.net/psion/fileform.htm#header
-    var totalSize = sizeMultiplier * 8192;
+    // Fix: Size Code is exponential (1=8k, 2=16k, 3=32k, 4=64k...) NOT linear.
+    // Logic matches opkedit.js: 8 * Math.pow(2, code - 1) KB
+    var totalSize = 8192 * Math.pow(2, sizeMultiplier - 1);
 
     // Calculate Actual Used Size
     var usedSize = 0;

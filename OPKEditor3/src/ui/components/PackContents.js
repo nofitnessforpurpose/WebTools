@@ -29,8 +29,6 @@ class PackContentsView {
         if (!this.container) return;
         // prevent re-render during drag
         if (this.dragSrcInfo) {
-            // alert("DEBUG: Render called during drag! blocked.");
-            // console.log("Render blocked due to active drag");
             return;
         }
 

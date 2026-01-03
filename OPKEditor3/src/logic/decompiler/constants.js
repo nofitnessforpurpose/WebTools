@@ -101,7 +101,7 @@ const QCODE_DEFS = {
     0X5C: { args: '', pops: '', pushes: '', desc: 'CLOSE' },
     0X5D: { args: '', pops: 'S S', pushes: '', desc: 'COPY' },
     0X5E: { args: 'f+list', pops: 'S', pushes: '', desc: 'CREATE' },
-    0X5F: { args: '', pops: '', pushes: '', desc: 'DELETE' },
+    0X5F: { args: '', pops: 'S', pushes: '', desc: 'DELETE' },
     0X60: { args: '', pops: '', pushes: '', desc: 'ERASE' },
     0X61: { args: '', pops: '', pushes: '', desc: 'FIRST' },
     0X62: { args: '', pops: '', pushes: '', desc: 'LAST' },

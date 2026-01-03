@@ -37,7 +37,7 @@ class OPLContentViewer {
             const viewer = window.opener[viewerId];
             viewer.render(win);
         } else {
-            console.error("OPLContentViewer: source viewer not found in opener");
+            // console.error("OPLContentViewer: source viewer not found in opener");
         }
     }
 

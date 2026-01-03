@@ -30,6 +30,10 @@
             this.procMap = {}; // procedureName -> { paramCount, returnType }
         }
 
+        resetTrap() {
+            this.trapNext = false;
+        }
+
         getInstructionDef(codeBlock, pc) {
             const op = codeBlock[pc];
             if (op === 0xFE && pc + 1 < codeBlock.length) {
@@ -351,7 +355,7 @@
                 this.trapNext = true;
                 return null;
             }
-            this.trapNext = false;
+            // Do not reset trapNext here; only reset when a statement is emitted (in SourceGenerator)
 
             if (op === 0x20) { stack.push({ text: args.B.toString(), prec: PRECEDENCE.ATOM }); return null; }
             if (op === 0x21 || op === 0x22) { stack.push({ text: args.I.toString(), prec: PRECEDENCE.ATOM }); return null; }
@@ -527,7 +531,7 @@
 
             if (def.desc === 'USE') {
                 const logical = String.fromCharCode(65 + args.B);
-                return `USE ${logical}`;
+                return (trap ? "TRAP " : "") + `USE ${logical}`;
             }
 
             if (def.desc === 'CREATE' || def.desc === 'OPEN') {
@@ -540,11 +544,13 @@
                 if (args.fields && args.fields.length > 0) {
                     const fields = args.fields.map(f => {
                         const suffix = this.getTypeSuffix(f.type);
+                        // Prevent double suffixing if name already contains it
+                        if (f.name.endsWith(suffix)) return f.name;
                         return f.name + suffix;
                     });
                     res += "," + fields.join(",");
                 }
-                return res;
+                return (trap ? "TRAP " : "") + res;
             }
 
             if (op === 0xFB) { // ELSEIF using LZ structure
@@ -591,6 +597,7 @@
                 } else if (varMap[signedAddr]) {
                     comment = `: REM ${varMap[signedAddr].name}`;
                 }
+
                 return `POKEB ${hexAddr},${value}${comment}`;
             }
 
@@ -635,7 +642,7 @@
                             stack.push({ text: expr, prec: PRECEDENCE.FUNC });
                             return null;
                         } else {
-                            return expr;
+                            return (trap ? "TRAP " : "") + expr;
                         }
                     }
                 }
@@ -865,8 +872,16 @@
                 } else {
                     // Command style
                     let res = `${def.desc} ${operands.join(',')}`;
-                    let trap = this.trapNext; // trapNext is bound to this class instance
-                    if (trap && res) res = "TRAP " + res;
+                    // trap already captured at top of function
+
+                    // Whitelist for TRAP support (User Requested)
+                    const allowedTrap = ['APPEND', 'BACK', 'CLOSE', 'COPY', 'CREATE', 'DELETE', 'ERASE', 'EDIT', 'FIRST', 'INPUT', 'LAST', 'NEXT', 'OPEN', 'POSITION', 'RENAME', 'UPDATE', 'USE'];
+
+                    // Check if current opcode is one of them?
+                    // def.desc might have suffixes or args? No, generic commands are cleaner.
+                    if (trap && allowedTrap.includes(def.desc)) {
+                        res = "TRAP " + res;
+                    }
                     return res;
                 }
             }

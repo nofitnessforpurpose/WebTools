@@ -18,4 +18,4 @@ var EditorMessage = {
     DELETERECORDS: 4,
 };
 
-const APP_VERSION = "03.00.13";
+const APP_VERSION = "03.00.14";

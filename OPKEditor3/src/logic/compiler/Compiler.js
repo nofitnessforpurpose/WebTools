@@ -22,7 +22,7 @@ var OPLCompiler = (function () {
         'POKEB', 'POKEW', 'RANDOMIZE', 'CURSOR', 'ESCAPE',
         'APPEND', 'CLOSE', 'COPY', 'CREATE', 'DELETE', 'ERASE',
         'FIRST', 'LAST', 'NEXT', 'BACK', 'OPEN', 'POSITION', 'RENAME', 'UPDATE', 'USE',
-        'KSTAT', 'EDIT', 'INPUT', 'VIEW', 'ON', 'OFF',
+        'ON', 'OFF',
         'RAISE', 'EXT', 'DISP', 'COPYW', 'DELETEW'
     ];
 
@@ -1654,8 +1654,13 @@ var OPLCompiler = (function () {
                     if (peek() && peek().value === ',') next();
                     parseExpression(); // dest$
                     emit(0xD3);
+
+                } else if (t.value === 'DELETE') {
+                    // DELETE file$ (0x5F)
+                    parseExpression(); // file$
+                    emit(0x5F);
                 } else if (t.value === 'DELETEW') {
-                    // DELETEW file$
+                    // DELETEW file$ (0xD4)
                     parseExpression(); // file$
                     emit(0xD4);
                 } else if (t.value === 'INPUT') {

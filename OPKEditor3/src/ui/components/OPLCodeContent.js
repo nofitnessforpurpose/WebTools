@@ -508,6 +508,32 @@ window.OPL_LIBRARY_ROUTINES = [
     ret% = -1
   ENDIF
   RETURN ret%`
+      },
+      {
+        name: "Top Level Menu Item",
+        description: "Adds an item to the top level menu (System/Main Menu) at the specified position.",
+        code:
+          `ADDTOP:(item$, pos%)
+  REM Adds item$ item to the top level menu pos location
+
+  LOCAL I%, A%(2)
+  IF (LEN(item$) > 8)
+    RAISE 202 :REM Menu too big
+  ENDIF
+
+  POKEB $2187,LEN(item$)
+  I% = 1
+  WHILE (I% <= LEN(item$))
+    POKEB $2187 + I%, ASC(MID$(item$, I%, 1))
+    I% = I% + 1
+  ENDWH
+
+  POKEW $2188 + LEN(item$), 0
+  REM Machine code in array A%
+  A%(1)=$3F65
+  A%(2)=$3900
+  REM Call the machine code
+  USR(ADDR(A%()), pos%)`
       }
     ]
   },
@@ -542,25 +568,6 @@ window.OPL_LIBRARY_ROUTINES = [
   ELSE
     GOTO label::
   ENDIF`
-      },
-      {
-        name: "LZ Box Draw",
-        description: "Draws a box using standard characters on LZ 4-line screen.",
-        code:
-          `DRAWBOX:(x%, y%, w%, h%)
-  LOCAL i%
-  AT x%, y%
-  PRINT CHR$(218); REPT$(CHR$(196), w%-2); CHR$(191)
-  
-  i% = 1
-  WHILE i% < h% - 1
-    AT x%, y% + i%
-    PRINT CHR$(179); REPT$(" ", w%-2); CHR$(179)
-    i% = i% + 1
-  ENDWH
-  
-  AT x%, y% + h% - 1
-  PRINT CHR$(192); REPT$(CHR$(196), w%-2); CHR$(217)`
       }
     ]
   }

@@ -148,11 +148,11 @@
 
             const usedSystemVars = (options.annotateSystemVars !== false) ? new Set() : null;
 
-            let pc = (actualQCodeStart !== undefined) ? actualQCodeStart : qcodeStart;
+            let pc = (header.qcodeInstructionStart !== undefined) ? header.qcodeInstructionStart : ((actualQCodeStart !== undefined) ? actualQCodeStart : qcodeStart);
             const stack = new DecompilerStack();
             const loopStack = [];
 
-            const endPC = qcodeStart + qcodeSize;
+            const endPC = (header.qcodeInstructionStart !== undefined ? header.qcodeInstructionStart : qcodeStart) + qcodeSize;
 
             // Log LZ "Stop Sign" Signature if present and skipped
             if (isLZ && pc >= 2 && codeBlock[pc - 2] === 0x59 && codeBlock[pc - 1] === 0xB2) {
@@ -358,7 +358,10 @@
 
                             if (!foundBreakContinue) {
                                 expr = this.instHandler.handleInstruction(op, def, args, stack, varMap, pc, size, codeBlock, labelMap, usedSystemVars);
-                                if (expr) source += this.indent(indentLevel) + expr + "\n";
+                                if (expr) {
+                                    source += this.indent(indentLevel) + expr + "\n";
+                                    this.instHandler.resetTrap();
+                                }
                             }
                         }
                     } else {
@@ -381,6 +384,7 @@
                                 let val = expr.substring(keyword.length).trim();
                                 if (pendingPrint === null) pendingPrint = `${keyword} ${val}`;
                                 else pendingPrint += (pendingPrint.trim().endsWith(',') ? `${val}` : `;${val}`);
+                                this.instHandler.resetTrap();
                             }
                         } else if (isPrintComma || isLPrintComma) {
                             const keyword = (isLPrintComma) ? 'LPRINT' : 'PRINT';
@@ -425,6 +429,7 @@
                                 }
                                 if (expr.trim() === 'TRAP') source += this.indent(indentLevel) + "TRAP ";
                                 else source += this.indent(indentLevel) + expr + "\n";
+                                this.instHandler.resetTrap(); // Consume trap state
                             }
                         }
                     }
@@ -472,12 +477,7 @@
                     source += `  REM Error decompiling QCode ${opStr}: ${e.message} \n`;
                 }
 
-                if (def && def.desc && def.desc.startsWith('RETURN')) {
-                    // Procedure body level is 1
-                    if (indentLevel <= 1 && loopStack.length === 0) {
-                        break;
-                    }
-                }
+
                 pc += size;
             }
 

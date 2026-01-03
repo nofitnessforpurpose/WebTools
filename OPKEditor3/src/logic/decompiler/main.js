@@ -71,12 +71,17 @@
             if (header.qcodeActual !== undefined) {
                 header.qcodeStart = header.qcodeActual;
             }
-            const flow = this.analyzeControlFlow(codeBlock, header.qcodeStart, header.qcodeSize || (header.sourceActual - header.qcodeActual), options);
+
+            // Fix: Use deterministic start if available (skips tables)
+            const analysisStart = header.qcodeInstructionStart !== undefined ? header.qcodeInstructionStart : header.qcodeStart;
+            const analysisSize = header.qcodeSize || (header.sourceActual - header.qcodeActual);
+
+            const flow = this.analyzeControlFlow(codeBlock, analysisStart, analysisSize, options);
 
             // Generate Instructions List (Shared Logic)
             const instructions = [];
-            const qcodeStart = header.qcodeStart;
-            const qcodeSize = header.qcodeSize || (header.sourceActual - header.qcodeActual);
+            const qcodeStart = analysisStart; // Use resolved start
+            const qcodeSize = analysisSize;
 
             let pc = qcodeStart;
 
@@ -234,8 +239,10 @@
             const readByte = () => (offset < codeBlock.length) ? codeBlock[offset++] : 0;
 
             // --- 1. Detect Entry Point ---
+            // --- 1. Detect Entry Point ---
             let extractedName = null;
             let sync = 0, type = 0, vSpace = 0, qSize = 0, nParams = 0;
+            let qcodeTotalLen = 0; // NEW: Track total object size for boundary calculation
             let isProcedure = true;
             let isLZ = false;
             // Detect LZ Variant via Heuristic (Type $ at offset 0x14)
@@ -276,7 +283,7 @@
                 const longRecLen = readWordBE();
                 log(offset - 2, getHexBytes(offset - 2, 2), "LongRec Len", longRecLen.toString(), "Length of Data Block");
 
-                const qcodeTotalLen = readWordBE();
+                qcodeTotalLen = readWordBE();
                 log(offset - 2, getHexBytes(offset - 2, 2), "Total Len", qcodeTotalLen.toString(), "Total Object Size");
 
                 this.oplBase = offset;
@@ -292,7 +299,7 @@
                 const longRecLen = readWordBE();
                 log(2, getHexBytes(2, 2), "LongRec Len", longRecLen.toString(), "Length of Data Block");
 
-                const qcodeTotalLen = readWordBE();
+                qcodeTotalLen = readWordBE();
                 log(4, getHexBytes(4, 2), "Total Len", qcodeTotalLen.toString(), "Total Object Size");
 
                 this.oplBase = offset;
@@ -302,11 +309,13 @@
                 // No summary line, proceed to decode metadata
                 this.oplBase = 0;
                 offset = 0;
+                qcodeTotalLen = codeBlock.length; // Use full block
             } else {
                 // Fallback: Truly unknown
                 log(0, getHexBytes(0, Math.min(codeBlock.length, 8)), "Block File Header", "Unknown Format", "Assuming start of OPL metadata");
                 this.oplBase = 0;
                 offset = 0;
+                qcodeTotalLen = codeBlock.length;
             }
 
             // Separator between File Headers and OPL Body
@@ -332,11 +341,15 @@
                 log(poff, getHexBytes(poff, 1), `ParamType`, typeLabel, "");
             }
 
+            // Calculate Deterministic QCode Start
+            const qcodeInstructionStart = (this.oplBase + qcodeTotalLen) - qSize;
+
             const hMeta = {
                 extractedName,
                 magic: (sync << 8) | type,
                 varSpaceSize: vSpace, qcodeSize: qSize, numParams: nParams, paramTypes: [...paramTypes].reverse(),
-                qcodeStart: offset,
+                qcodeStart: offset, // Kept for compat (is body start)
+                qcodeInstructionStart: qcodeInstructionStart, // NEW: The explicit start of instructions
                 oplBase: this.oplBase,
                 isProcedure, isLZ, isCMXP: false
             };
@@ -404,7 +417,15 @@
                     stringFixups.push({ addr, len });
                     log(sOff, getHexBytes(sOff, 3), `StrFixup Addr:${toEvenHex(addr, 2).replace('0x', '')}`, `Len:${len}`);
                 }
-                if (offset < codeBlock.length) {
+            }
+
+            // --- Deterministic Boundary Check ---
+            // Check if we are already at the QCode boundary before reading ArrayFixTblSize.
+            // This handles cases where the Array Fixup Table (or its size word) is omitted.
+
+            if (offset < codeBlock.length) {
+                // Only attempt to read Array Fixup Size if we are strictly before the QCode instructions
+                if (offset + 2 <= qcodeInstructionStart) {
                     const arrFixSize = readWordBE();
                     log(offset - 2, getHexBytes(offset - 2, 2), "ArrFixTblSize", arrFixSize.toString(), "Array fixup table length");
 
@@ -459,7 +480,6 @@
                 qcodeStart: adjQCodeStart,
                 actualQCodeStart: adjQCodeStart,
                 isLZ: (hMeta.isLZ === true) || isLZSig,
-                isCMXP: !!hMeta.isCMXP,
                 isCMXP: !!hMeta.isCMXP,
                 extractedName: hMeta.extractedName,
                 globalTableSize: globalTableSize // Return explicit size
