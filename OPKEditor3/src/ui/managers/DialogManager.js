@@ -378,8 +378,7 @@ var DialogManager = {
 
             dialog.start();
         } catch (e) {
-            // console.error("Failed to open Options Dialog:", e);
-            alert("An error occurred while opening the options dialog.");
+            console.error("Failed to open Options Dialog:", e);
         }
     },
 

@@ -124,6 +124,7 @@ const SYSTEM_CONSTANTS = {
     0x20FF: "RTT_NUMB",
     0x214F: "DVT_SPAR",
 
+    0x2177: "Hardware (Printer)",
     0x2187: "RTB_BL",
     0x2188: "RTT_BF",
     0x2288: "AMT_NOW",
@@ -185,7 +186,11 @@ const SYSTEM_CONSTANTS = {
     0x23E6: "PKB_OVBL",
     0x23E7: "BTA_VECT",
 
-    0x228E: "AMT_WEEK"
+    0x228E: "AMT_WEEK",
+
+	0xFFE8: "Machine type",
+	0xFFE7: "Modrl variant",
+	0xFFCB: "Software rev. level no."
 };
 
 // Handle conflicts / aliases

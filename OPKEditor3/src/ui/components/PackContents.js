@@ -697,6 +697,23 @@ class PackContentsView {
         var isMain = (item.name === "MAIN");
         var isEOP = (item.type === 255);
 
+        // Feature: End Of Pack Overflow Indication
+        if (isEOP && typeof packs !== 'undefined' && packs[packIndex]) {
+            var p = packs[packIndex];
+            if (p.items && p.items.length > 0 && p.items[0].data) {
+                var sizeCode = p.items[0].data[1];
+                var limit = sizeCode * 8192; // Linear: 8KB * Code
+                if (address > limit) {
+                    row.style.color = '#cd5c5c'; // IndianRed
+                    row.title = "Warning: Pack Overflow! (Used: " + (address / 1024).toFixed(2) + "KB, Limit: " + (limit / 1024) + "KB)";
+                    itemDesc.style.textDecoration = 'line-through';
+                    if (itemName) itemName.style.textDecoration = 'line-through';
+                    // Also apply to address for visibility
+                    itemAddr.style.color = '#cd5c5c';
+                }
+            }
+        }
+
         // ... overflow logic ...
 
         if (!isHeader && !isMain && !isEOP) {

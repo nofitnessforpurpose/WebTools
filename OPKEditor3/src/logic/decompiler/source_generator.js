@@ -482,13 +482,20 @@
             }
 
             // Append System Locations Summary
-            if (usedSystemVars && usedSystemVars.size > 0 && typeof SYSTEM_CONSTANTS !== 'undefined') {
+            // Append System Locations Summary
+            // Resolve SYSTEM_CONSTANTS safely
+            let sysConsts = null;
+            if (typeof SYSTEM_CONSTANTS !== 'undefined') sysConsts = SYSTEM_CONSTANTS;
+            else if (typeof window !== 'undefined' && window.SYSTEM_CONSTANTS) sysConsts = window.SYSTEM_CONSTANTS;
+            else if (typeof global !== 'undefined' && global.SYSTEM_CONSTANTS) sysConsts = global.SYSTEM_CONSTANTS;
+
+            if (usedSystemVars && usedSystemVars.size > 0 && sysConsts) {
                 source += "\n";
                 source += "  REM System Locations\n";
                 const sortedVars = Array.from(usedSystemVars).sort((a, b) => a - b);
                 for (const addr of sortedVars) {
                     const hex = '$' + addr.toString(16).toUpperCase().padStart(4, '0');
-                    const name = SYSTEM_CONSTANTS[addr] || 'Unknown';
+                    const name = sysConsts[addr] || 'Unknown';
                     source += `  REM ${hex} - ${name}\n`;
                 }
             }

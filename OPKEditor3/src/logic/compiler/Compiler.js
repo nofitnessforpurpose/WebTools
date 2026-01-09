@@ -21,14 +21,14 @@ var OPLCompiler = (function () {
         'PRINT', 'LPRINT', 'AT', 'CLS', 'BEEP', 'PAUSE',
         'POKEB', 'POKEW', 'RANDOMIZE', 'CURSOR', 'ESCAPE',
         'APPEND', 'CLOSE', 'COPY', 'CREATE', 'DELETE', 'ERASE',
-        'FIRST', 'LAST', 'NEXT', 'BACK', 'OPEN', 'POSITION', 'RENAME', 'UPDATE', 'USE',
+        'FIRST', 'LAST', 'NEXT', 'BACK', 'OPEN', 'POSITION', 'RENAME', 'UPDATE', 'USE', 'EDIT',
         'ON', 'OFF',
-        'RAISE', 'EXT', 'DISP', 'COPYW', 'DELETEW'
+        'RAISE', 'EXT', 'DISP', 'COPYW', 'DELETEW', 'INPUT', 'KSTAT', 'VIEW', 'MENU'
     ];
 
     // LZ-Only Keywords
     var KEYWORDS_LZ = [
-        'UDG', 'MENU'
+        'UDG', 'MENU', 'CLOCK'
     ];
 
     // --- Helper: Invert QCODE_DEFS for name-based lookup ---
@@ -83,7 +83,7 @@ var OPLCompiler = (function () {
                 // String Literal
                 if (char === '"') {
                     var end = line.indexOf('"', ptr + 1);
-                    if (end === -1) throw new Error("Unterminated string on line " + (i + 1));
+                    if (end === -1) throw new Error("Error on line " + (i + 1) + ": Unterminated string");
                     tokens.push({ type: 'STRING', value: line.substring(ptr + 1, end), line: i + 1 });
                     ptr = end + 1;
                     continue;
@@ -183,7 +183,7 @@ var OPLCompiler = (function () {
                 }
 
                 // Unknown
-                ptr++;
+                throw new Error("Error on line " + (i + 1) + ": Unexpected character '" + char + "'");
             }
             tokens.push({ type: 'EOL', line: i + 1 });
         }
@@ -207,7 +207,7 @@ var OPLCompiler = (function () {
     const BUILTIN_OPCODES_SHARED = {
         'GET': 0x91, 'KEY': 0x95, 'POS': 0xA5, 'COUNT': 0xA2, 'EOF': 0xA3, 'ERR': 0x8E,
         'FREE': 0x90, 'RECSIZE': 0x9D, 'FIND': 0x8F, 'LEN': 0x96, 'LOC': 0x97, 'ASC': 0x8B,
-        'ADDR': 0x8A, 'ABS': 0x93, 'IABS': 0x93, 'INT': 0x94, 'FLT': 0x86, 'DIR$': 0xB7, 'KEY$': 0xBF,
+        'ADDR': 0x8A, 'ABS': 0xA6, 'IABS': 0x93, 'INT': 0x94, 'FLT': 0x86, 'DIR$': 0xB7, 'KEY$': 0xBF,
         'CHR$': 0xB8, 'EXIST': 0xA4,
         'DAY': 0x8C, 'HOUR': 0x92, 'MINUTE': 0x99, 'MONTH': 0x9A, 'SECOND': 0x9E, 'YEAR': 0xA1,
         'PEEKB': 0x9B, 'PEEKW': 0x9C, 'USR': 0x9F, 'USR$': 0xC8,
@@ -216,7 +216,8 @@ var OPLCompiler = (function () {
         'REPT$': 0xC5, 'GEN$': 0xBC, 'FIX$': 0xBB, 'SCI$': 0xC6, 'NUM$': 0xC3, 'DATIM$': 0xB9,
         'ERR$': 0xBA, 'GET$': 0xBD, 'VAL': 0xB5, 'PI': 0xAF, 'RAD': 0xB0, 'DEG': 0xA9,
         'SIN': 0xB2, 'COS': 0xA8, 'TAN': 0xB4, 'ATAN': 0xA7, 'SQR': 0xB3, 'LN': 0xAD,
-        'LOG': 0xAE, 'EXP': 0xAA, 'RND': 0xB1, 'INTF': 0xAC, 'SPACE': 0xB6
+        'LOG': 0xAE, 'EXP': 0xAA, 'RND': 0xB1, 'INTF': 0xAC, 'SPACE': 0xB6,
+        'DISP': 0x8D
     };
 
     const BUILTIN_OPCODES_LZ = {
@@ -224,6 +225,258 @@ var OPLCompiler = (function () {
         'ACOS': 0xDB, 'ASIN': 0xDC, 'DAYS': 0xDD, 'MAX': 0xDE, 'MEAN': 0xDF,
         'MIN': 0xE0, 'STD': 0xE1, 'SUM': 0xE2, 'VAR': 0xE3,
         'DAYNAME$': 0xE4, 'DIRW$': 0xE5, 'MONTH$': 0xE6
+    };
+
+    const QCODE_DEFS = {
+        0X00: { args: 'v', pops: '', pushes: 'I', desc: 'Push local/global int' },
+        0X01: { args: 'v', pops: '', pushes: 'F', desc: 'Push local/global float' },
+        0X02: { args: 'v', pops: '', pushes: 'S', desc: 'Push local/global string' },
+        0X03: { args: 'V', pops: '', pushes: 'I', desc: 'Push local/global int array element' },
+        0X04: { args: 'V', pops: '', pushes: 'F', desc: 'Push local/global float array element' },
+        0X05: { args: 'V', pops: '', pushes: 'S', desc: 'Push local/global string array element' },
+        0X06: { args: 'W', pops: '', pushes: 'F', desc: 'Push calculator memory' },
+        0X07: { args: 'v', pops: '', pushes: 'I', desc: 'Push extern int' },
+        0X08: { args: 'v', pops: '', pushes: 'F', desc: 'Push extern float' },
+        0X09: { args: 'v', pops: '', pushes: 'S', desc: 'Push extern string' },
+        0X0A: { args: 'v', pops: '', pushes: 'I', desc: 'Push extern int array element' },
+        0X0B: { args: 'v', pops: '', pushes: 'F', desc: 'Push extern float array element' },
+        0X0C: { args: 'v', pops: '', pushes: 'S', desc: 'Push extern string array element' },
+        0X0D: { args: 'v', pops: '', pushes: 'I', desc: 'Push local/global int ref' },
+        0X0E: { args: 'v', pops: '', pushes: 'F', desc: 'Push local/global float ref' },
+        0X0F: { args: 'v', pops: '', pushes: 'S', desc: 'Push local/global string ref' },
+        0X10: { args: 'v', pops: 'I', pushes: 'I', desc: 'Push local/global int array ref' },
+        0X11: { args: 'v', pops: 'I', pushes: 'F', desc: 'Push local/global float array ref' },
+        0X12: { args: 'v', pops: 'I', pushes: 'S', desc: 'Push local/global string array ref' },
+        0X13: { args: 'W', pops: '', pushes: 'F', desc: 'Push calculator memory ref' },
+        0X14: { args: 'V', pops: '', pushes: 'I', desc: 'Push extern int ref' },
+        0X15: { args: 'V', pops: '', pushes: 'F', desc: 'Push extern float ref' },
+        0X16: { args: 'V', pops: '', pushes: 'S', desc: 'Push extern string ref' },
+        0X17: { args: 'V', pops: 'I', pushes: 'I', desc: 'Push extern int array ref' },
+        0X18: { args: 'V', pops: 'I', pushes: 'F', desc: 'Push extern float array ref' },
+        0X19: { args: 'V', pops: 'I', pushes: 'S', desc: 'Push extern string array ref' },
+        0X1A: { args: 'B', pops: 'S', pushes: 'I', desc: 'Push file field int' },
+        0X1B: { args: 'B', pops: 'S', pushes: 'F', desc: 'Push file field float' },
+        0X1C: { args: 'B', pops: 'S', pushes: 'S', desc: 'Push file field string' },
+        0X1D: { args: 'B', pops: 'S', pushes: 'I', desc: 'Push file field int ref' },
+        0X1E: { args: 'B', pops: 'S', pushes: 'F', desc: 'Push file field float ref' },
+        0X1F: { args: 'B', pops: 'S', pushes: 'S', desc: 'Push file field string ref' },
+        0X20: { args: 'B', pops: '', pushes: 'I', desc: 'Push byte literal' },
+        0X21: { args: 'I', pops: '', pushes: 'I', desc: 'Push word literal' },
+        0X22: { args: 'I', pops: '', pushes: 'I', desc: 'Push integer literal' },
+        0X23: { args: 'F', pops: '', pushes: 'F', desc: 'Push float literal' },
+        0X24: { args: 'S', pops: '', pushes: 'S', desc: 'Push string literal' },
+        0X25: { args: '', pops: '', pushes: '', desc: 'Machine Code Call' },
+        0X26: { args: '', pops: '', pushes: '', desc: 'UT$LEAV' },
+        0X27: { args: '', pops: 'I I', pushes: 'I', desc: '<' },
+        0X28: { args: '', pops: 'I I', pushes: 'I', desc: '<=' },
+        0X29: { args: '', pops: 'I I', pushes: 'I', desc: '>' },
+        0X2A: { args: '', pops: 'I I', pushes: 'I', desc: '>=' },
+        0X2B: { args: '', pops: 'I I', pushes: 'I', desc: '<>' },
+        0X2C: { args: '', pops: 'I I', pushes: 'I', desc: '=' },
+        0X2D: { args: '', pops: 'I I', pushes: 'I', desc: '+' },
+        0X2E: { args: '', pops: 'I I', pushes: 'I', desc: '-' },
+        0X2F: { args: '', pops: 'I I', pushes: 'I', desc: '*' },
+        0X30: { args: '', pops: 'I I', pushes: 'I', desc: '/' },
+        0X31: { args: '', pops: 'I I', pushes: 'I', desc: '**' },
+        0X32: { args: '', pops: 'I', pushes: 'I', desc: '-' },
+        0X33: { args: '', pops: 'I', pushes: 'I', desc: 'NOT' },
+        0X34: { args: '', pops: 'I I', pushes: 'I', desc: 'AND' },
+        0X35: { args: '', pops: 'I I', pushes: 'I', desc: 'OR' },
+        0X36: { args: '', pops: 'F F', pushes: 'I', desc: '<' },
+        0X37: { args: '', pops: 'F F', pushes: 'I', desc: '<=' },
+        0X38: { args: '', pops: 'F F', pushes: 'I', desc: '>' },
+        0X39: { args: '', pops: 'F F', pushes: 'I', desc: '>=' },
+        0X3A: { args: '', pops: 'F F', pushes: 'I', desc: '<>' },
+        0X3B: { args: '', pops: 'F F', pushes: 'I', desc: '=' },
+        0X3C: { args: '', pops: 'F F', pushes: 'F', desc: '+' },
+        0X3D: { args: '', pops: 'F F', pushes: 'F', desc: '-' },
+        0X3E: { args: '', pops: 'F F', pushes: 'F', desc: '*' },
+        0X3F: { args: '', pops: 'F F', pushes: 'F', desc: '/' },
+        0X40: { args: '', pops: 'F F', pushes: 'F', desc: '**' },
+        0X41: { args: '', pops: 'F', pushes: 'F', desc: '-' },
+        0X42: { args: '', pops: 'F', pushes: 'I', desc: 'NOT' },
+        0X43: { args: '', pops: 'F F', pushes: 'I', desc: 'AND' },
+        0X44: { args: '', pops: 'F F', pushes: 'I', desc: 'OR' },
+        0X45: { args: '', pops: 'S S', pushes: 'I', desc: '<' },
+        0X46: { args: '', pops: 'S S', pushes: 'I', desc: '<=' },
+        0X47: { args: '', pops: 'S S', pushes: 'I', desc: '>' },
+        0X48: { args: '', pops: 'S S', pushes: 'I', desc: '>=' },
+        0X49: { args: '', pops: 'S S', pushes: 'I', desc: '<>' },
+        0X4A: { args: '', pops: 'S S', pushes: 'I', desc: '=' },
+        0X4B: { args: '', pops: 'S S', pushes: 'S', desc: '+' },
+        0X4C: { args: '', pops: 'I I', pushes: '', desc: 'AT' },
+        0X4D: { args: '', pops: 'I I', pushes: '', desc: 'BEEP' },
+        0X4E: { args: '', pops: '', pushes: '', desc: 'CLS' },
+        0X4F: { args: 'O', pops: '', pushes: '', desc: 'CURSOR' },
+        0X50: { args: 'O', pops: '', pushes: '', desc: 'ESCAPE' },
+        0X51: { args: 'D', pops: '', pushes: '', desc: 'GOTO' },
+        0X52: { args: '', pops: '', pushes: '', desc: 'OFF' },
+        0X53: { args: 'D', pops: '', pushes: '', desc: 'ONERR' },
+        0X54: { args: '', pops: 'I', pushes: '', desc: 'PAUSE' },
+        0X55: { args: '', pops: 'I I', pushes: '', desc: 'POKEB' },
+        0X56: { args: '', pops: 'I I', pushes: '', desc: 'POKEW' },
+        0X57: { args: '', pops: 'I', pushes: '', desc: 'RAISE' },
+        0X58: { args: '', pops: 'F', pushes: '', desc: 'RANDOMIZE' },
+        0X59: { args: '', pops: '', pushes: '', desc: 'STOP' },
+        0X5A: { args: '', pops: '', pushes: '', desc: 'TRAP' },
+        0X5B: { args: '', pops: '', pushes: '', desc: 'APPEND' },
+        0X5C: { args: '', pops: '', pushes: '', desc: 'CLOSE' },
+        0X5D: { args: '', pops: 'S S', pushes: '', desc: 'COPY' },
+        0X5E: { args: 'f+list', pops: 'S', pushes: '', desc: 'CREATE' },
+        0X5F: { args: '', pops: 'S', pushes: '', desc: 'DELETE' },
+        0X60: { args: '', pops: '', pushes: '', desc: 'ERASE' },
+        0X61: { args: '', pops: '', pushes: '', desc: 'FIRST' },
+        0X62: { args: '', pops: '', pushes: '', desc: 'LAST' },
+        0X63: { args: '', pops: '', pushes: '', desc: 'NEXT' },
+        0X64: { args: '', pops: '', pushes: '', desc: 'BACK' },
+        0X65: { args: 'f+list', pops: 'S', pushes: '', desc: 'OPEN' },
+        0X66: { args: '', pops: 'I', pushes: '', desc: 'POSITION' },
+        0X67: { args: '', pops: 'S S', pushes: '', desc: 'RENAME' },
+        0X68: { args: '', pops: '', pushes: '', desc: 'UPDATE' },
+        0X69: { args: 'B', pops: '', pushes: '', desc: 'USE' },
+        0X6A: { args: '', pops: 'I', pushes: '', desc: 'KSTAT' },
+        0X6B: { args: '', pops: 'S', pushes: '', desc: 'EDIT' },
+        0X6C: { args: '', pops: 'I', pushes: '', desc: 'INPUT' },
+        0X6D: { args: '', pops: 'I', pushes: '', desc: 'INPUT' },
+        0X6E: { args: '', pops: 'I', pushes: '', desc: 'INPUT' },
+        0X6F: { args: '', pops: 'I', pushes: '', desc: 'PRINT' },
+        0X70: { args: '', pops: 'F', pushes: '', desc: 'PRINT' },
+        0X71: { args: '', pops: 'S', pushes: '', desc: 'PRINT' },
+        0X72: { args: '', pops: '', pushes: '', desc: 'PRINT ,' },
+        0X73: { args: '', pops: '', pushes: '', desc: 'PRINT (NL)' },
+        0X74: { args: '', pops: 'I', pushes: '', desc: 'LPRINT' },
+        0X75: { args: '', pops: 'F', pushes: '', desc: 'LPRINT' },
+        0X76: { args: '', pops: 'S', pushes: '', desc: 'LPRINT' },
+        0X77: { args: '', pops: '', pushes: '', desc: 'LPRINT ,' },
+        0X78: { args: '', pops: '', pushes: '', desc: 'LPRINT (NL)' },
+        0X79: { args: '', pops: '?', pushes: '', desc: 'RETURN' },
+        0X7A: { args: '', pops: '', pushes: '', desc: 'RETURN' },
+        0X7B: { args: '', pops: '', pushes: '', desc: 'RETURN' },
+        0X7C: { args: '', pops: '', pushes: '', desc: 'RETURN' },
+        0X7D: { args: 'params', pops: '', pushes: '?', desc: 'PROC' },
+        0X7E: { args: 'D', pops: '', pushes: '', desc: 'BranchIfFalse' },
+        0X7F: { args: '', pops: 'I I', pushes: '', desc: 'Assign Int' },
+        0X80: { args: '', pops: 'I F', pushes: '', desc: 'Assign Float' },
+        0X81: { args: '', pops: 'I S', pushes: '', desc: 'Assign String' },
+        0X82: { args: '', pops: '', pushes: '', desc: 'DROP' },
+        0X83: { args: '', pops: 'I', pushes: '', desc: 'DROP' },
+        0X84: { args: '', pops: 'F', pushes: '', desc: 'DROP' },
+        0X85: { args: '', pops: 'S', pushes: '', desc: 'DROP' },
+        0X86: { args: '', pops: 'I', pushes: 'F', desc: 'FLT' },
+        0X87: { args: '', pops: 'F', pushes: 'I', desc: 'INT' },
+        0X88: { args: '', pops: '', pushes: '', desc: 'End of Field List' },
+        0X89: { args: 'code', pops: '', pushes: '', desc: 'Inline Code' },
+        0X8A: { args: '', pops: 'i', pushes: 'I', desc: 'ADDR' },
+        0X8B: { args: '', pops: 'S', pushes: 'I', desc: 'ASC' },
+        0X8C: { args: '', pops: '', pushes: 'I', desc: 'DAY' },
+        0X8D: { args: '', pops: 'I S', pushes: 'I', desc: 'DISP' },
+        0X8E: { args: '', pops: '', pushes: 'I', desc: 'ERR' },
+        0X8F: { args: '', pops: 'S', pushes: 'I', desc: 'FIND' },
+        0X90: { args: '', pops: '', pushes: 'I', desc: 'FREE' },
+        0X91: { args: '', pops: '', pushes: 'I', desc: 'GET' },
+        0X92: { args: '', pops: '', pushes: 'I', desc: 'HOUR' },
+        0X93: { args: '', pops: 'I', pushes: 'I', desc: 'ABS' },
+        0X94: { args: '', pops: 'F', pushes: 'I', desc: 'INT' },
+        0X95: { args: '', pops: '', pushes: 'I', desc: 'KEY' },
+        0X96: { args: '', pops: 'S', pushes: 'I', desc: 'LEN' },
+        0X97: { args: '', pops: 'S S', pushes: 'I', desc: 'LOC' },
+        0X98: { args: '', pops: 'S', pushes: 'I', desc: 'MENU' },
+        0X99: { args: '', pops: '', pushes: 'I', desc: 'MINUTE' },
+        0X9A: { args: '', pops: '', pushes: 'I', desc: 'MONTH' },
+        0X9B: { args: '', pops: 'I', pushes: 'I', desc: 'PEEKB' },
+        0X9C: { args: '', pops: 'I', pushes: 'I', desc: 'PEEKW' },
+        0X9D: { args: '', pops: '', pushes: 'I', desc: 'RECSIZE' },
+        0X9E: { args: '', pops: '', pushes: 'I', desc: 'SECOND' },
+        0X9F: { args: '', pops: 'I I', pushes: 'I', desc: 'USR' },
+        0XA0: { args: '', pops: 'I S', pushes: 'I', desc: 'VIEW' },
+        0XA1: { args: '', pops: '', pushes: 'I', desc: 'YEAR' },
+        0XA2: { args: '', pops: '', pushes: 'I', desc: 'COUNT' },
+        0XA3: { args: '', pops: '', pushes: 'I', desc: 'EOF' },
+        0XA4: { args: '', pops: 'S', pushes: 'I', desc: 'EXIST' },
+        0XA5: { args: '', pops: '', pushes: 'I', desc: 'POS' },
+        0XA6: { args: '', pops: 'F', pushes: 'F', desc: 'ABS' },
+        0XA7: { args: '', pops: 'F', pushes: 'F', desc: 'ATAN' },
+        0XA8: { args: '', pops: 'F', pushes: 'F', desc: 'COS' },
+        0XA9: { args: '', pops: 'F', pushes: 'F', desc: 'DEG' },
+        0XAA: { args: '', pops: 'F', pushes: 'F', desc: 'EXP' },
+        0XAB: { args: '', pops: 'F', pushes: 'F', desc: 'FLT' },
+        0XAC: { args: '', pops: 'F', pushes: 'F', desc: 'INTF' },
+        0XAD: { args: '', pops: 'F', pushes: 'F', desc: 'LN' },
+        0XAE: { args: '', pops: 'F', pushes: 'F', desc: 'LOG' },
+        0XAF: { args: '', pops: '', pushes: 'F', desc: 'PI' },
+        0XB0: { args: '', pops: 'F', pushes: 'F', desc: 'RAD' },
+        0XB1: { args: '', pops: '', pushes: 'F', desc: 'RND' },
+        0XB2: { args: '', pops: 'F', pushes: 'F', desc: 'SIN' },
+        0XB3: { args: '', pops: 'F', pushes: 'F', desc: 'SQR' },
+        0XB4: { args: '', pops: 'F', pushes: 'F', desc: 'TAN' },
+        0XB5: { args: '', pops: 'S', pushes: 'F', desc: 'VAL' },
+        0XB6: { args: '', pops: '', pushes: 'F', desc: 'SPACE' },
+        0XB7: { args: '', pops: 'S', pushes: 'S', desc: 'DIR$' },
+        0XB8: { args: '', pops: 'I', pushes: 'S', desc: 'CHR$' },
+        0XB9: { args: '', pops: '', pushes: 'S', desc: 'DATIM$' },
+        0XBA: { args: '', pops: '', pushes: 'S', desc: 'ERR$' },
+        0XBB: { args: '', pops: 'F I I', pushes: 'S', desc: 'FIX$' },
+        0XBC: { args: '', pops: 'F I', pushes: 'S', desc: 'GEN$' },
+        0XBD: { args: '', pops: '', pushes: 'S', desc: 'GET$' },
+        0XBE: { args: '', pops: 'I', pushes: 'S', desc: 'HEX$' },
+        0XBF: { args: '', pops: '', pushes: 'S', desc: 'KEY$' },
+        0XC0: { args: '', pops: 'S I', pushes: 'S', desc: 'LEFT$' },
+        0XC1: { args: '', pops: 'S', pushes: 'S', desc: 'LOWER$' },
+        0XC2: { args: '', pops: 'S I I', pushes: 'S', desc: 'MID$' },
+        0XC3: { args: '', pops: 'F I', pushes: 'S', desc: 'NUM$' },
+        0XC4: { args: '', pops: 'S I', pushes: 'S', desc: 'RIGHT$' },
+        0XC5: { args: '', pops: 'S I', pushes: 'S', desc: 'REPT$' },
+        0XC6: { args: '', pops: 'F I I', pushes: 'S', desc: 'SCI$' },
+        0XC7: { args: '', pops: 'S', pushes: 'S', desc: 'UPPER$' },
+        0XC8: { args: '', pops: 'I I', pushes: 'S', desc: 'USR$' },
+        0XC9: { args: '', pops: 's', pushes: 'I', desc: 'ADDR' },
+        0XCA: { args: 'S I', pops: '', pushes: '', desc: '.LNO' },
+        0XCB: { args: 'I I', pops: '', pushes: '', desc: '.LNO' },
+        0XCC: { args: '', pops: 'F F', pushes: 'F', desc: '<%' },
+        0XCD: { args: '', pops: 'F F', pushes: 'F', desc: '>%' },
+        0XCE: { args: '', pops: 'F F', pushes: 'F', desc: '+%' },
+        0XCF: { args: '', pops: 'F F', pushes: 'F', desc: '-%' },
+        0XD0: { args: '', pops: 'F F', pushes: 'F', desc: '*%' },
+        0XD1: { args: '', pops: 'F F', pushes: 'F', desc: '/%' },
+        0XD2: { args: '', pops: 'I', pushes: '', desc: 'OFF' },
+        0XD3: { args: '', pops: 'S S', pushes: '', desc: 'COPYW' },
+        0XD4: { args: '', pops: 'S', pushes: '', desc: 'DELETEW' },
+        0XD5: { args: '', pops: 'I I I I I I I I I', pushes: '', desc: 'UDG' },
+        0XD6: { args: '', pops: 'I', pushes: 'I', desc: 'CLOCK' },
+        0XD7: { args: '', pops: 'I I I', pushes: 'I', desc: 'DOW' },
+        0XD8: { args: '', pops: 'S', pushes: 'I', desc: 'FINDW' },
+        0XD9: { args: '', pops: 'I S', pushes: 'I', desc: 'MENUN' },
+        0XDA: { args: '', pops: 'I I I', pushes: 'I', desc: 'WEEK' },
+        0XDB: { args: '', pops: 'F', pushes: 'F', desc: 'ACOS' },
+        0XDC: { args: '', pops: 'F', pushes: 'F', desc: 'ASIN' },
+        0XDD: { args: '', pops: 'I I I', pushes: 'F', desc: 'DAYS' },
+        0XDE: { args: 'Flist', pushes: 'F', desc: 'MAX' },
+        0XDF: { args: 'Flist', pushes: 'F', desc: 'MEAN' },
+        0XE0: { args: 'Flist', pushes: 'F', desc: 'MIN' },
+        0XE1: { args: 'Flist', pushes: 'F', desc: 'STD' },
+        0XE2: { args: 'Flist', pushes: 'F', desc: 'SUM' },
+        0XE3: { args: 'Flist', pushes: 'F', desc: 'VAR' },
+        0XE4: { args: 'I', pushes: 'S', desc: 'DAYNAME$' },
+        0XE5: { args: 'S', pushes: 'S', desc: 'DIRW$' },
+        0XE6: { args: 'I', pushes: 'S', desc: 'MONTH$' },
+        0XEA: { args: '', pops: '', pushes: '', desc: 'REM Unknown EA' },
+        0XED: { args: 'b', pops: '', pushes: '', desc: 'EXT' },
+        0XEF: { args: 'v', pops: '', pushes: '', desc: 'REM LZ_EF' },
+        0XFB: { args: 'D', pops: '', pushes: '', desc: 'ELSEIF' },
+        0XFC: { args: '', pops: '', pushes: '', desc: 'REM LZ_FC' },
+        0XFD: { args: '', pops: '', pushes: '', desc: 'REM LZ_FD' },
+        0XFE: { args: 'prefix', pops: '', pushes: '', desc: 'Multi-byte Prefix' },
+        0XFF: { args: '', pops: '', pushes: '', desc: 'CHECK' },
+        0XF1: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_F1' },
+        0XF2: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_F2' },
+        0XF3: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_F3' },
+        0XF4: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_F4' },
+        0XF5: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_F5' },
+        0XF6: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_F6' },
+        0XF7: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_F7' },
+        0XF8: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_F8' },
+        0XF9: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_F9' },
+        0XFA: { args: 'b b', pops: '', pushes: '', desc: 'POKE_M_FA' },
     };
 
     // --- Parser & Compiler ---
@@ -259,6 +512,11 @@ var OPLCompiler = (function () {
 
         function peek() { return tokens[ptr]; }
         function next() { return tokens[ptr++]; }
+
+        function error(msg) {
+            var lineInfo = (t && t.line) ? "Error on line " + t.line + ": " : "Error: ";
+            throw new Error(lineInfo + msg);
+        }
 
         // Skip blank lines / comments handled by tokenizer
 
@@ -351,6 +609,10 @@ var OPLCompiler = (function () {
                             }
 
                             declList.push({ name: storedName, type: type, dims: dim });
+                        } else {
+                            var errTok = varNameTok || t;
+                            var errVal = errTok.value || errTok.type || "EOF";
+                            throw new Error("Error on line " + (errTok.line || "?") + ": Expected Variable Name, found '" + errVal + "'");
                         }
 
                         if (peek() && peek().value === ',') {
@@ -668,9 +930,9 @@ var OPLCompiler = (function () {
         }
 
         // Combine Fixups: Locals FIRST, then Globals (per OPL Spec)
-        // Combine Fixups: Globals FIRST, then Locals (Match Golden Binary)
-        var strFixups = globalStrFixups.concat(localStrFixups);
-        var arrFixups = globalArrFixups.concat(localArrFixups);
+        // Combine Fixups: Locals FIRST, then Globals (Match Golden Binary)
+        var strFixups = localStrFixups.concat(globalStrFixups);
+        var arrFixups = localArrFixups.concat(globalArrFixups);
 
         // Final varSpaceSize: Tight Packing, no alignment to even.
 
@@ -683,12 +945,22 @@ var OPLCompiler = (function () {
             qcode.push(0x59, 0xB2);
         }
 
+        var pendingTrap = false;
+
         // --- CodeGen Helpers ---
         function emit(b) {
             qcode.push(b & 0xFF);
         }
         function emitWord(w) { emit(w >> 8); emit(w & 0xFF); }
         function emitOp(op) { emit(op); }
+
+        function emitCommand(op) {
+            if (pendingTrap) {
+                emit(0x5A); // TRAP
+                pendingTrap = false;
+            }
+            emit(op);
+        }
 
         function emitFloat(val) {
 
@@ -808,6 +1080,7 @@ var OPLCompiler = (function () {
             var type = parseAddSub();
             while (peek() && ['=', '<', '>', '<=', '>=', '<>'].includes(peek().value)) {
                 var op = next().value;
+                var rhsStart = qcode.length; // Capture start of RHS
                 var rhsType = parseAddSub();
                 var usePercent = false;
 
@@ -866,11 +1139,26 @@ var OPLCompiler = (function () {
                         // Simple mixed mode support:
                         if (type === 0 && rhsType === 1) {
                             // Int LHS, Float RHS -> Promote LHS? 
-                            // We are stuck because LHS is already on stack.
-                            //                             console.warn("Compiler: Mixed mode comparison (Int vs Float) not fully supported yet. LHS conversion needed.");
+                            // Backpatch: Insert FLT before RHS
+                            if (rhsStart !== undefined) {
+                                qcode.splice(rhsStart, 0, 0x86); // Inject FLT
+                            } else {
+                                console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
+                            }
+                            type = 1; // Promoted to Float
                         } else if (type === 1 && rhsType === 0) {
                             // Float LHS, Int RHS -> Promote RHS
                             emit(0x86); // FLT RHS
+                        }
+
+                        // Re-evaluate comparison for Float (since mixed mode implies Float)
+                        if (type === 1) { // Float Comparison
+                            if (op === '=') emit(0x3B);
+                            else if (op === '<') emit(0x36);
+                            else if (op === '>') emit(0x38);
+                            else if (op === '<=') emit(0x37);
+                            else if (op === '>=') emit(0x39);
+                            else if (op === '<>') emit(0x3A);
                         }
                     }
                     type = 0; // Result is Int
@@ -892,6 +1180,7 @@ var OPLCompiler = (function () {
             var type = parseMulDiv();
             while (peek() && ['+', '-'].includes(peek().value)) {
                 var op = next().value;
+                var rhsStart = qcode.length; // Capture start of RHS
                 var rhsType = parseMulDiv();
                 var usePercent = false;
 
@@ -900,7 +1189,7 @@ var OPLCompiler = (function () {
                     usePercent = true;
                 }
 
-                type = emitMathOp(op, type, rhsType, usePercent);
+                type = emitMathOp(op, type, rhsType, usePercent, rhsStart);
             }
             return type;
         }
@@ -909,6 +1198,7 @@ var OPLCompiler = (function () {
             var type = parsePower();
             while (peek() && ['*', '/'].includes(peek().value)) {
                 var op = next().value;
+                var rhsStart = qcode.length; // Capture start of RHS
                 var rhsType = parsePower();
                 var usePercent = false;
 
@@ -917,7 +1207,7 @@ var OPLCompiler = (function () {
                     usePercent = true;
                 }
 
-                type = emitMathOp(op, type, rhsType, usePercent);
+                type = emitMathOp(op, type, rhsType, usePercent, rhsStart);
             }
             return type;
         }
@@ -926,13 +1216,14 @@ var OPLCompiler = (function () {
             var type = parseFactor();
             while (peek() && peek().value === '**') {
                 var op = next().value;
+                var rhsStart = qcode.length; // Capture start of RHS
                 var rhsType = parseFactor();
-                type = emitMathOp(op, type, rhsType, false);
+                type = emitMathOp(op, type, rhsType, false, rhsStart);
             }
             return type;
         }
 
-        function emitMathOp(op, t1, t2, usePercent) {
+        function emitMathOp(op, t1, t2, usePercent, rhsStart) {
             if (t1 === 2 && t2 === 2 && op === '+' && !usePercent) {
                 emit(0x4B); // Str + Str
                 return 2;
@@ -963,7 +1254,14 @@ var OPLCompiler = (function () {
                 else if (op === '**') emit(0x31);
                 return 0;
             } else { // Float
-                if (t1 === 0) { console.warn("Compiler: Implicit Int->Float cast required (LHS)."); }
+                if (t1 === 0) {
+                    // Backpatch: Insert FLT before RHS
+                    if (rhsStart !== undefined) {
+                        qcode.splice(rhsStart, 0, 0x86); // Inject FLT
+                    } else {
+                        console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
+                    }
+                }
                 if (t2 === 0) {
                     emit(0x86);
                 }
@@ -1147,7 +1445,7 @@ var OPLCompiler = (function () {
                             // 0x1D (IntRef), 0x1E (FltRef), 0x1F (StrRef) -- References?
                             // Expression result is usually Value.
 
-                            var fName = tField.value;
+                            var fName = tField.value.toUpperCase();
                             var type = 1; // Flt
                             if (fName.endsWith('%')) type = 0; // Int
                             else if (fName.endsWith('$')) type = 2; // Str
@@ -1168,27 +1466,18 @@ var OPLCompiler = (function () {
                         }
                     }
                     // If fall through (invalid logical name?), treat as error or weird syntax
-                    throw new Error("Invalid Field Access syntax: " + valName + "." + (tField ? tField.value : ""));
+                    error("Invalid Field Access syntax: " + valName + "." + (tField ? tField.value : ""));
                 }
 
-                // --- 2. Logical Name Constants (A, B, C, D) ---
-                // Treat A-D as integer constants 0-3 when used as values (e.g. USE A)
-                if (valName.length === 1) {
-                    var logVal = -1;
-                    if (valName === 'A') logVal = 0;
-                    else if (valName === 'B') logVal = 1;
-                    else if (valName === 'C') logVal = 2;
-                    else if (valName === 'D') logVal = 3;
-
-                    if (logVal !== -1) {
-                        emit(0x22); emitWord(logVal); // Push Integer logic val
-                        return 0; // Int
-                    }
-                }
-
+                // --- 2. Built-in Opcodes ---
                 var builtinOp = activeOpcodes[valName];
 
                 if (builtinOp) {
+                    var def = QCODE_DEFS[builtinOp];
+                    if (def && def.pushes === '') {
+                        throw new Error("Error on line " + t.line + ": Syntax Error: '" + valName + "' is a command, not a function.");
+                    }
+
                     // Check if it's a function using parenthesis: GET()
                     // Check if it's a function using parenthesis: GET()
                     if (peek() && peek().value === '(') {
@@ -1200,9 +1489,27 @@ var OPLCompiler = (function () {
                             expectedArgs = def.pops.split(' ');
                         }
 
+                        // Patch for ABS Polymorphism (Int 0x93 vs Float 0xA6)
+                        if (valName === 'ABS') {
+                            // Peek ahead to see likely argument type (naive check)
+                            // or wait until we parse the expression and decide?
+                            // We are inside the loop parsing arguments.
+                            // But we need to set the Opcode *after* parsing arguments?
+                            // No, typically we parse args then emit op.
+                            // But we need to cast args based on expected type.
+                            // Solution: Parse expression first, THEN decide if we need to switch Opcode.
+                            // But we currently use expectedArgs to auto-cast.
+                            // ABS (Int) expects 'I'. ABS (Float) expects 'F'.
+
+                            // Let's defer strict type checking for ABS until we see the arg.
+                            // We can parse the expression, see what we got, and THEN choose the op.
+                        }
+
                         var argIdx = 0;
                         while (peek() && peek().value !== ')') {
                             var argType = parseExpression();
+
+                            // Auto-Cast based on Opcode Signature
 
                             // Auto-Cast based on Opcode Signature
                             if (argIdx < expectedArgs.length) {
@@ -1223,13 +1530,16 @@ var OPLCompiler = (function () {
                     }
                     emit(builtinOp);
 
-                    // Return type whitelist for built-ins in expressions
-                    var intBuiltins = [
-                        'GET', 'KEY', 'POS', 'COUNT', 'EOF', 'ERR', 'DAY', 'HOUR', 'MINUTE', 'MONTH', 'SECOND', 'YEAR',
-                        'FREE', 'RECSIZE', 'FIND', 'LEN', 'LOC', 'ASC', 'ADDR', 'VIEW', 'PEEKB', 'PEEKW', 'USR', 'DOW', 'WEEK', 'FDAYS', 'EXIST',
-                        'IABS', 'MENUN', 'MENU'
-                    ];
-                    if (intBuiltins.includes(valName)) return 0;
+                    // Dynamically determine return type from QCODE definitions
+                    // This handles polymorphic functions (like ABS) where the opcode changes based on argument types.
+                    if (QCODE_DEFS[builtinOp]) {
+                        var pushes = QCODE_DEFS[builtinOp].pushes;
+                        if (pushes === 'I') return 0; // Int
+                        if (pushes === 'S') return 2; // String
+                        return 1; // Default Float
+                    }
+
+                    // Fallback (Legacy behavior)
                     if (valName.endsWith('$')) return 2;
                     return 1; // Default Float
                 }
@@ -1238,6 +1548,10 @@ var OPLCompiler = (function () {
 
                 // If Symbol Not Found -> Assume PROCEDURE CALL (Not Implicit External)
                 if (!sym) {
+                    if (t.type === 'KEYWORD') {
+                        throw new Error("Error on line " + t.line + ": Reserved keyword '" + valName + "' cannot be used as an identifier or function.");
+                    }
+
                     // Implicit Externals are dangerous (e.g. GETKEY%).
                     // OPL usually assumes undeclared ID is a PROC call.
                     // We emit 0x7D (PROC).
@@ -1543,7 +1857,7 @@ var OPLCompiler = (function () {
                     loops.push({ start: qcode.length, type: 'DO', breaks: [], continues: [] });
                 } else if (t.value === 'UNTIL') {
                     var loop = loops.pop();
-                    if (!loop || loop.type !== 'DO') throw new Error("UNTIL without DO");
+                    if (!loop || loop.type !== 'DO') error("UNTIL without DO");
 
                     // Continues target: Condition Check (Here)
                     for (var k = 0; k < loop.continues.length; k++) {
@@ -1566,13 +1880,13 @@ var OPLCompiler = (function () {
                         patchFixup(loop.breaks[k], qcode.length);
                     }
                 } else if (t.value === 'BREAK') {
-                    if (loops.length === 0) throw new Error("BREAK outside loop");
+                    if (loops.length === 0) error("BREAK outside loop");
                     var loop = loops[loops.length - 1];
                     emit(0x51); // GOTO
                     var addr = emitFixup();
                     loop.breaks.push(addr);
                 } else if (t.value === 'CONTINUE') {
-                    if (loops.length === 0) throw new Error("CONTINUE outside loop");
+                    if (loops.length === 0) error("CONTINUE outside loop");
                     var loop = loops[loops.length - 1];
                     if (loop.type === 'WHILE') {
                         // GOTO Start
@@ -1593,40 +1907,49 @@ var OPLCompiler = (function () {
                     parseExpression(); // Value (Int) -> Stack
 
                     // Emit 0x55 (POKEB) or 0x56 (POKEW)
-                    emit(t.value === 'POKEB' ? 0x55 : 0x56);
+                    emitCommand(t.value === 'POKEB' ? 0x55 : 0x56);
                 } else if (t.value === 'PAUSE') {
                     parseExpression(); // Duration (Int)
-                    emit(0x54); // PAUSE opcode
+                    emitCommand(0x54); // PAUSE opcode
                 } else if (t.value === 'BEEP') {
                     // BEEP duration, frequency
                     parseExpression(); // Duration
                     if (peek() && peek().value === ',') next();
                     parseExpression(); // Frequency
-                    emit(0x4D);
+                    emitCommand(0x4D);
                 } else if (t.value === 'AT') {
                     // AT column, row
                     parseExpression(); // Column
                     if (peek() && peek().value === ',') next();
                     parseExpression(); // Row
-                    emit(0x4C);
+                    emitCommand(0x4C);
                 } else if (t.value === 'CLS') {
-                    emit(0x4E);
+                    emitCommand(0x4E);
                 } else if (t.value === 'STOP') {
-                    emit(0x59);
+                    emitCommand(0x59);
                 } else if (t.value === 'TRAP') {
-                    emit(0x5A);
+                    pendingTrap = true;
                 } else if (t.value === 'ESCAPE') {
-                    parseExpression(); // Byte (0=OFF, 1=ON)
-                    emit(0x50);
+                    // ESCAPE ON/OFF
+                    var nextT = next();
+                    emitCommand(0x50);
+                    if (nextT.value === 'ON') { emit(0x01); }
+                    else if (nextT.value === 'OFF') { emit(0x00); }
+                    else error("ESCAPE requires ON or OFF");
                 } else if (t.value === 'CURSOR') {
-                    parseExpression(); // Byte (Cursor ID)
-                    emit(0x4F);
+                    // CURSOR ON/OFF
+                    var nextT = next();
+                    emitCommand(0x4F);
+                    if (nextT.value === 'ON') { emit(0x01); }
+                    else if (nextT.value === 'OFF') { emit(0x00); }
+                    else error("CURSOR requires ON or OFF");
                 } else if (t.value === 'RANDOMIZE') {
-                    parseExpression(); // Float Seed
-                    emit(0x58);
+                    var type = parseExpression(); // Float Seed
+                    if (type === 0) emit(0x86); // FLT
+                    emitCommand(0x58);
                 } else if (t.value === 'RAISE') {
                     parseExpression(); // Int Error Code
-                    emit(0x57);
+                    emitCommand(0x57);
                 } else if (t.value === 'OFF') {
                     // Check for optional duration (LZ OFF: 0xD2)
                     var hasArg = false;
@@ -1637,36 +1960,36 @@ var OPLCompiler = (function () {
 
                     if (hasArg) {
                         parseExpression();
-                        emit(0xD2);
+                        emitCommand(0xD2);
                     } else {
-                        emit(0x52);
+                        emitCommand(0x52);
                     }
                 } else if (t.value === 'DISP') {
                     // DISP mode, msg$ (Returns Key Code Int -> Needs DROP)
                     parseExpression(); // mode
                     if (peek() && peek().value === ',') next();
                     parseExpression(); // msg$
-                    emit(0x8D);
+                    emitCommand(0x8D);
                     emit(0x83); // DROP Int
                 } else if (t.value === 'COPYW') {
                     // COPYW src$, dest$
                     parseExpression(); // src$
                     if (peek() && peek().value === ',') next();
                     parseExpression(); // dest$
-                    emit(0xD3);
+                    emitCommand(0xD3);
 
                 } else if (t.value === 'DELETE') {
                     // DELETE file$ (0x5F)
                     parseExpression(); // file$
-                    emit(0x5F);
+                    emitCommand(0x5F);
                 } else if (t.value === 'DELETEW') {
                     // DELETEW file$ (0xD4)
                     parseExpression(); // file$
-                    emit(0xD4);
+                    emitCommand(0xD4);
                 } else if (t.value === 'INPUT') {
                     // INPUT var
                     var tVar = next();
-                    if (!tVar || tVar.type !== 'IDENTIFIER') throw new Error("INPUT expects variable");
+                    if (!tVar || tVar.type !== 'IDENTIFIER') error("INPUT expects variable");
 
                     var targetName = tVar.value.toUpperCase();
                     var hasIndices = (peek() && peek().value === '(');
@@ -1724,10 +2047,10 @@ var OPLCompiler = (function () {
 
                     // Emit INPUT Opcode
                     // 6C=Int, 6D=Flt, 6E=Str
-                    if (baseType === 0) emit(0x6C);
-                    else if (baseType === 1) emit(0x6D);
-                    else if (baseType === 2) emit(0x6E);
-                    else emit(0x6D); // Default Float
+                    if (baseType === 0) emitCommand(0x6C);
+                    else if (baseType === 1) emitCommand(0x6D);
+                    else if (baseType === 2) emitCommand(0x6E);
+                    else emitCommand(0x6D); // Default Float
 
                 } else if (t.value === 'CREATE' || t.value === 'OPEN') {
                     // CREATE/OPEN spec$, log, f1, f2...
@@ -1735,7 +2058,7 @@ var OPLCompiler = (function () {
                     var opcode = isCreate ? 0x5E : 0x65;
 
                     parseExpression(); // spec$
-                    emit(opcode);
+                    emitCommand(opcode);
 
                     if (peek() && peek().value === ',') next();
 
@@ -1780,7 +2103,7 @@ var OPLCompiler = (function () {
 
                         var fToken = next();
                         if (fToken && fToken.type === 'IDENTIFIER') {
-                            var fName = fToken.value;
+                            var fName = fToken.value.toUpperCase();
                             var type = 1; // Default Float
                             var suffix = fName.slice(-1);
 
@@ -1800,16 +2123,18 @@ var OPLCompiler = (function () {
                     if (peek() && peek().value === ',') next();
                     parseExpression();
                     if (peek() && peek().value === ')') next();
-                    emit(0xA0);
+                    emitCommand(0xA0);
                     emit(0x83); // DROP explicitly as it pushes 'I'
                 } else if (t.value === 'MENU') {
-                    parseExpression(); emit(0x98);
+                    parseExpression(); emitCommand(0x98);
                 } else if (t.value === 'KSTAT') {
-                    parseExpression(); emit(0x6A);
+                    parseExpression(); emitCommand(0x6A);
+                } else if (t.value === 'CLOCK') {
+                    parseExpression(); emitCommand(0xD6); emit(0x83); // DROP Int
                 } else if (t.value === 'EDIT') {
                     // EDIT var$
                     var tVar = next();
-                    if (tVar.type !== 'IDENTIFIER') throw new Error("EDIT expects variable");
+                    if (tVar.type !== 'IDENTIFIER') error("EDIT expects variable");
                     var targetName = tVar.value.toUpperCase();
                     var hasIndices = (peek() && peek().value === '(');
 
@@ -1856,7 +2181,7 @@ var OPLCompiler = (function () {
                         if (sym.offset !== undefined) emitWord(sym.offset);
                         else emitWord(sym.index);
                     }
-                    emit(0x6B);
+                    emitCommand(0x6B);
                 } else if (t.value === 'USE') {
                     var arg = next(); // Expect A, B, C, D
                     var val = 0;
@@ -1867,20 +2192,20 @@ var OPLCompiler = (function () {
                         else if (name === 'D') val = 3;
                         // Default A=0
                     }
-                    emit(0x69);
+                    emitCommand(0x69);
                     emit(val);
                 } else if (t.value === 'APPEND') {
-                    emit(0x5B);
+                    emitCommand(0x5B);
                 } else if (t.value === 'UPDATE') {
-                    emit(0x68);
+                    emitCommand(0x68);
                 } else if (t.value === 'FIRST') {
-                    emit(0x61);
+                    emitCommand(0x61);
                 } else if (t.value === 'LAST') {
-                    emit(0x62);
+                    emitCommand(0x62);
                 } else if (t.value === 'NEXT') {
-                    emit(0x63);
+                    emitCommand(0x63);
                 } else if (t.value === 'BACK') {
-                    emit(0x64);
+                    emitCommand(0x64);
                 } else if (t.value === 'EXT') {
                     var exprType = parseExpression(); // Should be Int Constant
                     // Ideally we should check if it was a literal, but parseExpression emits 0x22 (Int) or 0x20.
@@ -1898,27 +2223,27 @@ var OPLCompiler = (function () {
                     // Correct Implementation:
                     if (peek() && (peek().type === 'INTEGER' || peek().type === 'HEX')) {
                         var val = next().value;
-                        if (val < 0 || val > 255) throw new Error("EXT argument out of range");
+                        if (val < 0 || val > 255) error("EXT argument out of range");
                         emit(0xED); emit(val);
                     } else {
                         // Fallback: Parse expression? No, EXT requires immediate byte.
-                        throw new Error("EXT requires byte constant");
+                        error("EXT requires byte constant");
                     }
                 } else if (t.value === 'CLOSE') {
-                    emit(0x5C);
+                    emitCommand(0x5C);
                 } else if (t.value === 'DELETE') {
                     parseExpression(); // Filename
-                    emit(0x5F);
+                    emitCommand(0x5F);
                 } else if (t.value === 'POSITION') {
-                    parseExpression(); emit(0x66);
+                    parseExpression(); emitCommand(0x66);
                 } else if (t.value === 'ERASE') {
-                    emit(0x60);
+                    emitCommand(0x60);
                 } else if (t.value === 'RENAME') {
                     parseExpression(); if (peek() && peek().value === ',') next();
-                    parseExpression(); emit(0x67);
+                    parseExpression(); emitCommand(0x67);
                 } else if (t.value === 'COPY') {
                     parseExpression(); if (peek() && peek().value === ',') next();
-                    parseExpression(); emit(0x5D);
+                    parseExpression(); emitCommand(0x5D);
                 } else if (t.value === 'GOTO') {
                     emit(0x51);
                     var fixupAddr = emitFixup();
@@ -1951,7 +2276,7 @@ var OPLCompiler = (function () {
                             if (peek() && peek().value === ',') next();
                         }
                     }
-                    emit(0xD5);
+                    emitCommand(0xD5);
                 } else if (t.value === 'RETURN') {
                     if (peek() && (peek().type === 'EOL' || peek().value === ':')) {
                         // Bare RETURN -> Default based on Proc Type?
@@ -2036,6 +2361,57 @@ var OPLCompiler = (function () {
                 }
 
                 if (!isAssign) {
+                    // Check for Field Access (Logical.Field) in Statement Context
+                    if (peek() && peek().value === '.') {
+                        var logChar = t.value.toUpperCase();
+                        if (logChar.length === 1 && ['A', 'B', 'C', 'D'].includes(logChar)) {
+                            next(); // Consume .
+                            var fTok = next(); // Consume Field Name
+                            if (fTok && fTok.type === 'IDENTIFIER') {
+                                var fName = fTok.value.toUpperCase();
+                                var logVal = logChar.charCodeAt(0) - 65;
+                                var type = 1; // Flt
+                                if (fName.endsWith('%')) type = 0;
+                                else if (fName.endsWith('$')) type = 2;
+
+                                // 1. Push Field Name String
+                                emit(0x24);
+                                emit(fName.length);
+                                for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
+
+                                // Check for Assignment: A.f = ...
+                                if (peek() && peek().value === '=') {
+                                    next(); // Consume =
+
+                                    // Emit Field Ref (1D/1E/1F)
+                                    emit(0x1D + type);
+                                    emit(logVal);
+
+                                    // Parse RHS
+                                    var rhsType = parseExpression();
+
+                                    // Auto-Cast
+                                    if (type === 0 && rhsType === 1) emit(0x87); // INT
+                                    else if (type === 1 && rhsType === 0) emit(0x86); // FLT
+
+                                    // Assign Opcode (7F/80/81)
+                                    emit(0x7F + type);
+                                } else {
+                                    // Statement: A.f (Emit Value + Drop)
+                                    // Emit Field Value (1A/1B/1C)
+                                    emit(0x1A + type);
+                                    emit(logVal);
+
+                                    // Drop
+                                    if (type === 0) emit(0x83);
+                                    else if (type === 2) emit(0x85);
+                                    else emit(0x84);
+                                }
+                                continue;
+                            }
+                        }
+                    }
+
                     // Check Colon logic
                     if (peek() && peek().value === ':') {
                         next(); // Consume first colon
@@ -2049,7 +2425,12 @@ var OPLCompiler = (function () {
                             else isCall = true;
                         }
                     } else {
-                        isCall = true;
+                        // Strict Syntax: Procedure calls must have arguments OR be followed by a colon
+                        if (peek() && peek().value === '(') {
+                            isCall = true;
+                        } else {
+                            error("Procedure call '" + t.value + "' must be followed by ':' or have arguments");
+                        }
                     }
                 }
 
@@ -2216,6 +2597,12 @@ var OPLCompiler = (function () {
             qcode[qcode.length - 1] !== 0x79) { // Check 79 too
             emit(0x7B); // Implicit Return 0.0
         }
+
+        // Check for Unclosed Blocks
+        if (loops.length > 0) error("Unclosed loop (DO/WHILE) at end of file");
+
+        var unclosedIfs = fixups.filter(function (f) { return f.type === 'IF' || f.type === 'ELSE' || f.type === 'ELSEIF'; });
+        if (unclosedIfs.length > 0) error("Unclosed IF block at end of file");
 
         // Backpatch Label Fixups (GOTO/ONERR)
         for (var i = 0; i < labelFixups.length; i++) {

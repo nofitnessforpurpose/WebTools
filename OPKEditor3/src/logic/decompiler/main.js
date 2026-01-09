@@ -15,6 +15,13 @@
         const deps3 = require('./constants.js');
         QCODE_DEFS = deps3.QCODE_DEFS;
         FE_OPCODES = deps3.FE_OPCODES;
+        const sysConsts = require('./system_constants.js');
+        if (typeof global !== 'undefined') {
+            global.SYSTEM_CONSTANTS = sysConsts;
+        }
+        if (typeof window !== 'undefined') {
+            window.SYSTEM_CONSTANTS = sysConsts;
+        }
     }
 
     class OPLDecompiler {
@@ -1106,6 +1113,8 @@
             const flow = {
                 starts: {}, targets: {}, jumps: {}, labels: new Set(), structureLabels: new Set(), forceLabels: new Set()
             };
+            const protectedLabels = new Set(); // Loop ends or continue targets, used to prevent false ELSE detection
+
             let pc = start;
             log(`Analyzing control flow (Start:${toEvenHex(start, 2)} Size:${size})`);
             const instructions = [];
@@ -1163,6 +1172,12 @@
                         flow.structureLabels.add(target);
                         if (condStart !== inst.pc) flow.structureLabels.add(condStart);
                         flow.structureLabels.add(inst.pc + instSize);
+
+                        // Protect loop control points from being interpreted as ELSE jumps
+                        protectedLabels.add(inst.pc + instSize); // Loop End (Break Target)
+                        protectedLabels.add(condStart); // Loop Condition (Continue Target)
+                        if (inst.pc !== condStart) protectedLabels.add(inst.pc); // Explicit check address (if heuristic moved condStart)
+
                         log(`Detected DO...UNTIL (Start:${target.toString(16)} End:${(inst.pc + instSize).toString(16)} CondRef:${condStart.toString(16)})`);
                         continue;
                     }
@@ -1192,6 +1207,11 @@
                                     flow.jumps[prev.pc] = { type: 'WHILE' };
                                     flow.structureLabels.add(gotoTarget);
                                     flow.structureLabels.add(target);
+
+                                    // Protect loop control points
+                                    protectedLabels.add(target); // Loop End (Break Target)
+                                    protectedLabels.add(gotoTarget); // Loop Top (Continue Target)
+
                                     log(`Detected WHILE loop (Start:${gotoTarget.toString(16)} End:${target.toString(16)})`);
                                     continue;
                                 }
@@ -1205,7 +1225,13 @@
                             const prev = instructions[elseJumpIndex - 1];
                             if (prev.op === 0x51) { // GOTO
                                 const endifTarget = (prev.pc + 1) + prev.args.D;
-                                if (endifTarget > target) {
+
+                                if (protectedLabels.has(endifTarget)) {
+                                    // Fix: If the GOTO jumps to a Loop End or Loop Condition, it is a BREAK/CONTINUE.
+                                    // It is NOT an ELSE.
+                                    isElse = false;
+                                }
+                                else if (endifTarget > target) {
                                     // It's an IF ... ELSE ... ENDIF
                                     addStart(inst.pc, { type: 'IF', else: target, end: endifTarget });
                                     addTarget(prev.pc, { type: 'ELSE', start: inst.pc });

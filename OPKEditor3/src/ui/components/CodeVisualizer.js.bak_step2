@@ -298,25 +298,11 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
 
                     // 2. Get Full Source for Code Viewer & Regex Extraction
                     var fullCode = null;
+                    var lncode = obLen;
                     var lnsrc = 0;
-                    var srcOffset = 0;
+                    var srcOffset = baseStart + lncode;
 
-                    // Fix: Correctly calculate Source Offset based on Record Structure
-                    if (st.valid && st.type === 'long') {
-                        // Long Record: obLen is the TOTAL Block Length.
-                        // Structure: 02 80 [BlockLen] [QCodeLen] [QCode...] [SrcLen] [Src...]
-                        // baseStart points to QCodeLen field.
-                        if (data.length >= baseStart + 2) {
-                            var qCodeLen = (data[baseStart] << 8) | data[baseStart + 1];
-                            srcOffset = baseStart + 2 + qCodeLen;
-                        }
-                    } else {
-                        // Raw/Legacy: obLen is QCode Length (from first 2 bytes)
-                        // Structure: [QCodeLen] [QCode...] [SrcLen] [Src...]
-                        srcOffset = baseStart + obLen;
-                    }
-
-                    if (srcOffset > 0 && data.length >= srcOffset + 2) {
+                    if (data.length >= srcOffset + 2) {
                         lnsrc = (data[srcOffset] << 8) | data[srcOffset + 1];
                     }
 
@@ -344,7 +330,7 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                     if (node) {
                         node.code = fullCode;
 
-                        var hasSource = (lnsrc > 0) || (item.text ? true : false);
+                        var hasSource = (lnsrc > 0 && data.length >= lncode + 4 + lnsrc) || (item.text ? true : false);
 
                         if (!hasSource && item.varMap) {
                             // Fallback: Use Decompiler Analysis for Params & Locals
@@ -1128,7 +1114,7 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
         var win = window.open("index.html?mode=child&feature=visualizer", "OPKSystemMap", `width=${width},height=${height},top=${top},left=${left}`);
 
         if (!win) {
-            console.warn("Please allow popups to view the System Map.");
+            alert("Please allow popups to view the System Map.");
             return null;
         }
 
@@ -1155,25 +1141,6 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
             bodyClass = document.body.className;
         }
 
-        // Helper to create glass effect from theme color
-        function hexToRgba(hex, alpha) {
-            if (!hex) return 'rgba(128, 128, 128, 0.5)'; // Fallback
-            hex = hex.replace('#', '');
-            if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-            var r = parseInt(hex.substring(0, 2), 16);
-            var g = parseInt(hex.substring(2, 4), 16);
-            var b = parseInt(hex.substring(4, 6), 16);
-            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-        }
-
-        var glassBg = 'rgba(200, 200, 200, 0.5)'; // Default
-        if (typeof ThemeManager !== 'undefined') {
-            var defs = ThemeManager.getThemeDefinition(ThemeManager.currentTheme);
-            if (defs && defs['--list-hover-bg']) {
-                glassBg = hexToRgba(defs['--list-hover-bg'], 0.5);
-            }
-        }
-
         // 2. Inject Styles and Content
         var doc = win.document;
 
@@ -1193,14 +1160,13 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
         var style = doc.createElement('style');
         style.textContent = `
                     :root {
-                        --glass-bg: ${glassBg};
                         --container-bg: var(--bg-color);
                         --container-border: var(--border-color);
                         --container-header-bg: var(--sidebar-header-bg);
                         
                         --node-bg: var(--bg-color);
                         --node-border: var(--border-color);
-                        --node-header-bg: var(--glass-bg); 
+                        --node-header-bg: var(--list-hover-bg);
                         --node-shadow: 0 2px 5px rgba(0,0,0,0.1);
                         
                         --link-color: var(--text-color);
@@ -1289,7 +1255,7 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                     #controls button {
                         padding: 5px;
                         border: 1px solid var(--border-color);
-                        background: var(--glass-bg);
+                        background: var(--bg-color);
                         color: var(--text-color);
                         cursor: pointer;
                         border-radius: 4px;
@@ -1363,7 +1329,7 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                         height: 100%;
                         background: var(--node-bg);
                         border: 1px solid var(--node-border);
-                        border-radius: 6px;
+                        border-radius: 8px;
                         box-shadow: var(--node-shadow);
                         display: flex;
                         flex-direction: column;
@@ -1375,7 +1341,7 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                     .node-header {
                         background: var(--node-header-bg);
                         color: var(--text-color);
-                        padding: 4px 8px 4px 14px;
+                        padding: 4px 8px;
                         font-weight: bold;
                         border-bottom: 1px solid var(--node-border);
                         display: flex;
@@ -1383,6 +1349,7 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                         position: relative;
                         height: 32px; 
                         box-sizing: border-box; 
+                        text-shadow: 0px 1px 2px rgba(0, 0, 0, 0.8); 
                     }
                     .node-title {
                         flex: 1;
@@ -1431,20 +1398,10 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                     .node-card:hover { border-color: var(--text-color); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
                     .node-card.active { border-color: var(--syntax-keyword); border-width: 2px; }
 
-                    /* Type Color Bands (Top Left - Offset 2px) */
-                    .node-header.type-int::before,
-                    .node-header.type-str::before,
-                    .node-header.type-float::before {
-                        content: '';
-                        position: absolute;
-                        left: 5px;
-                        top: 0;
-                        bottom: 0;
-                        width: 4px;
-                    }
-                    .node-header.type-int::before { background-color: rgba(0, 170, 0, 0.7); }
-                    .node-header.type-str::before { background-color: rgba(170, 0, 170, 0.7); }
-                    .node-header.type-float::before { background-color: rgba(255, 136, 0, 0.7); }
+                    /* Type Color Bands (Top Left) */
+                    .node-header.type-int { border-left: 4px solid #00AA00; }
+                    .node-header.type-str { border-left: 4px solid #AA00AA; }
+                    .node-header.type-float { border-left: 4px solid #FF8800; }
 
                     /* Link Styles */
                     .link {
@@ -1599,11 +1556,6 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                     <button id="btn-toggle-code" title="Toggle Procedure View">Code</button>
                     <button id="btn-legend" title="Link Key / Legend">Key</button>
                 </div>
-                <style>
-                    #btn-toggle-code, #btn-legend {
-                        background: var(--bg-color) !important;
-                    }
-                </style>
                 
                 <div id="main-container">
                     <div id="graph-pane">
@@ -1734,60 +1686,6 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                 legendWin.style.display = 'none';
             });
         }
-
-        // Keyboard Shortcuts
-        doc.addEventListener('keydown', function (e) {
-            // Zoom
-            if (e.key === '+' || e.key === '=') {
-                var btn = doc.getElementById('btn-zoom-in');
-                if (btn) btn.click();
-            }
-            if (e.key === '-' || e.key === '_') {
-                var btn = doc.getElementById('btn-zoom-out');
-                if (btn) btn.click();
-            }
-
-            // Alt Combinations
-            if (e.altKey) {
-                var key = e.key.toUpperCase();
-
-                if (key === 'C') {
-                    // Toggle Code Window
-                    var btn = doc.getElementById('btn-toggle-code');
-                    if (btn) btn.click();
-                    e.preventDefault();
-                }
-                if (key === 'K') {
-                    // Toggle Key Window
-                    var btn = doc.getElementById('btn-legend');
-                    if (btn) btn.click();
-                    e.preventDefault();
-                }
-                if (key === 'P') {
-                    var btn = doc.getElementById('btn-toggle-calls');
-                    if (btn) btn.click();
-                    e.preventDefault();
-                }
-                if (key === 'A') {
-                    var btn = doc.getElementById('btn-toggle-access');
-                    if (btn) btn.click();
-                    e.preventDefault();
-                }
-                if (key === 'U') {
-                    var btn = doc.getElementById('btn-toggle-links'); // Usage
-                    if (btn) btn.click();
-                    e.preventDefault();
-                }
-                if (key === 'G') {
-                    // Toggle Both Globals
-                    var btnA = doc.getElementById('btn-toggle-access');
-                    var btnU = doc.getElementById('btn-toggle-links');
-                    if (btnA) btnA.click();
-                    if (btnU) btnU.click();
-                    e.preventDefault();
-                }
-            }
-        });
     }
 
     // --- Rendering ---
@@ -2375,18 +2273,9 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
                         // Color Coding
                         var strokeColor = "var(--link-color)";
 
-                        if (link.type === 'CALL') {
-                            // CALL links inherit color from Source Procedure Type (Caller)
-                            if (src.label.endsWith('%')) strokeColor = "#4CAF50";      // Integer
-                            else if (src.label.endsWith('$')) strokeColor = "#E040FB"; // String
-                            else strokeColor = "#FF9800";                              // Float/Default
-                        } else if (link.dataType) {
-                            if (link.dataType === 'Integer') strokeColor = "#4CAF50";
-                            else if (link.dataType === 'String') strokeColor = "#E040FB";
-                            else strokeColor = "#FF9800";
-                        } else {
-                            strokeColor = "#FF9800"; // Default Fallback
-                        }
+                        if (link.dataType === 'Integer') strokeColor = "#4CAF50";
+                        else if (link.dataType === 'String') strokeColor = "#E040FB";
+                        else strokeColor = "#FF9800";
 
                         path.setAttribute("class", "link " + link.type.toLowerCase());
                         path.style.stroke = strokeColor;

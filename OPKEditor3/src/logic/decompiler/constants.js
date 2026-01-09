@@ -113,7 +113,7 @@ const QCODE_DEFS = {
     0X68: { args: '', pops: '', pushes: '', desc: 'UPDATE' },
     0X69: { args: 'B', pops: '', pushes: '', desc: 'USE' },
     0X6A: { args: '', pops: 'I', pushes: '', desc: 'KSTAT' },
-    0X6B: { args: '', pops: 'I', pushes: '', desc: 'EDIT' },
+    0X6B: { args: '', pops: 'S', pushes: '', desc: 'EDIT' },
     0X6C: { args: '', pops: 'I', pushes: '', desc: 'INPUT' },
     0X6D: { args: '', pops: 'I', pushes: '', desc: 'INPUT' },
     0X6E: { args: '', pops: 'I', pushes: '', desc: 'INPUT' },

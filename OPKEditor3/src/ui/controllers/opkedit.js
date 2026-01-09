@@ -394,6 +394,32 @@ if (menuOplLibrary) {
       closeAllMenus();
    });
 }
+
+var menuGraphicEditor = document.getElementById('menu-graphic-editor');
+if (menuGraphicEditor) {
+   menuGraphicEditor.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeAllMenus();
+      if (typeof UDGEditor !== 'undefined') {
+         UDGEditor.openWindow();
+      } else {
+         alert("UDG Editor component not loaded.");
+      }
+   });
+}
+
+var menuCharacterMap = document.getElementById('menu-character-map');
+if (menuCharacterMap) {
+   menuCharacterMap.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeAllMenus();
+      if (typeof CharacterMap !== 'undefined') {
+         CharacterMap.openWindow();
+      } else {
+         alert("Character Map component not loaded.");
+      }
+   });
+}
 // Dialog Functions
 // Delegated to DialogManager.js
 
@@ -1478,13 +1504,124 @@ function loadPackFromFiles(files) {
             try {
                var binary = parseIntelHexToBinary(e.target.result);
 
-               // Validation: Must start with OPK
-               if (binary.length < 3 || binary[0] !== 0x4F || binary[1] !== 0x50 || binary[2] !== 0x4B) {
-                  alert("Error: Imported HEX file does not contain a valid Psion Pack header (OPK).");
-                  return;
+               // --- Header Validation & Feature Extraction ---
+
+               // Native Psion Headers (EPROM Image)
+               // Offset 0: Type Byte (0x7A = Data, 0x7E = Paged/Bootable, etc)
+               // Offset 1: Size Code (1=8K, 2=16K, 4=32K... 128=1MB)
+               // Offset 8: ID Word? (Often date/time or system ID. We previously checked for 0100 but user data suggests otherwise).
+
+               var validSizes = [1, 2, 4, 8, 16, 32, 64, 128];
+
+               // Helper to validate and extract features
+               var features = {
+                  isValidType: false,
+                  isValidSize: false,
+                  sizeKB: 0,
+                  sizeCode: 0,
+                  isBootable: false,
+                  bootAddr: 0,
+                  headerID: "Unknown",
+                  typeByte: 0
+               };
+
+               if (binary.length >= 10) {
+                  features.typeByte = binary[0];
+                  features.sizeCode = binary[1]; // Size is at Offset 1
+                  features.headerID = binary[8].toString(16).toUpperCase().padStart(2, '0') + binary[9].toString(16).toUpperCase().padStart(2, '0');
+
+                  // Validate Type: 0x7A (Standard) or 0x7E (Bootable/Paged)
+                  // We accept anything with the high bit 0 (0-127)? No, usually 0x7A.
+                  // Let's accept 0x7A and 0x7E as "Known Valid".
+                  // But if Size is valid, we might trust it even if Type is generic.
+                  var isKnownType = (features.typeByte === 0x7A || features.typeByte === 0x7E);
+
+                  // Validate Size
+                  features.isValidSize = (validSizes.indexOf(features.sizeCode) !== -1);
+                  if (features.isValidSize) features.sizeKB = features.sizeCode * 8;
+
+                  features.bootAddr = (binary[6] << 8) | binary[7];
+
+                  // Combined Check: Must have Valid Size AND (Valid Type OR Valid ID?)
+                  // Let's rely heavily on Size Code at Offset 1 being sensible.
+                  // And Type Byte being sensible.
                }
 
-               var newPack = new PackImage(binary);
+               var isNative = (features.isValidSize && (features.typeByte === 0x7A || features.typeByte === 0x7E));
+
+               // 2. Legacy OPK Header
+               var isOPK = (binary.length >= 3 && binary[0] === 0x4F && binary[1] === 0x50 && binary[2] === 0x4B);
+
+               var finalBinary = null;
+
+               if (isNative) {
+                  var hexType = features.typeByte.toString(16).toUpperCase().padStart(2, '0');
+                  var hexSize = features.sizeCode.toString(16).toUpperCase().padStart(2, '0');
+                  var hexBoot = binary[6].toString(16).toUpperCase().padStart(2, '0') + binary[7].toString(16).toUpperCase().padStart(2, '0');
+
+                  var typeStr = (features.typeByte === 0x7E) ? "Paged/Bootable (0x7E)" : "Standard Data (0x7A)";
+
+                  var msg = "Detected Psion Organiser II Datapack:\n" +
+                     "------------------------------------\n" +
+                     "Pack Type: " + typeStr + "\n" +
+                     "Capacity:  " + features.sizeKB + " KB (Size Code: 0x" + hexSize + ")\n" +
+                     "ID Word:   0x" + features.headerID + "\n" +
+                     "Boot Addr: 0x" + features.bootAddr.toString(16).toUpperCase().padStart(4, '0') + " (Bytes: " + hexBoot + ")\n" +
+                     "------------------------------------\n\n" +
+                     "Import this pack?";
+
+                  if (!confirm(msg)) return;
+
+                  // Wrap Native Pack in OPK Header for internal compatibility
+                  finalBinary = new Uint8Array(binary.length + 6);
+                  finalBinary[0] = 0x4F; finalBinary[1] = 0x50; finalBinary[2] = 0x4B;
+
+                  var len = binary.length - 2;
+                  if (len < 0) len = 0;
+                  finalBinary[3] = (len >> 16) & 0xFF;
+                  finalBinary[4] = (len >> 8) & 0xFF;
+                  finalBinary[5] = len & 0xFF;
+
+                  finalBinary.set(binary, 6);
+
+               } else if (isOPK) {
+                  // Legacy behavior: Valid OPK found
+                  finalBinary = binary;
+
+               } else {
+                  // Invalid / Unknown Header
+                  var details = "";
+                  if (binary.length >= 10) {
+                     var hType = binary[0].toString(16).toUpperCase().padStart(2, '0');
+                     var hSize = binary[1].toString(16).toUpperCase().padStart(2, '0');
+                     var hID = binary[8].toString(16).toUpperCase().padStart(2, '0') + binary[9].toString(16).toUpperCase().padStart(2, '0');
+
+                     details += "Header Byte 0 (Type): 0x" + hType + "\n";
+                     details += "Header Byte 1 (Size): 0x" + hSize + " (" + (validSizes.indexOf(binary[1]) !== -1 ? "Valid" : "Invalid") + ")\n";
+                     details += "Header Byte 8-9 (ID): 0x" + hID + "\n";
+                  } else {
+                     details += "File too short (<10 bytes)\n";
+                  }
+
+                  var msg = "Warning: The imported data does not appear to be a standard Psion Datapack.\n" +
+                     "(Missing OPK Header and Invalid Native Header)\n\n" +
+                     "Details:\n" + details + "\n" +
+                     "Import as raw data anyway?";
+
+                  if (!confirm(msg)) return;
+
+                  // Treat as Raw/Native (Wrap it)
+                  finalBinary = new Uint8Array(binary.length + 6);
+                  finalBinary[0] = 0x4F; finalBinary[1] = 0x50; finalBinary[2] = 0x4B;
+                  var len = binary.length - 2;
+                  if (len < 0) len = 0;
+                  finalBinary[3] = (len >> 16) & 0xFF;
+                  finalBinary[4] = (len >> 8) & 0xFF;
+                  finalBinary[5] = len & 0xFF;
+                  finalBinary.set(binary, 6);
+               }
+
+               var newPack = new PackImage(finalBinary);
                newPack.unsaved = false;
                newPack.filename = file.name.replace(/\.[^/.]+$/, "") + ".opk";
 
@@ -1802,7 +1939,8 @@ function createNewItem() {
          addItemToPack(hdritem);
          updateInventory();
       } else if (type == 3) {
-         var data = [0x00, 0x00, 0x00, 0x0A, 80, 82, 79, 67, 78, 65, 77, 69, 58, 0];
+         // Fix: Initialize with Double Null and Correct Length (9 bytes for "PROCNAME:")
+         var data = [0x00, 0x00, 0x00, 0x09, 80, 82, 79, 67, 78, 65, 77, 69, 58, 0x00, 0x00];
          createBlockFile(data, "PROCNAME", 3);
       } else if (type == 7) {
          var data = [0x00, 0x02, 8, 0, 0x00, 0x09, 78, 79, 84, 69, 80, 65, 68, 58, 0];
@@ -2042,7 +2180,6 @@ function getFreeFileId() {
 }
 
 function createItemFromFileData(filedata, name) {
-   // alert("DEBUG: createItemFromFileData called for " + name);
    // ... (logic preserved) ...
    // check if it is a valid binary file, "ORG"+type
    if (filedata[0] == 79 && filedata[1] == 82 && filedata[2] == 71 && filedata[5] >= 0x82 && filedata[5] <= 0x8f) {
@@ -2219,31 +2356,83 @@ function createItemFromFileData(filedata, name) {
       }
    } else if (name.substr(-4).toUpperCase() == ".OPL") {
       var hdritem = createFileHeader(name, 3, 0);
-      // Add +1 for Null Terminator
-      var ln = filedata.length + 6 + 1;
-      var blkhdr = new Uint8Array(4);
-      blkhdr[0] = 2; blkhdr[1] = 0x80; blkhdr[2] = (ln >> 8) & 0xff; blkhdr[3] = ln & 0xff;
-
-      var itemdata = new Uint8Array(6 + filedata.length + 1);
-      itemdata[0] = 0; itemdata[1] = 0;
-      // Source Length includes Null Terminator
-      var srclen = filedata.length + 1;
-      itemdata[2] = (srclen >> 8) & 0xff; itemdata[3] = srclen & 0xff;
-
-      for (var i = 0; i < filedata.length; i++) {
-         var c = (typeof filedata === 'string') ? filedata.charCodeAt(i) : filedata[i];
-         itemdata[4 + i] = c == 10 ? 0 : c;
-      }
-      // Null Terminator
-      itemdata[4 + filedata.length] = 0;
-
-      var dataitem = new PackItem(itemdata, 0, itemdata.length);
-      var blkhdritem = new PackItem(blkhdr, 0, 4);
-      blkhdritem.child = dataitem;
-      blkhdritem.setDescription();
-      hdritem.child = blkhdritem;
+      var itemdataList = [];
+      // OPL Line-Based Import Logic
+      // 1. Add File Header Once
       addItemToPack(hdritem);
+
+
+      // Helper to create OPL Record from accumulated data
+      function createOPLRecord(dataList) {
+         if (dataList.length === 0) return;
+
+         var srclen = dataList.length;
+         // Ensure two trailing 0x00 bytes (Terminator)
+         var totalPayloadLen = srclen + 2;
+
+         // Record Structure:
+         // [00 00] [LenHi] [LenLo] [Text...] [00 00]
+         // Header (4) + Text (srclen) + Pad (2)
+
+         var itemdata = new Uint8Array(totalPayloadLen + 4);
+         itemdata[0] = 0; itemdata[1] = 0; // Type 0 Record Header?
+
+         // OPL Record Length calculates TEXT ONLY (excludes terminator padding)
+         itemdata[2] = (srclen >> 8) & 0xff;
+         itemdata[3] = srclen & 0xff;
+
+         itemdata.set(dataList, 4);
+
+         // Append trailing nulls (Terminator)
+         itemdata[4 + srclen] = 0;
+         itemdata[5 + srclen] = 0;
+
+         var dataitem = new PackItem(itemdata, 0, itemdata.length);
+
+         // Block Header Wrapper (Type 2, 0x80)
+         var blkhdr = new Uint8Array(4);
+         var totalLen = itemdata.length; // Block Length includes EVERYTHING
+         blkhdr[0] = 2; blkhdr[1] = 0x80;
+         blkhdr[2] = (totalLen >> 8) & 0xff;
+         blkhdr[3] = totalLen & 0xff;
+
+         var blkhdritem = new PackItem(blkhdr, 0, 4);
+         blkhdritem.child = dataitem;
+         blkhdritem.setDescription();
+
+         // Fix for Editor: Link FIRST (and only) block to Header
+         if (!hdritem.child) {
+            hdritem.child = blkhdritem;
+         }
+      }
+
+      var fileLen = filedata.length;
+
+      for (var i = 0; i < fileLen; i++) {
+         var c = (typeof filedata === 'string') ? filedata.charCodeAt(i) : filedata[i];
+
+         if (c === 13 || c === 10) { // Newline -> Null Separator
+            // Check for Pair (CRLF) and Skip second byte
+            if (i + 1 < fileLen) {
+               var nextC = (typeof filedata === 'string') ? filedata.charCodeAt(i + 1) : filedata[i + 1];
+               if ((c === 13 && nextC === 10) || (c === 10 && nextC === 13)) {
+                  i++;
+               }
+            }
+            // Add Separator Null
+            itemdataList.push(0);
+
+         } else {
+            // Accumulate Payload
+            itemdataList.push(c);
+         }
+      }
+
+      // Save Single Record containing all text
+      createOPLRecord(itemdataList);
+
       updateInventory();
+      // Select Header logic
       var idx = packs[currentPackIndex].items.indexOf(hdritem);
       if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
    } else if (name.substr(-4).toUpperCase() == ".ODB") {
@@ -2251,32 +2440,64 @@ function createItemFromFileData(filedata, name) {
       if (id <= 0) return;
       var hdritem = createFileHeader(name, 1, id + 0x8f);
       addItemToPack(hdritem);
-      var line = 1;
-      var startix = 0;
-      while (startix < filedata.length) {
-         var endix = startix;
-         while (endix < filedata.length && filedata.charCodeAt(endix) != 10) endix++;
-         if (endix >= filedata.length) {
-            alert("File is missing a newline on last line. That line has been ignored.");
-            break;
+      var itemdataList = [];
+      // Header placeholder (Length will be set later)
+      itemdataList.push(0); itemdataList.push(id + 0x8f);
+
+      // Line-Based Import Logic (.ODB)
+      var lineLen = 0;
+      var fileLen = filedata.length;
+      var hasTab = false;
+
+      for (var i = 0; i < fileLen; i++) {
+         var c = (typeof filedata === 'string') ? filedata.charCodeAt(i) : filedata[i];
+
+         if (c === 9) hasTab = true;
+
+         if (c === 13 || c === 10) { // New Record Delimiter
+            // Check for Pair and Skip
+            if (i + 1 < fileLen) {
+               var nextC = (typeof filedata === 'string') ? filedata.charCodeAt(i + 1) : filedata[i + 1];
+               if ((c === 13 && nextC === 10) || (c === 10 && nextC === 13)) {
+                  i++;
+               }
+            }
+
+            // Save Current Record IF Tab Present
+            if (hasTab) {
+               itemdataList[0] = lineLen;
+               var itemdata = new Uint8Array(itemdataList);
+               var recitem = new PackItem(itemdata, 0, itemdata.length);
+               recitem.setDescription();
+               addItemToPack(recitem);
+            }
+
+            // Reset for Next Record
+            itemdataList = [];
+            itemdataList.push(0); itemdataList.push(id + 0x8f);
+            lineLen = 0;
+            hasTab = false;
+
+         } else {
+            // Accumulate Payload
+            // Max 255 for Data Record payload
+            if (lineLen < 255) {
+               itemdataList.push(c);
+               lineLen++;
+            }
+            // Else: Truncate
          }
-         if (endix - startix > 255) {
-            alert("Line " + line + " has " + (endix - startix) + " characters. Only first 255 characters are stored.");
-         }
-         var ln = Math.min(endix - startix, 255);
-         var itemdata = new Uint8Array(2 + ln);
-         for (var i = 0; i < ln; i++) {
-            var val = (typeof filedata === 'string') ? filedata.charCodeAt(startix + i) : filedata[startix + i];
-            itemdata[2 + i] = val;
-         }
-         itemdata[0] = ln;
-         itemdata[1] = id + 0x8f;
-         var recitem = new PackItem(itemdata, 0, ln + 2);
+      }
+
+      // Save Final Record IF Tab Present
+      if (hasTab) {
+         itemdataList[0] = lineLen;
+         var itemdata = new Uint8Array(itemdataList);
+         var recitem = new PackItem(itemdata, 0, itemdata.length);
          recitem.setDescription();
          addItemToPack(recitem);
-         line++;
-         startix = endix + 1;
       }
+
       updateInventory();
       var idx = packs[currentPackIndex].items.indexOf(hdritem);
       if (idx !== -1 && typeof selectItem === 'function') selectItem(currentPackIndex, idx);
@@ -2393,20 +2614,14 @@ function createItemFromFileData(filedata, name) {
       // Must simply be reachable within 16-bit address space
       var itemIdx = pack.items.indexOf(blkhdritem);
 
-      alert("DEBUG: inside headerless block handler");
-      alert("DEBUG: itemIdx=" + itemIdx + ", items=" + (pack ? pack.items.length : "null"));
-
       if (pack && itemIdx > 0) {
          // Calculate Boot Address BEFORE prompting
          var bootAddr = getItemAddres(pack, itemIdx);
-
-         alert("DEBUG: BootAddr=" + bootAddr);
 
          // Only prompt if address is valid (fits in 2 bytes)
          if (bootAddr <= 0xFFFF) {
             // Adjust for Header (4 bytes)
             var targetBootAddr = bootAddr + 4;
-            alert("DEBUG: targetBootAddr=" + targetBootAddr);
 
             // Create content for dialog
             var content = document.createElement('div');
@@ -2841,10 +3056,18 @@ function initChildMode(feature) {
       if (typeof OPLCommandReference !== 'undefined') {
          new OPLCommandReference().render(window);
       }
-   } else if (feature === 'opl_content') {
       if (typeof OPLContentViewer !== 'undefined') {
          OPLContentViewer.childWindowReady(window);
       }
+   } else if (feature === 'udg') {
+      document.title = "Graphic Character Editor";
+      // UDG Editor initializes itself via its update logic or if needed.
+      // Actually UDGEditor.js has its own check for feature=udg but relies on initChildEnvironment.
+      // We can ensure UDGEditor is ready or defer.
+      // UDGEditor.js calls window.addEventListener('load', initChildEnvironment) itself!
+      // So we might not need to do anything here if UDGEditor.js is self-bootstrapping.
+      // However, to be consistent with hiding the main app, we keep this block.
+      // The 'app' hiding is done at the top of this function.
    }
 
 }

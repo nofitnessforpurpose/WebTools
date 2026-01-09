@@ -24,7 +24,7 @@ var SyntaxHighlighter = {
             "YEAR"
         ],
         commands: [
-            "AND", "APP", "APPEND", "AT",
+            "AND", "APP", "APPEND", "AT", "BACK",
             "BEEP", "BREAK",
             "CLOCK", "CLOSE", "CLS", "CONST", "CONTINUE", "COPY", "COPYW", "CREATE", "CURSOR",
             "DELETE", "DELETEW", "DO",

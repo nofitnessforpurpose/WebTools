@@ -9,9 +9,9 @@ function renderMemoryMap(pack) {
 
     // Calculate Total Pack Size (from Header)
     var sizeMultiplier = pack.items[0].data[1];
-    // Fix: Size Code is exponential (1=8k, 2=16k, 3=32k, 4=64k...) NOT linear.
-    // Logic matches opkedit.js: 8 * Math.pow(2, code - 1) KB
-    var totalSize = 8192 * Math.pow(2, sizeMultiplier - 1);
+    // Fix: Size Code is linear (multiplier of 8KB), e.g., 0x08 = 64KB.
+    // Logic: 8KB * code
+    var totalSize = 8192 * sizeMultiplier;
 
     // Calculate Actual Used Size
     var usedSize = 0;

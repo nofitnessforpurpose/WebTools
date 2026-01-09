@@ -302,9 +302,13 @@
             if (typeof val === 'string' && /^-?\d+$/.test(val)) {
                 let num = parseInt(val, 10);
                 if (!isNaN(num)) {
-                    // Track usage if it's a known system constant (using signed value)
-                    if (usedSystemVars && typeof SYSTEM_CONSTANTS !== 'undefined' && SYSTEM_CONSTANTS[num]) {
-                        usedSystemVars.add(num);
+                    // Normalize negative numbers for lookup (e.g. -24 -> 0xFFE8)
+                    let lookupAddr = num;
+                    if (lookupAddr < 0) lookupAddr += 65536;
+
+                    const sysConsts = this.getSystemConstants();
+                    if (usedSystemVars && sysConsts && sysConsts[lookupAddr]) {
+                        usedSystemVars.add(lookupAddr);
                     }
 
                     // Convert to unsigned 16-bit for display
@@ -465,11 +469,14 @@
                 return null; // Ignore check byte
             }
 
-            if (def.desc === 'CURSOR') {
-                return `CURSOR ${args.O}`;
+            if (op === 0x4F) { // CURSOR
+                // Force O-byte logic even if args missing in legacy defs? 
+                // We rely on getArgs/getInstructionSize being correct (based on constants.js), 
+                // which we verified. args.O should be present.
+                return args.O === 0 ? 'CURSOR OFF' : 'CURSOR ON';
             }
 
-            if (def.desc === 'ESCAPE') {
+            if (op === 0x50) { // ESCAPE
                 return args.O === 0 ? 'ESCAPE OFF' : 'ESCAPE ON';
             }
 
@@ -586,16 +593,21 @@
                 const offset = args.b; // 1st byte arg
                 const value = args.b_1; // 2nd byte arg
                 const fullAddr = (page << 8) | offset;
-                let signedAddr = fullAddr;
-                if (signedAddr > 32767) signedAddr -= 65536;
+                // Use unsigned address for System Constant lookup to match definition file
+                const lookupAddr = fullAddr;
 
                 let comment = "";
                 let hexAddr = '$' + (fullAddr & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
 
-                if (typeof SYSTEM_CONSTANTS !== 'undefined' && SYSTEM_CONSTANTS[signedAddr]) {
-                    comment = `: REM ${SYSTEM_CONSTANTS[signedAddr]}`;
-                } else if (varMap[signedAddr]) {
-                    comment = `: REM ${varMap[signedAddr].name}`;
+                const sysConsts = this.getSystemConstants();
+                if (sysConsts && sysConsts[lookupAddr]) {
+                    comment = `: REM ${sysConsts[lookupAddr]}`;
+                    if (usedSystemVars) usedSystemVars.add(lookupAddr);
+                } else if (varMap[fullAddr] || varMap[lookupAddr] || (lookupAddr > 32767 && varMap[lookupAddr - 65536])) {
+                    // Check varMap with both signed and unsigned? varMap keys are usually signed for locals but globals?
+                    // varMap keys are signed 16-bit.
+                    let vKey = (lookupAddr > 32767) ? lookupAddr - 65536 : lookupAddr;
+                    if (varMap[vKey]) comment = `: REM ${varMap[vKey].name}`;
                 }
 
                 return `POKEB ${hexAddr},${value}${comment}`;
@@ -739,6 +751,16 @@
                     }
                     return null;
                 }
+            }
+
+            // EDIT
+            if (def.desc === 'EDIT') {
+                const varObj = stack.pop();
+                let variable = varObj ? (varObj.text || '') : 'BAD_VAR';
+                if (variable.startsWith('ADDR(') && variable.endsWith(')')) {
+                    variable = variable.slice(5, -1);
+                }
+                return `EDIT ${variable}`;
             }
 
             // INPUT
@@ -887,6 +909,13 @@
             }
         }
 
+
+        getSystemConstants() {
+            if (typeof SYSTEM_CONSTANTS !== 'undefined') return SYSTEM_CONSTANTS;
+            if (typeof window !== 'undefined' && window.SYSTEM_CONSTANTS) return window.SYSTEM_CONSTANTS;
+            if (typeof global !== 'undefined' && global.SYSTEM_CONSTANTS) return global.SYSTEM_CONSTANTS;
+            return null;
+        }
 
         decodeFloat(buf) {
             if (buf.length < 2) return "0.0";

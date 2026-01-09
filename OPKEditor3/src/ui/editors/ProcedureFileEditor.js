@@ -59,6 +59,10 @@ ProcedureFileEditor.prototype.initialise = function (item) {
     var lncode = chld.data[0] * 256 + chld.data[1];
     document.getElementById("objectcode").innerHTML = "" + lncode;
 
+    // [Fix] Hide Checksum in Editor Mode (Context: Editing, not Pack Management)
+    var ckEl = document.getElementById("status-checksum");
+    if (ckEl) ckEl.style.display = "none";
+
     var lnsrc = chld.data[lncode + 2] * 256 + chld.data[lncode + 3];
 
     setTimeout(function () {
@@ -330,6 +334,25 @@ ProcedureFileEditor.prototype.createToobarButtons = function () {
     leftTools.appendChild(stripBtn);
     this.stripBtn = stripBtn;
 
+    // [New] Extract Source Button (fa-solid fa-file-circle-plus)
+    var extractBtn = document.createElement('button');
+    extractBtn.innerHTML = '<i class="fa-solid fa-file-circle-plus"></i>';
+    extractBtn.className = 'icon-btn';
+    extractBtn.style.marginLeft = '5px';
+    extractBtn.style.background = 'none';
+    extractBtn.style.border = 'none';
+    extractBtn.style.color = 'var(--text-color)';
+    extractBtn.style.cursor = 'pointer';
+    extractBtn.style.fontSize = '13px';
+    extractBtn.title = 'Extract Source to New Record';
+    extractBtn.addEventListener('click', function (e) {
+        if (self.item.deleted) return;
+        self.extractSourceCode();
+    });
+    if (this.item.deleted) extractBtn.disabled = true;
+    leftTools.appendChild(extractBtn);
+    this.extractBtn = extractBtn;
+
     // [Moved] Trailing Divider
     var divider = document.createElement('span');
     divider.innerHTML = '|';
@@ -391,6 +414,11 @@ ProcedureFileEditor.prototype.updateToolbarButtons = function () {
         this.stripBtn.title = hasChanges ? "Save changes before Copying Object Code" : "Copy Object Code";
         this.stripBtn.style.opacity = (isDeleted || hasChanges) ? '0.5' : '1';
     }
+    if (this.extractBtn) {
+        this.extractBtn.disabled = isDeleted || hasChanges;
+        this.extractBtn.title = hasChanges ? "Save changes before Extracting Source" : "Extract Source to New Record";
+        this.extractBtn.style.opacity = (isDeleted || hasChanges) ? '0.5' : '1';
+    }
 
     // New Buttons Logic
     if (this.applyBtn) {
@@ -429,6 +457,10 @@ ProcedureFileEditor.prototype.finish = function () {
     if (this.stripBtn && this.stripBtn.parentNode) {
         this.stripBtn.parentNode.removeChild(this.stripBtn);
         this.stripBtn = null;
+    }
+    if (this.extractBtn && this.extractBtn.parentNode) {
+        this.extractBtn.parentNode.removeChild(this.extractBtn);
+        this.extractBtn = null;
     }
 }
 
@@ -477,7 +509,7 @@ ProcedureFileEditor.prototype.getProcedureData = function () {
     }
 
     var lncode = chld.data[0] * 256 + chld.data[1];
-    var oldlnsrc = chld.data[lncode + 2] * 256 + chld.data[lncode + 3];
+    // var oldlnsrc = chld.data[lncode + 2] * 256 + chld.data[lncode + 3]; // Unused in new calculation
     var txt;
 
     if (this.codeEditorInstance && this.codeEditorContainer && this.codeEditorContainer.style.display !== 'none') {
@@ -485,8 +517,8 @@ ProcedureFileEditor.prototype.getProcedureData = function () {
     } else {
         txt = document.getElementById("sourcecode").value;
     }
-    // 1. Minimal (Correct) Termination: Ensure one null at end.
-    // Users report OPL records require 00 termination.
+    // 1. Correct Termination: Ensure TWO nulls at end (Double Null).
+    // Logic matches Import: Text + Separators + 00 00 Terminator.
 
     // Reconstruct Source Bytes from txt
     var srcBytes = [];
@@ -495,22 +527,32 @@ ProcedureFileEditor.prototype.getProcedureData = function () {
         srcBytes.push(c === 10 ? 0 : c);
     }
 
-    // Always append a generic null terminator to ensure the last line/empty line is preserved
-    // The loader strips the last byte if it is 0, so this acts as the "sacrificial" terminator.
+    // Append Double Null Terminator (Padding)
+    srcBytes.push(0);
     srcBytes.push(0);
 
-    var newlnsrc = srcBytes.length;
+    // Calculate Source Length (Excluding Terminator)
+    var newlnsrc = srcBytes.length - 2;
 
-    var newdata = new Uint8Array(chld.data.length + newlnsrc - oldlnsrc);
-    for (var i = 0; i < lncode + 2; i++) {
+    // Construct New Data
+    // Structure: [LenCodeHi][LenCodeLo][...Code...][LenSrcHi][LenSrcLo][...Src...][Terminator]
+    var headerSize = lncode + 2; // Bytes before LenSrc (0,1 + Code)
+    var totalSize = headerSize + 2 + srcBytes.length; // +2 for LenSrc field
+
+    var newdata = new Uint8Array(totalSize);
+
+    // Copy Header/Code (Preserve existing QCode or Header Type)
+    for (var i = 0; i < headerSize; i++) {
         newdata[i] = chld.data[i];
     }
-    newdata[lncode + 2] = newlnsrc >> 8;
-    newdata[lncode + 3] = newlnsrc & 0xff;
 
-    // Copy Source Bytes
+    // Set New Source Length
+    newdata[headerSize] = (newlnsrc >> 8) & 0xff;
+    newdata[headerSize + 1] = newlnsrc & 0xff;
+
+    // Copy Source Bytes (Includes Text + Separators + Terminator)
     for (var i = 0; i < srcBytes.length; i++) {
-        newdata[lncode + 4 + i] = srcBytes[i];
+        newdata[headerSize + 2 + i] = srcBytes[i];
     }
 
     return newdata;
@@ -667,6 +709,7 @@ ProcedureFileEditor.prototype.copyObjectCode = function () {
         if (this.codeEditorInstance) this.codeEditorInstance.setReadOnly(true);
         if (this.translateBtn) this.translateBtn.disabled = true;
         if (this.stripBtn) this.stripBtn.disabled = true;
+        if (this.extractBtn) this.extractBtn.disabled = true;
     }
 
     // Force Save & Refresh if any success
@@ -687,141 +730,237 @@ ProcedureFileEditor.prototype.copyObjectCode = function () {
 ProcedureFileEditor.prototype.processItemCopyObject = function (targetItem, pack) {
     if (targetItem.deleted) return { success: false, error: "Item is already deleted" };
 
-    // Helper: Parse Record Structure
-    function parseRecordStructure(data, itemType) {
-        var offset = 0;
-        // [Fix] Removed dangerous "Skip leading nulls" loop (Alignment Correction)
-        // which caused corruption on Raw/Bare records starting with 00.
+    // 1. Flatten Data Hierarchy (Header -> child -> child)
+    // PackImage splits Type 3 records into HeaderItem -> BlockItem (02 80) -> BodyItem
+    // We need the contiguous bytes to parse safely.
+    var flatData = null;
+    var parts = [];
 
-        // 1. Try Standard Long Record Header (02 80) - Used by Type 3
-        var syncFound = -1;
-        for (var i = offset; i < data.length - 1; i++) {
-            if (data[i] === 0x02 && data[i + 1] === 0x80) {
-                syncFound = i;
-                break;
-            }
-        }
-
-        if (syncFound !== -1) {
-            var lenOffset = syncFound + 2;
-            if (lenOffset + 1 >= data.length) return { valid: false, error: "Truncated header" };
-            var len = (data[lenOffset] << 8) | data[lenOffset + 1];
-            return { valid: true, offset: lenOffset, length: len, start: syncFound, type: 'long' };
-        }
-
-        // 2. Fallback: Raw / Type 2 Check
-        // Check if index 0 is valid BE len 
-        if (data.length >= 2) {
-            var rawLen = (data[0] << 8) | data[1];
-            // If rawLen fits exactly? (Common for imported Type 2 with Len prefix)
-            if (rawLen > 0 && (2 + rawLen) <= data.length) {
-                return { valid: true, offset: 0, length: rawLen, start: 0, type: 'raw' };
-            }
-        }
-
-        // 3. Last Resort: Bare Type 2 (Treat All Data as QCode)
-        // Only if Type 2 and we have data
-        if (itemType === 2 && data.length > 0) {
-            return { valid: true, offset: 0, length: data.length, start: 0, type: 'bare' };
-        }
-
-        return { valid: false, error: "Sync 02 80 not found and Raw Header check failed" };
+    // Header (always present for Type 3)
+    if (targetItem.data) parts.push(targetItem.data);
+    // Block Header (02 80) if present
+    if (targetItem.child && targetItem.child.data) parts.push(targetItem.child.data);
+    // Body (QCode) if present
+    if (targetItem.child && targetItem.child.child && targetItem.child.child.data) {
+        parts.push(targetItem.child.child.data);
     }
 
-    var struct = parseRecordStructure(targetItem.child.data, targetItem.type);
+    // Concatenate
+    var totalFlatLen = parts.reduce(function (a, b) { return a + b.length; }, 0);
+    flatData = new Uint8Array(totalFlatLen);
+    var offset = 0;
+    for (var i = 0; i < parts.length; i++) {
+        flatData.set(parts[i], offset);
+        offset += parts[i].length;
+    }
+
+    // Helper: Parse Record Structure (STRICT / DETERMINISTIC)
+    // See psion_pack_specification.md - Section 4 & User Request for QCode Size
+    function parseRecordStructure(data, itemType) {
+        var result = { valid: false, error: "Unknown Error" };
+        var recStart = 0;
+        var qcodeSizeVal = 0;
+        var oplBase = 0;
+        var isType3 = (itemType === 3);
+
+        // 1. Identify Structure & OPL Base
+        if (isType3) {
+            // Strict Type 3 Check
+            if (data.length < 13) return { valid: false, error: "Record too short" };
+            var recHdrLen = data[0]; // Usually 9
+            var syncOffset = 1 + recHdrLen;
+
+            // Check Terminator (00)
+            if (data[syncOffset] !== 0x00) return { valid: false, error: "Missing Terminator 0x00 at " + syncOffset };
+
+            // Check Sync (02 80)
+            if (data[syncOffset + 1] !== 0x02 || data[syncOffset + 2] !== 0x80) {
+                return { valid: false, error: "Missing Sync 02 80 at " + (syncOffset + 1) };
+            }
+
+            // OPL Base is after LongRecLen(2) + TotalLen(2)
+            // Sync(02) is at syncOffset+1.
+            // Type(80) is at syncOffset+2.
+            // LongRecLen at syncOffset+3 (2 bytes) -> 0x0D relative to start if RecLen=9
+            // TotalLen at syncOffset+5 (2 bytes) -> 0x0F relative to start
+            // OplBase at syncOffset+7 -> 0x11 relative to start
+            oplBase = syncOffset + 7;
+            recStart = 0;
+        } else if (itemType === 2) {
+            // Type 2: Can be Bare or Wrapped?
+            // Check for 02 80
+            var syncFound = -1;
+            for (var i = 0; i < Math.min(data.length - 1, 20); i++) {
+                if (data[i] === 0x02 && data[i + 1] === 0x80) {
+                    syncFound = i;
+                    break;
+                }
+            }
+            if (syncFound !== -1) {
+                oplBase = syncFound + 6; // 02 80 [Len] [Len] [Base]
+                // Note: Standard Type 2 Obj doesn't strictly enforce RecHdr wrapper, so valid check is laxer.
+            } else {
+                // Bare OPL Object?
+                oplBase = 0;
+            }
+        }
+
+        if (oplBase + 4 >= data.length) return { valid: false, error: "Data too short for OPL Header" };
+
+        // 2. Read QCode Size (Offset 2 relative to OplBase, i.e., 0x13 in Type 3)
+        // vSpace (2), qSize (2), nParams (1)
+        qcodeSizeVal = (data[oplBase + 2] << 8) | data[oplBase + 3];
+        var nParams = data[oplBase + 4];
+
+        // 3. Walk Tables to find Instruction Start
+        var cursor = oplBase + 5; // After nParams
+
+        // Skip Param Types
+        cursor += nParams;
+        if (cursor >= data.length) return { valid: false, error: "Truncated Param Types" };
+
+        // Helper to read word and advance
+        function readWord() {
+            if (cursor + 1 >= data.length) return -1;
+            var val = (data[cursor] << 8) | data[cursor + 1];
+            cursor += 2;
+            return val;
+        }
+
+
+
+
+        // Global Table
+        var globalTblSize = readWord();
+        if (globalTblSize === -1) return { valid: false, error: "Truncated Global Tbl Size" };
+        cursor += globalTblSize;
+        if (cursor > data.length) return { valid: false, error: "Truncated Global Table" };
+
+        // Extern Table
+        var externTblSize = readWord();
+        if (externTblSize === -1) return { valid: false, error: "Truncated Extern Tbl Size" };
+        cursor += externTblSize;
+        if (cursor > data.length) return { valid: false, error: "Truncated Extern Table" };
+
+        // String Fixup Table
+        var strFixTblSize = readWord();
+        if (strFixTblSize === -1) return { valid: false, error: "Truncated String Fixup Tbl Size" };
+        cursor += strFixTblSize;
+        if (cursor > data.length) return { valid: false, error: "Truncated String Fixup Table" };
+
+        // Array Fixup Table 
+        var arrFixTblSize = readWord();
+        if (arrFixTblSize === -1) return { valid: false, error: "Truncated Array Fixup Tbl Size" };
+        cursor += arrFixTblSize;
+        if (cursor > data.length) return { valid: false, error: "Truncated Array Fixup Table" };
+
+        // Cursor is now at Start of Instructions
+        var instructionStart = cursor;
+
+        // 4. Calculate Total Valid Length
+        // Total = (InstructionStart - OplBase) + QCodeSizeVal
+
+        var calculatedBodySize = (instructionStart - oplBase) + qcodeSizeVal;
+
+        // Validate against physical buffer
+        if (oplBase + calculatedBodySize > data.length) {
+            return { valid: false, error: "Calculated Body Size exceeds Data" };
+        }
+
+        return {
+            valid: true,
+            oplBase: oplBase,
+            calculatedBodySize: calculatedBodySize,
+            longRecLenOffset: oplBase - 4, // 0x0D relative to start (if Type 3)
+            totalLenOffset: oplBase - 2,    // 0x0F relative to start
+            fullData: data
+        };
+    }
+
+    // Use Flat Data for Parsing
+    var struct = parseRecordStructure(flatData, targetItem.type);
     if (!struct.valid) return { success: false, error: struct.error };
 
-    var chld = targetItem.child;
-    var srcData = null;
-    var qcodeLen = 0;
-    var qcodeOffset = 0;
-    var isBare = (struct.type === 'bare');
+    // Prepare New Data
+    // We want to KEEP from 0 up to oplBase + calculatedBodySize.
+    var cutLength = struct.oplBase + struct.calculatedBodySize;
 
-    if (chld.child && chld.child.data) {
-        // Hierarchical (Standard Type 3)
-        srcData = chld.child.data;
+    var newData = new Uint8Array(cutLength);
+    newData.set(flatData.subarray(0, cutLength));
 
-        // [Fix] Check for Inner Wrapper (Double Wrap) which causes Variable Storage corruption
-        // If import wrapped an existing OB3/LongRecord, inner data has 02 80 header.
-        var innerStruct = parseRecordStructure(srcData, 0);
-        if (innerStruct.valid && innerStruct.type === 'long') {
-            qcodeOffset = innerStruct.offset + 2; // Skip LenLen
-        } else {
-            qcodeOffset = 0;
-        }
+    // Update Lengths (0x0D/0E and 0x0F/10)
+    var totalLen = struct.calculatedBodySize; // The payload size
+    var longRecLen = totalLen + 2;
 
-        if (srcData.length >= qcodeOffset + 2) {
-            qcodeLen = (srcData[qcodeOffset] << 8) | srcData[qcodeOffset + 1];
-        } else {
-            return { success: false, error: "Payload too short (Hierarchical)" };
-        }
-    } else {
-        // Flat or Bare
-        srcData = chld.data;
-        if (isBare) {
-            qcodeLen = srcData.length;
-            qcodeOffset = 0;
-        } else if (struct.type === 'raw') {
-            qcodeLen = struct.length;
-            qcodeOffset = struct.offset; // 0 usually
-        } else {
-            // Long Record Wrapper
-            qcodeOffset = struct.offset + 2; // Skip LenLen
-            if (qcodeOffset + 1 < srcData.length) {
-                qcodeLen = (srcData[qcodeOffset] << 8) | srcData[qcodeOffset + 1];
-            } else {
-                return { success: false, error: "Payload too short (Flat)" };
-            }
-        }
+    // Write TotalLen (0x0F)
+    if (struct.totalLenOffset >= 0) {
+        newData[struct.totalLenOffset] = (totalLen >> 8) & 0xFF;
+        newData[struct.totalLenOffset + 1] = totalLen & 0xFF;
     }
 
-    if (qcodeLen <= 0 && !isBare) return { success: false, error: "Object Data Length is 0" };
-
-    // Extract Logic
-    var objCodeToKeep;
-
-    if (isBare) {
-        // Must synthesize [Len][QCode]
-        objCodeToKeep = new Uint8Array(2 + qcodeLen);
-        objCodeToKeep[0] = (qcodeLen >> 8) & 0xFF;
-        objCodeToKeep[1] = qcodeLen & 0xFF;
-        objCodeToKeep.set(srcData.subarray(0, qcodeLen), 2);
-    } else {
-        // Safety Cap
-        var totalNeeded = qcodeOffset + 2 + qcodeLen;
-        if (totalNeeded > srcData.length) {
-            if (srcData.length - qcodeOffset - 2 < qcodeLen) {
-                qcodeLen = srcData.length - qcodeOffset - 2;
-                if (qcodeLen < 0) qcodeLen = 0;
-            }
-        }
-        var objectOnlyLen = 2 + qcodeLen;
-        objCodeToKeep = srcData.subarray(qcodeOffset, qcodeOffset + objectOnlyLen);
+    // Write LongRecLen (0x0D)
+    if (struct.longRecLenOffset >= 0) {
+        newData[struct.longRecLenOffset] = (longRecLen >> 8) & 0xFF;
+        newData[struct.longRecLenOffset + 1] = longRecLen & 0xFF;
     }
 
-    // Mark Original as Deleted
+    // Add to Pack as Type 2 (Object)
+    // 3. Create PackItem Hierarchy (To match system stability)
+    // We must manually reconstruct the item hierarchy (Header -> Block -> Body) 
+    // because removeItem/addItemToPack expects valid items.
+
+    // Split into Header and Body components
+    // HeaderLen is newData[0]. Header Item usually contains [RecLen] [Type] [Name...] (9 bytes)
+    // And usually valid Items contain the Terminator? PackImage says 'ix += len + 2'.
+    // So Header Item is (9+2) = 11 bytes.
+    var hdrLen = newData[0];
+    var split1 = hdrLen + 2;
+
+    // Safety check
+    if (split1 > newData.length) split1 = newData.length;
+
+    // New Header Data
+    var newHeaderData = newData.subarray(0, split1);
+    var headerItem = new PackItem(newHeaderData, 0, newHeaderData.length);
+    headerItem.setDescription(); // Updates type/desc (Should be Type 2 now)
+
+    // New Block Header (02 80 ...)
+    // Usually 4 bytes [02 80 LL LL]
+    var split2 = split1 + 4;
+
+    // But check if we have enough data
+    if (split2 > newData.length) split2 = newData.length;
+
+    var newBlockHdrData = newData.subarray(split1, split2);
+    // Note: Lengths in here are already updated in newData
+    var blkHeaderItem = new PackItem(newBlockHdrData, 0, newBlockHdrData.length);
+    blkHeaderItem.setDescription();
+
+    // New Body
+    var newBodyData = newData.subarray(split2);
+    var bodyItem = new PackItem(newBodyData, 0, newBodyData.length);
+
+    // Link them
+    blkHeaderItem.child = bodyItem;
+    headerItem.child = blkHeaderItem;
+
+    // Add to Pack
+    if (typeof addItemToPack === 'function') {
+        addItemToPack(headerItem);
+        // Force Inventory Update if possible
+        if (window.updateInventory) window.updateInventory();
+    } else {
+        return { success: false, error: "addItemToPack is missing" };
+    }
+
+    // Delete Source Item
     targetItem.deleted = true;
-    targetItem.data[1] &= 0x7F;
-
-    // Prepare New Data (Type 3 Standard: [QCodeLen][QCode][SrcLen=0][Src=Empty])
-    var finalPayloadLen = objCodeToKeep.length + 2;
-    var newData = new Uint8Array(finalPayloadLen);
-
-    newData.set(objCodeToKeep, 0);
-    newData[objCodeToKeep.length] = 0; // SrcLen High
-    newData[objCodeToKeep.length + 1] = 0; // SrcLen Low
-
-    // [Fix] Always Create NEW Record (Append)
-    // Do NOT search for existing items by name to update. OPL records are additive.
-    // If the user wants to clean up, they can delete old ones.
-    if (typeof createBlockFile === 'function') {
-        createBlockFile(newData, targetItem.name, 3);
-    } else {
-        return { success: false, error: "createBlockFile is not a function" };
-    }
+    targetItem.data[1] &= 0x7F; // Mark deleted in byte
 
     return { success: true };
-};
+
+}; //
+
 
 // Helper to build a process map (procedure name -> param count) for the decompiler
 function buildProcMap() {
@@ -913,11 +1052,39 @@ ProcedureFileEditor.prototype.translateAndSave = function () {
         try {
             // Pass suppressUpdate=true only for batch mode to prevent UI thrashing
             // interactive flag is (targetItem === self.item)
+
+            // Clear previous errors
+            if (targetItem === self.item && self.codeEditorInstance) {
+                self.codeEditorInstance.setErrorLine(-1);
+            }
+
             var result = self.compileAndSaveItem(targetItem, sourceCode, targetItem === self.item, isBatch);
             if (result.success) successes++;
-            else errors.push(targetItem.name + ": " + result.error);
+            else {
+                errors.push(targetItem.name + ": " + result.error);
+                // Parse Error Line
+                if (targetItem === self.item && self.codeEditorInstance) {
+                    var match = result.error.match(/line\s+(\d+)/i);
+                    if (match && match[1]) {
+                        var lineNum = parseInt(match[1], 10);
+                        if (!isNaN(lineNum) && lineNum > 0) {
+                            self.codeEditorInstance.setErrorLine(lineNum - 1);
+                        }
+                    }
+                }
+            }
         } catch (e) {
             errors.push(targetItem.name + ": " + e.message);
+            // Parse Error Line from Exception
+            if (targetItem === self.item && self.codeEditorInstance) {
+                var match = e.message.match(/line\s+(\d+)/i);
+                if (match && match[1]) {
+                    var lineNum = parseInt(match[1], 10);
+                    if (!isNaN(lineNum) && lineNum > 0) {
+                        self.codeEditorInstance.setErrorLine(lineNum - 1);
+                    }
+                }
+            }
         }
     });
 
@@ -930,20 +1097,53 @@ ProcedureFileEditor.prototype.translateAndSave = function () {
         if (window.updateInventory) window.updateInventory();
     }
 
-    // Restore Status
-    if (statusEl) statusEl.innerText = oldStatus;
-
     if (!OptionsManager.getOption('suppressConfirmations')) {
         if (errors.length === 0) {
-            // Only alert for SINGLE item if successful? No, usually translation is silent success for single item editor loop?
-            // "Translate" button usually gives feedback.
-            // Existing logic gave alert. We Keep it.
-            alert("Translated " + successes + " item(s) successfully!");
+            // Success
+            if (statusEl) {
+                statusEl.textContent = "Translated successfully.";
+                statusEl.style.color = "lightgreen";
+                setTimeout(function () { if (statusEl) { statusEl.style.color = ""; statusEl.textContent = "Ready"; } }, 3000);
+            }
+
+            if (isBatch) {
+                alert("Translated " + successes + " item(s) successfully!");
+            }
         } else {
-            alert("Translated " + successes + " item(s).\n\nErrors:\n" + errors.join("\n"));
+            // Processing Errors
+            if (isBatch) {
+                // Batch: Show Alert with list
+                alert("Translated " + successes + " item(s).\n\nErrors:\n" + errors.join("\n"));
+            } else {
+                // Single Item Error logic
+                var msg = errors[0];
+                if (msg.startsWith(targets[0].name + ": ")) {
+                    msg = msg.substring(targets[0].name.length + 2);
+                }
+
+                // Get Checksum Element
+                var ckEl = document.getElementById("status-checksum");
+
+                if (statusEl) {
+                    // [Fix] Add spacing to ensure visual separation from checksum
+                    // Format: PROCNAME: - Error: MESSAGE
+                    statusEl.textContent = targets[0].name + ": - Error: " + msg + "\u00A0\u00A0";
+                    statusEl.style.color = "#e00000";
+
+                    // Hide Checksum temporarily
+                    if (ckEl) ckEl.style.display = "none";
+
+                    // Revert color after a few seconds as requested
+                    setTimeout(function () {
+                        if (statusEl) statusEl.style.color = "";
+                        // Do NOT restore Checksum here. It stays hidden in Editor Context.
+                    }, 5000);
+                } else {
+                    alert("Error: " + msg);
+                }
+            }
         }
     }
-    // }, 20); // Timeout removed
 };
 
 ProcedureFileEditor.prototype.getSourceFromItem = function (item) {
@@ -1555,4 +1755,135 @@ ProcedureFileEditor.prototype.refreshDecompilerLog = function (hasSource) {
         }
     }
     return null;
+};
+
+ProcedureFileEditor.prototype.extractSourceCode = function () {
+    // Detect Batch Mode via Global Selection
+    var targets = [];
+    if (typeof selectedItems !== 'undefined' && selectedItems.length > 0) {
+        if (selectedItems.indexOf(this.item) !== -1) {
+            targets = selectedItems.filter(function (it) { return it.type === 3; }); // Filter only Type 3
+        } else {
+            targets = [this.item];
+        }
+    } else {
+        targets = [this.item];
+    }
+
+    if (targets.length === 0) return;
+
+    if (!OptionsManager.getOption('suppressConfirmations')) {
+        var msg = (targets.length === 1) ?
+            "Extract Source Code to New Record?\n\nThis will:\n1. Create a new OPL Text record with the source.\n2. Mark this OPL Procedure as DELETED." :
+            "Extract Source for " + targets.length + " items?\n\nThis will create new Text records and mark originals as DELETED.";
+        if (!confirm(msg)) return;
+    }
+
+    var pack = packs[currentPackIndex];
+    var successCount = 0;
+    var self = this;
+
+    targets.forEach(function (targetItem) {
+        var result = self.processItemExtractSource(targetItem, pack);
+        if (result === true || (result && result.success)) {
+            successCount++;
+        } else {
+            if (targets.length === 1) {
+                var reason = (result && result.error) ? result.error : "Unknown validation error";
+                // alert("Failed: " + reason); // Keeping commented out or replacing with status
+                if (typeof setStatus === 'function') setStatus("Extraction Failed: " + reason);
+            }
+        }
+    });
+
+    if (this.item.deleted) {
+        // UI Update for Deletion
+        var delChk = document.getElementById('deleted');
+        if (delChk) delChk.checked = true;
+        var ta = document.getElementById('sourcecode');
+        if (ta) ta.disabled = true;
+        if (this.codeEditorInstance) this.codeEditorInstance.setReadOnly(true);
+        if (this.translateBtn) this.translateBtn.disabled = true;
+        if (this.stripBtn) this.stripBtn.disabled = true;
+        if (this.extractBtn) this.extractBtn.disabled = true;
+    }
+
+    if (successCount > 0) {
+        if (window.saveSession) window.saveSession();
+        if (window.updateInventory) window.updateInventory();
+    }
+};
+
+ProcedureFileEditor.prototype.processItemExtractSource = function (targetItem, pack) {
+    if (targetItem.deleted) return { success: false, error: "Item is already deleted" };
+
+    // We strictly need the BODY data to find the source
+    // Use getProcedureData logic: chld = item.child.child (Type 3)
+    // Structure: Header -> Block (02 80) -> Body
+    var chld = targetItem.child ? targetItem.child.child : null;
+    if (!chld || !chld.data) {
+        // Fallback: If structure is flat? (Shouldn't happen for valid Type 3 but possible)
+        return { success: false, error: "No data found" };
+    }
+
+    var data = chld.data; // Body data
+    var extractedPayload = null;
+    var isSimpleCopy = false;
+
+    // 1. Try to Parse as Compiled Procedure (Type 3)
+    // Format: [CodeLen 2] [ObjectCode...] [SrcLen 2] [Source...]
+    var isValidProc = false;
+    if (data.length >= 4) {
+        var codeLen = (data[0] << 8) | data[1];
+        var srcLenOffset = 2 + codeLen;
+        if (srcLenOffset + 2 <= data.length) {
+            var srcLen = (data[srcLenOffset] << 8) | data[srcLenOffset + 1];
+            if (srcLenOffset + 2 + srcLen <= data.length) {
+                // Valid Structure Found
+                isValidProc = true;
+                if (srcLen > 0) {
+                    var srcOffset = srcLenOffset + 2;
+                    var sourceBytes = data.subarray(srcOffset, srcOffset + srcLen);
+
+                    // Construct New Payload: [00 00] [SrcLen] [Source]
+                    extractedPayload = new Uint8Array(2 + 2 + sourceBytes.length);
+                    extractedPayload[0] = 0; extractedPayload[1] = 0;
+                    extractedPayload[2] = (sourceBytes.length >> 8) & 0xFF;
+                    extractedPayload[3] = sourceBytes.length & 0xFF;
+                    extractedPayload.set(sourceBytes, 4);
+                }
+                // If srcLen is 0, we can't extract source. 
+                // But wait, user said "Extract Source to New Record". If no source, fail?
+                // Or treat as "OPL Text"? A 0-length source OPL Text is just empty.
+                // We'll let extraction fail if empty, or fallback below?
+                // If it IS a compiled proc but has NO source, we can't extract source.
+            }
+        }
+    }
+
+    // 2. Fallback: Treat as "OPL Text" (Simple Copy)
+    if (!isValidProc || !extractedPayload) {
+        // If it failed proc parsing, assume it's just a text file or raw source.
+        // User Request: "Correct the creation of the incorrect file type. (in this context its a simple record copy operation)"
+        // So we strictly COPY the existing payload.
+        isSimpleCopy = true;
+        extractedPayload = new Uint8Array(data.length);
+        extractedPayload.set(data);
+    }
+
+    if (!extractedPayload && !isSimpleCopy) return { success: false, error: "No Source Code found" };
+
+    // Mark Original as Deleted
+    targetItem.deleted = true;
+    if (targetItem.data.length > 1) {
+        targetItem.data[1] &= 0x7F;
+    }
+
+    // Create New Record (Type 3 - Procedure)
+    // Ensures output is OPL Text / Procedure Type
+    if (typeof createBlockFile === 'function') {
+        createBlockFile(extractedPayload, targetItem.name, 3, true);
+    }
+
+    return { success: true };
 };

@@ -215,6 +215,34 @@ class DecompilerLogWindow {
         row.style.fontSize = '12px';
         row.style.alignItems = 'baseline';
 
+        // Helper: Determine Category based on OpName
+        const getCategory = (opName) => {
+            if (!opName) return '';
+            opName = opName.toUpperCase().split(' ')[0]; // First word
+
+            const FLOW = ['GOTO', 'IF', 'ELSE', 'ELSEIF', 'ENDIF', 'DO', 'UNTIL', 'WHILE', 'ENDWH', 'BREAK', 'CONTINUE', 'STOP', 'ONERR', 'RAISE', 'TRAP', 'BRANCHIFFALSE'];
+            const STACK = ['PUSH', 'DROP', 'INT', 'FLT', 'Simple', 'Inline'];
+
+            // Explicitly transparent: Just Comments now. 
+            // Assignments (ASSIGN/STORE) should fall through to Green as they are "Commands".
+            const TRANSPARENT = ['REM'];
+
+            if (FLOW.includes(opName)) return 'log-row-flow';
+            if (TRANSPARENT.includes(opName)) return '';
+            if (STACK.includes(opName) || /^[A-Z]/.test(opName) === false) return ''; // Default/Stack (e.g. operators)
+
+            // Heuristic for Operators/Math (Stack)
+            if (['+', '-', '*', '/', '**', '=', '<', '>', 'AND', 'OR', 'NOT'].includes(opName)) return 'log-row-stack';
+
+            // All other commands = Green
+            return 'log-row-cmd';
+        };
+
+        const catClass = getCategory(entry.opName);
+        if (catClass) {
+            row.classList.add(catClass);
+        }
+
         // 1. Address
         const addrDiv = document.createElement('div');
         addrDiv.style.color = '#888';

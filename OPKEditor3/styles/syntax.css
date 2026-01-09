@@ -108,3 +108,35 @@
 .opl-operator {
     color: var(--syntax-operator);
 }
+
+/* Decompiler Log Banding (Simplified) */
+.log-row-flow {
+    background-color: rgba(65, 105, 225, 0.08);
+    /* Faint Royal Blue */
+}
+
+.log-row-cmd {
+    background-color: rgba(34, 139, 34, 0.08);
+    /* Faint Forest Green (Generic Command) */
+}
+
+.log-row-stack {
+    background-color: rgba(128, 128, 128, 0.08);
+    /* Faint Grey */
+}
+
+/* Main Text Area Error Line */
+.code-error-line {
+    background-color: rgba(255, 0, 0, 0.4) !important;
+    border-bottom: 2px solid red !important;
+    color: inherit;
+    /* Avoid display: inline-block inside pre if possible, but span needs it for bg/border consistency sometimes */
+    /* Let's try omitting display to see if natural flow works better if simpler */
+}
+
+/* Gutter Highlight */
+.gutter-error {
+    background-color: #d00 !important;
+    color: white !important;
+    font-weight: bold;
+}

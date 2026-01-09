@@ -12,6 +12,9 @@ HeaderEditor.prototype.initialise = function (item) {
     if (!this.myelement) {
         this.myelement = document.createElement('div');
         this.myelement.style.height = "100%";
+        // [Fix] Ensure Checksum is visible in Pack Management Mode
+        var ckEl = document.getElementById("status-checksum");
+        if (ckEl) ckEl.style.display = "";
         this.myelement.style.overflowY = "auto"; // Main Scroll Container
         this.myelement.style.overflowX = "hidden";
         this.myelement.style.padding = "10px";

@@ -10,6 +10,7 @@ function CodeEditor(container, options) {
 
     this.lines = [];
     this.foldState = {}; // lineIndex -> boolean (true = folded)
+    this.errorLine = -1; // 0-indexed line number of error
 
     this.init();
 }
@@ -100,6 +101,7 @@ CodeEditor.prototype = {
 
                 self.validateHeader();
                 self.updateFullTextFromParts();
+                if (self.errorLine !== -1) self.errorLine = -1; // Clear Error on Edit
                 if (self.onChange) self.onChange();
                 self.updateFullTextFromParts();
                 if (self.onChange) self.onChange();
@@ -183,6 +185,7 @@ CodeEditor.prototype = {
             // But if we are here, we are editing.
 
             // If in procedureMode, this is just the body
+            if (self.errorLine !== -1) self.errorLine = -1; // Clear Error on Edit
             self.updateFullTextFromParts();
             self.update();
             if (self.onChange) self.onChange();
@@ -261,6 +264,7 @@ CodeEditor.prototype = {
                     this.selectionStart = this.selectionEnd = newCursorPos;
 
                     self.updateFullTextFromParts();
+                    if (self.errorLine !== -1) self.errorLine = -1; // Clear Error on Edit
                     self.update();
                     if (self.onChange) self.onChange();
                     return;
@@ -273,7 +277,9 @@ CodeEditor.prototype = {
                 var end = this.selectionEnd;
                 this.value = this.value.substring(0, start) + "\t" + this.value.substring(end);
                 this.selectionStart = this.selectionEnd = start + 1;
+                this.selectionStart = this.selectionEnd = start + 1;
                 self.updateFullTextFromParts();
+                if (self.errorLine !== -1) self.errorLine = -1; // Clear Error on Edit
                 self.update();
                 if (self.onChange) self.onChange();
             }
@@ -452,6 +458,7 @@ CodeEditor.prototype = {
     },
 
     setValue: function (val) {
+        this.errorLine = -1; // Clear any existing errors
         this.fullText = val;
 
         if (this.isSplitMode()) {
@@ -480,6 +487,44 @@ CodeEditor.prototype = {
             this.updateFullTextFromParts();
         }
         return this.fullText;
+    },
+
+    setErrorLine: function (lineIndex) {
+        this.errorLine = lineIndex;
+        if (lineIndex !== -1) {
+            this.unfoldLine(lineIndex);
+        }
+        this.update();
+    },
+
+    unfoldLine: function (lineIndex) {
+        // Calculate ranges to determine what hides this line
+        var textToProcess = this.fullText;
+        if (this.isSplitMode()) {
+            var allLines = textToProcess.split('\n');
+            if (allLines.length > 0) allLines.shift();
+            textToProcess = allLines.join('\n');
+        }
+        var lines = textToProcess.split('\n');
+        var foldRanges = this.calculateFoldRanges(lines);
+
+        var changed = false;
+        for (var i = 0; i < foldRanges.length; i++) {
+            var r = foldRanges[i];
+            if (this.foldState[r.start]) {
+                // If this folded range COVERS the target line
+                // (lineIndex is inside the folded block, i.e., > start and <= end)
+                if (lineIndex > r.start && lineIndex <= r.end) {
+                    this.foldState[r.start] = false; // Unfold
+                    changed = true;
+                }
+            }
+        }
+        // If we changed fold state, we might need a re-update, 
+        // but setErrorLine calls update() right after, so we don't need to call it here explicitly 
+        // if we rely on the caller. However, setErrorLine calls update().
+        // To be safe and modular:
+        // (But avoid double update)
     },
 
     setReadOnly: function (readOnly) {
@@ -518,13 +563,30 @@ CodeEditor.prototype = {
             if (this.foldState[i] && enableFolding) {
                 var range = foldRanges.find(r => r.start === i);
                 if (range) {
-                    displayText += lines[i] + " ...\n";
-                    displayLines.push(lines[i] + " ...");
+                    var content = lines[i] + " ...";
+                    if (this.errorLine === i) {
+                        content = '<div class="code-error-line">' + content + '</div>';
+                    }
+                    displayText += content + "\n";
+                    displayLines.push(content);
                     lineMap.push(i);
                     skipUntil = range.end;
                     continue;
                 }
             }
+
+            var lineContent = lines[i];
+            if (this.errorLine === i) {
+                // For renderLayer, we handle this in the Highlighting loop usually?
+                // No, renderLayer.innerHTML is set from 'highlighted'.
+                // 'displayText' is for the textarea (inputLayer).
+                // We should NOT add HTML to 'displayText' or 'displayLines' if they are used for inputLayer.
+                // Wait, 'displayLines' is used for Highlighting.
+
+                // Correction: InputLayer is TEXT area. It cannot handle HTML.
+                // We must apply style in RenderLayer.
+            }
+
             displayText += lines[i] + "\n";
             displayLines.push(lines[i]);
             lineMap.push(i);
@@ -554,19 +616,37 @@ CodeEditor.prototype = {
         if (this.language === 'opl' && enableSyntaxHighlighting) {
             for (var i = 0; i < displayLines.length; i++) {
                 var line = displayLines[i];
+                var originalLineIndex = lineMap[i];
+
+                var lineHTML = "";
                 if (line.endsWith(" ...")) {
                     var content = line.substring(0, line.length - 4);
                     var hl = SyntaxHighlighter.highlight(content);
                     if (hl.endsWith('\n')) hl = hl.slice(0, -1);
-                    highlighted += hl + '<span class="fold-placeholder"> ...</span>\n';
+                    lineHTML = hl + '<span class="fold-placeholder"> ...</span>';
                 } else {
                     var hl = SyntaxHighlighter.highlight(line);
                     if (hl.endsWith('\n')) hl = hl.slice(0, -1);
-                    highlighted += hl + '\n';
+                    lineHTML = hl;
                 }
+
+                if (this.errorLine === originalLineIndex) {
+                    lineHTML = '<span class="code-error-line">' + lineHTML + '</span>';
+                }
+                highlighted += lineHTML + '\n';
             }
         } else {
-            highlighted = displayText.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            // Non-Highlighted matching logic
+            for (var i = 0; i < displayLines.length; i++) {
+                var line = displayLines[i];
+                var originalLineIndex = lineMap[i];
+                var lineHTML = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+                if (this.errorLine === originalLineIndex) {
+                    lineHTML = '<span class="code-error-line">' + lineHTML + '</span>';
+                }
+                highlighted += lineHTML + '\n';
+            }
         }
         this.renderLayer.innerHTML = highlighted;
 
@@ -620,7 +700,6 @@ CodeEditor.prototype = {
     updateGutter: function (allLines, foldRanges, lineMap, lineOffset) {
         var showLineNumbers = (this.options && this.options.lineNumbers !== undefined) ? this.options.lineNumbers : OptionsManager.getOption('showLineNumbers');
         var enableFolding = OptionsManager.getOption('codeFolding');
-        var enableFolding = OptionsManager.getOption('codeFolding');
 
         this.gutter.innerHTML = '';
 
@@ -640,6 +719,14 @@ CodeEditor.prototype = {
 
             var cell = document.createElement('div');
             cell.className = 'gutter-cell';
+
+            // Highlight Error in Gutter
+            if (this.errorLine === originalIndex) {
+                cell.classList.add('gutter-error');
+                // Force style in case CSS missing
+                cell.style.backgroundColor = 'rgba(255, 0, 0, 0.4)';
+                cell.style.color = '#fff';
+            }
 
             var numSpan = document.createElement('span');
             numSpan.className = 'gutter-line-number';
