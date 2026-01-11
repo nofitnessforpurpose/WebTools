@@ -1132,7 +1132,7 @@ var OPLCompiler = (function () {
             if (peek()) {
 
             }
-            while (peek() && ['AND', 'OR'].includes(peek().value)) {
+            while (peek() && peek().type !== 'STRING' && ['AND', 'OR'].includes(peek().value)) {
                 var op = next().value;
 
                 var rhsType = parseComparison();
@@ -1147,7 +1147,7 @@ var OPLCompiler = (function () {
 
         function parseComparison() {
             var type = parseAddSub();
-            while (peek() && ['=', '<', '>', '<=', '>=', '<>'].includes(peek().value)) {
+            while (peek() && peek().type !== 'STRING' && ['=', '<', '>', '<=', '>=', '<>'].includes(peek().value)) {
                 var op = next().value;
                 var rhsStart = qcode.length; // Capture start of RHS
                 var rhsType = parseAddSub();
@@ -1247,7 +1247,7 @@ var OPLCompiler = (function () {
 
         function parseAddSub() {
             var type = parseMulDiv();
-            while (peek() && ['+', '-'].includes(peek().value)) {
+            while (peek() && peek().type !== 'STRING' && ['+', '-'].includes(peek().value)) {
                 var op = next().value;
                 var rhsStart = qcode.length; // Capture start of RHS
                 var rhsType = parseMulDiv();
@@ -1265,7 +1265,7 @@ var OPLCompiler = (function () {
 
         function parseMulDiv() {
             var type = parsePower();
-            while (peek() && ['*', '/'].includes(peek().value)) {
+            while (peek() && peek().type !== 'STRING' && ['*', '/'].includes(peek().value)) {
                 var op = next().value;
                 var rhsStart = qcode.length; // Capture start of RHS
                 var rhsType = parsePower();
@@ -1283,7 +1283,7 @@ var OPLCompiler = (function () {
 
         function parsePower() {
             var type = parseFactor();
-            while (peek() && peek().value === '**') {
+            while (peek() && peek().type !== 'STRING' && peek().value === '**') {
                 var op = next().value;
                 var rhsStart = qcode.length; // Capture start of RHS
                 var rhsType = parseFactor();
@@ -1347,7 +1347,7 @@ var OPLCompiler = (function () {
         function parseFactor() {
             var t = peek();
             // Check for Unary Minus
-            if (t && (t.value === '-' || (t.type === 'PUNCTUATION' && t.value === '-'))) { // Tokenizer might mark - as PUNCTUATION or KEYWORD depending on logic?
+            if (t && t.type !== 'STRING' && (t.value === '-' || (t.type === 'PUNCTUATION' && t.value === '-'))) { // Tokenizer might mark - as PUNCTUATION or KEYWORD depending on logic?
                 next(); // Consume '-'
                 var type = parseFactor(); // Recurse
 
@@ -1357,7 +1357,7 @@ var OPLCompiler = (function () {
                 else console.warn("Compiler: Unary minus on String?");
                 return type;
             }
-            if (t && (t.value === 'NOT')) {
+            if (t && t.type !== 'STRING' && (t.value === 'NOT')) {
                 next(); // Value
                 var type = parseFactor();
                 if (type === 1) emit(0x42); // NOT (Float)
