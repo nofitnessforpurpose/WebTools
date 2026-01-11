@@ -1365,6 +1365,18 @@ var OPLCompiler = (function () {
                 return 0; // Result is Int
             }
 
+            // ASCII Literal %C
+            if (t && t.value === '%') {
+                next(); // Consume %
+                var charTick = next(); // Consume Character
+                if (!charTick || !charTick.value) throw new Error("Error on line " + ((t && t.line) || "?") + ": Expected character after %");
+                var strVal = charTick.value.toString();
+                if (strVal.length === 0) throw new Error("Error on line " + ((t && t.line) || "?") + ": Empty literal after %");
+                var ascii = strVal.charCodeAt(0);
+                emit(0x22); emitWord(ascii); // Push Int
+                return 0; // Int
+            }
+
             t = next(); // Consume
             if (!t) return 0;
 
@@ -1756,6 +1768,7 @@ var OPLCompiler = (function () {
                 return type;
             }
             return 0; // Fallback
+            throw new Error("Error on line " + ((t && t.line) || "?") + ": Unexpected token '" + (t ? t.value : "EOF") + "' in expression");
         }
 
         // --- Fixup System ---
@@ -2675,6 +2688,7 @@ var OPLCompiler = (function () {
                             }
                         }
                     }
+
                 }
 
                 if (isLabel) continue;
