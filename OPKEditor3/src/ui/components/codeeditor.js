@@ -273,15 +273,11 @@ CodeEditor.prototype = {
 
             if (e.key === 'Tab') {
                 e.preventDefault();
-                var start = this.selectionStart;
-                var end = this.selectionEnd;
-                this.value = this.value.substring(0, start) + "\t" + this.value.substring(end);
-                this.selectionStart = this.selectionEnd = start + 1;
-                this.selectionStart = this.selectionEnd = start + 1;
-                self.updateFullTextFromParts();
-                if (self.errorLine !== -1) self.errorLine = -1; // Clear Error on Edit
-                self.update();
-                if (self.onChange) self.onChange();
+                if (e.shiftKey) {
+                    self.outdentSelection();
+                } else {
+                    self.indentSelection();
+                }
             }
             // Prevent deleting the apparent "first line" (which is now separate) from here? 
             // It's physically separate, so backspace at start of body does nothing naturally. Good.
@@ -767,6 +763,190 @@ CodeEditor.prototype = {
         if (!this.options) this.options = {};
         this.options.lineNumbers = enabled;
         this.update();
+    },
+
+    indentSelection: function () {
+        if (this.readOnly) return;
+        var text = this.inputLayer.value;
+        var start = this.inputLayer.selectionStart;
+        var end = this.inputLayer.selectionEnd;
+
+        var optVal = OptionsManager.getOption('indentSize');
+        var indentSize = parseInt(optVal, 10);
+        if (isNaN(indentSize) || indentSize < 1) indentSize = 2;
+
+        var startLineStart = text.lastIndexOf('\n', start - 1) + 1;
+        var endLineEnd = text.indexOf('\n', end);
+        if (endLineEnd === -1) endLineEnd = text.length;
+
+        var selectedText = text.substring(startLineStart, endLineEnd);
+
+        var lines = selectedText.split('\n');
+        var indentString = " ".repeat(indentSize);
+        var textBefore = text.substring(0, startLineStart);
+        var isEffectiveStart = !textBefore.trim(); // True if start of file or only whitespace before
+
+        var newText = lines.map((line, index) => {
+            // Rule: Top Procedure Line (First non-empty line) must have NO indentation
+            if (isEffectiveStart && index === 0) {
+                return line.replace(/^\s+/, '');
+            }
+            return indentString + line;
+        }).join('\n');
+
+        // Construct New Body
+        var head = text.substring(0, startLineStart);
+        var tail = text.substring(endLineEnd);
+        var newBody = head + newText + tail;
+
+        // Construct Full Text and Set
+        var newFullText = newBody;
+        if (this.isSplitMode()) {
+            var headerVal = this.headerInput ? this.headerInput.value : "";
+            newFullText = headerVal + "\n" + newBody;
+        }
+
+        this.setValue(newFullText);
+
+        // Restore Selection
+        this.inputLayer.selectionStart = startLineStart;
+        this.inputLayer.selectionEnd = startLineStart + newText.length;
+        if (this.onChange) this.onChange();
+    },
+
+    outdentSelection: function () {
+        if (this.readOnly) return;
+        var text = this.inputLayer.value;
+        var start = this.inputLayer.selectionStart;
+        var end = this.inputLayer.selectionEnd;
+
+        var optVal = OptionsManager.getOption('indentSize');
+        var indentSize = parseInt(optVal, 10);
+        if (isNaN(indentSize) || indentSize < 1) indentSize = 2;
+
+        var startLineStart = text.lastIndexOf('\n', start - 1) + 1;
+        var endLineEnd = text.indexOf('\n', end);
+        if (endLineEnd === -1) endLineEnd = text.length;
+
+        var selectedText = text.substring(startLineStart, endLineEnd);
+
+        var lines = selectedText.split('\n');
+        var indentString = " ".repeat(indentSize);
+        var indentLen = indentString.length;
+        var textBefore = text.substring(0, startLineStart);
+        var isEffectiveStart = !textBefore.trim();
+
+        var newText = lines.map((line, index) => {
+            // Rule: Top Procedure Line must have NO indentation
+            if (isEffectiveStart && index === 0) {
+                return line.replace(/^\s+/, '');
+            }
+
+            if (line.startsWith(indentString)) {
+                return line.substring(indentLen);
+            } else {
+                return line.replace(new RegExp("^ {1," + indentSize + "}"), "");
+            }
+        }).join('\n');
+
+        // Construct New Body
+        var head = text.substring(0, startLineStart);
+        var tail = text.substring(endLineEnd);
+        var newBody = head + newText + tail;
+
+        // Construct Full Text and Set
+        var newFullText = newBody;
+        if (this.isSplitMode()) {
+            var headerVal = this.headerInput ? this.headerInput.value : "";
+            newFullText = headerVal + "\n" + newBody;
+        }
+
+        this.setValue(newFullText);
+
+        // Restore Selection
+        this.inputLayer.selectionStart = startLineStart;
+        this.inputLayer.selectionEnd = startLineStart + newText.length;
+        if (this.onChange) this.onChange();
+    },
+
+    formatSelection: function () {
+        if (this.readOnly) return;
+        if (!window.OPLFormatter) return;
+
+        var text = this.inputLayer.value;
+        var start = this.inputLayer.selectionStart;
+        var end = this.inputLayer.selectionEnd;
+
+        // Expand to full lines
+        var startLineStart = text.lastIndexOf('\n', start - 1) + 1;
+        var endLineEnd = text.indexOf('\n', end);
+        if (endLineEnd === -1) endLineEnd = text.length;
+
+        var selectedText = text.substring(startLineStart, endLineEnd);
+
+        // Format
+        var newText = window.OPLFormatter.format(selectedText);
+
+        // Replace
+        var head = text.substring(0, startLineStart);
+        var tail = text.substring(endLineEnd);
+        var newBody = head + newText + tail;
+
+        // Construct Full Text and Set
+        var newFullText = newBody;
+        if (this.isSplitMode()) {
+            var headerVal = this.headerInput ? this.headerInput.value : "";
+            newFullText = headerVal + "\n" + newBody;
+        }
+
+        this.setValue(newFullText);
+
+        // Restore Selection (Deselect: Move cursor to end of formatted text)
+        this.inputLayer.selectionStart = startLineStart + newText.length;
+        this.inputLayer.selectionEnd = startLineStart + newText.length;
+        if (this.onChange) this.onChange();
+    },
+
+    minifySelection: function () {
+        if (this.readOnly) return;
+        if (!window.OPLFormatter) return;
+
+        var text = this.inputLayer.value;
+        var start = this.inputLayer.selectionStart;
+        var end = this.inputLayer.selectionEnd;
+
+        // Expand to full lines
+        var startLineStart = text.lastIndexOf('\n', start - 1) + 1;
+        var endLineEnd = text.indexOf('\n', end);
+        if (endLineEnd === -1) endLineEnd = text.length;
+
+        var selectedText = text.substring(startLineStart, endLineEnd);
+
+        // Compress (Minify + Remove Comments)
+        var newText = window.OPLFormatter.compress(selectedText);
+
+        // Replace
+        var head = text.substring(0, startLineStart);
+        var tail = text.substring(endLineEnd);
+        var newBody = head + newText + tail;
+
+        // Construct Full Text and Set
+        var newFullText = newBody;
+        if (this.isSplitMode()) {
+            var headerVal = this.headerInput ? this.headerInput.value : "";
+            newFullText = headerVal + "\n" + newBody;
+        }
+
+        this.setValue(newFullText);
+
+        // Restore Selection (Deselect: Move cursor to end of minified text)
+        this.inputLayer.selectionStart = startLineStart + newText.length;
+        this.inputLayer.selectionEnd = startLineStart + newText.length;
+        if (this.onChange) this.onChange();
+    },
+
+    selectAll: function () {
+        this.inputLayer.select();
     },
 
     formatLine: function (line) {

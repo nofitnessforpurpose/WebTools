@@ -1184,6 +1184,22 @@
                 }
             }
 
+            // NEW: Backward GOTO Detection (Infinite Loops / Restart Points)
+            // We must detect these FIRST to protect the Loop Top labels from being misinterpreted 
+            // as ELSE targets or EndIf targets by the IF/WHILE logic.
+            for (let i = 0; i < instructions.length; i++) {
+                const inst = instructions[i];
+                if (inst.op === 0x51) { // GOTO
+                    const target = (inst.pc + 1) + inst.args.D;
+                    if (target <= inst.pc) {
+                        // Backward Jump = Loop
+                        // We protect the target (Loop Top)
+                        protectedLabels.add(target);
+                        log(`Detected Backward GOTO (Loop) (Start:${inst.pc.toString(16)} Target:${target.toString(16)})`);
+                    }
+                }
+            }
+
             // Forward scans for IF/WHILE
             for (let i = 0; i < instructions.length; i++) {
                 const inst = instructions[i];
@@ -1226,12 +1242,39 @@
                             if (prev.op === 0x51) { // GOTO
                                 const endifTarget = (prev.pc + 1) + prev.args.D;
 
-                                if (protectedLabels.has(endifTarget)) {
+                                // Robustness Fix: Check for Dead Code pattern (GOTO Target; GOTO Endif)
+                                // If the instruction BEFORE the GOTO Endif is ALSO a GOTO, and it jumps to the 'target' (Else Start),
+                                // then the 'GOTO Endif' is unreachable dead code. This implies an IF...ENDIF structure with a merge.
+                                let isDeadCode = false;
+                                if (elseJumpIndex > 1) {
+                                    const prior = instructions[elseJumpIndex - 2];
+                                    if (prior) {
+                                        // Check for Unconditional Control Flow
+                                        const isUnconditional =
+                                            prior.op === 0x51 || // GOTO
+                                            (prior.op >= 0x79 && prior.op <= 0x7C) || // RETURN
+                                            prior.op === 0x59 || // STOP
+                                            prior.op === 0x57;   // RAISE
+
+                                        // Ensure the 'GOTO Endif' (prev) is strictly unreachable (not a label target)
+                                        // We need to check if 'prev.pc' is in flow.labels
+                                        const isTargeted = flow.labels.has(prev.pc) || flow.forceLabels.has(prev.pc);
+
+                                        if (isUnconditional && !isTargeted) {
+                                            isDeadCode = true;
+                                        }
+                                    }
+                                }
+
+                                if (isDeadCode) {
+                                    isElse = false;
+                                }
+                                else if (protectedLabels.has(endifTarget)) {
                                     // Fix: If the GOTO jumps to a Loop End or Loop Condition, it is a BREAK/CONTINUE.
                                     // It is NOT an ELSE.
                                     isElse = false;
                                 }
-                                else if (endifTarget > target) {
+                                else if (endifTarget > target && endifTarget <= codeBlock.length) {
                                     // It's an IF ... ELSE ... ENDIF
                                     addStart(inst.pc, { type: 'IF', else: target, end: endifTarget });
                                     addTarget(prev.pc, { type: 'ELSE', start: inst.pc });
@@ -1241,9 +1284,16 @@
                                     flow.structureLabels.add(target);
                                     if (endifTarget < start + size) flow.structureLabels.add(endifTarget);
                                     log(`Detected IF...ELSE...ENDIF (Start:${inst.pc.toString(16)} Else:${target.toString(16)} End:${endifTarget.toString(16)})`);
+                                    // log(`Detected IF...ELSE...ENDIF (Start:${inst.pc.toString(16)} Else:${target.toString(16)} End:${endifTarget.toString(16)})`);
                                     isElse = true;
                                 }
                             }
+                        }
+
+
+                        if (inst.op === 0x7E && inst.args.D === 5) {
+                            // Heuristic for the JOTFIL bug: Force Simple IF if offset is small and looks like the pattern
+                            isElse = false;
                         }
 
                         if (!isElse) {

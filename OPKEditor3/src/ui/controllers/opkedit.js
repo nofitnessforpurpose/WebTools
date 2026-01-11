@@ -20,7 +20,7 @@ function Button(id, clickcallback, inputId, filecallback) {
       // 
       // 
       // 
-      //       console.warn("Button not found: " + id);
+      // // console.warn("Button not found: " + id);
       return;
    }
 
@@ -360,6 +360,19 @@ if (menuAbout) {
    });
 }
 
+var menuOplErrors = document.getElementById('menu-opl-errors');
+if (menuOplErrors) {
+   menuOplErrors.addEventListener('click', function (e) {
+      e.preventDefault();
+      closeAllMenus();
+      if (typeof OPLErrorCodes !== 'undefined') {
+         OPLErrorCodes.openWindow();
+      } else {
+         alert("OPLErrorCodes component not loaded.");
+      }
+   });
+}
+
 var menuOplRef = document.getElementById('menu-opl-ref');
 if (menuOplRef) {
    menuOplRef.addEventListener('click', function (e) {
@@ -485,7 +498,7 @@ function init() {
          try {
             var lData = JSON.parse(legacy);
             var existingPacks = [];
-            try { existingPacks = JSON.parse(localStorage.getItem('opkedit_cached_packs') || '[]'); } catch (e) { console.warn("Failed to load cached packs:", e); }
+            try { existingPacks = JSON.parse(localStorage.getItem('opkedit_cached_packs') || '[]'); } catch (e) { }
 
             // Avoid duplicates during migration
             var exists = false;
@@ -509,7 +522,7 @@ function init() {
       try {
          var stored = localStorage.getItem('opkedit_cached_packs');
          if (stored) cachedPacks = JSON.parse(stored);
-      } catch (e) { console.error("Error in loadSession:", e); }
+      } catch (e) { }
 
       if (cachedPacks.length > 0) {
 
@@ -2527,20 +2540,13 @@ function createItemFromFileData(filedata, name) {
       var match = name.match(/\.OB([0-9A-F])$/i);
       var typeExt = parseInt(match[1], 16);
 
-      // Basic check: filedata must start with ORG
-      var validHeader = false;
-      if (filedata.length >= 6) {
-         if (typeof filedata === 'string') {
-            if (filedata.substr(0, 3) === "ORG") validHeader = true;
-         } else {
-            if (filedata[0] == 79 && filedata[1] == 82 && filedata[2] == 71) validHeader = true;
-         }
-      }
+      // Relaxed Logic: Do NOT enforce "ORG" header.
+      // We rely on the extension to define the type.
+      // However, we still expect the standard OPL Object format:
+      // Byte 0: Type? (Ignored in favor of Extension)
+      // Byte 1-2: ...
+      // Byte 3-4: Length (essential for integrity check)
 
-      if (!validHeader) {
-         alert("File " + name + " is missing required 'ORG' header.");
-         return false;
-      }
 
       // Convert to Uint8Array if needed
       var rawBytes;
@@ -2558,9 +2564,10 @@ function createItemFromFileData(filedata, name) {
       }
 
       // Use internal type from file if present, otherwise trust extension or just use byte 5
-      var typeByte = rawBytes[5];
+      // Rule Update: .OBx extension dictates the type.
+      // var typeByte = rawBytes[5]; 
 
-      var hdritem = createFileHeader(name, typeByte & 0x7F, 0);
+      var hdritem = createFileHeader(name, typeExt, 0);
       var blkhdr = new Uint8Array(4);
       blkhdr[0] = 2; blkhdr[1] = 0x80; blkhdr[2] = rawBytes[3]; blkhdr[3] = rawBytes[4];
 

@@ -242,13 +242,81 @@ ProcedureFileEditor.prototype.createToobarButtons = function () {
     this.discardBtn = discardBtn;
 
     // Divider
+    var divFormat = document.createElement('span');
+    divFormat.innerHTML = '|';
+    divFormat.style.margin = '0 10px 0 2px';
+    divFormat.style.color = 'var(--border-color)';
+    divFormat.style.opacity = '0.5';
+    leftTools.appendChild(divFormat);
+
+    // [New] Formatting Tools (Format / Minify)
+    var formatBtn = createHeaderBtn('fa-solid fa-feather-pointed', 'Pretty Print (Format Selection)', function () {
+        if (self.item.deleted) return;
+        if (self.codeEditorInstance) {
+            self.codeEditorInstance.formatSelection();
+        }
+    });
+    leftTools.appendChild(formatBtn);
+    this.formatBtn = formatBtn;
+
+    var minifyBtn = createHeaderBtn('fa-solid fa-hammer', 'Minify & Compress (Selection)', function () {
+        if (self.item.deleted) return;
+        var suppressed = OptionsManager.getOption('suppressConfirmations');
+        if (!suppressed) {
+            if (!confirm("Minify Selection?\n\nThis will remove comments and compact whitespace in the selected area.")) {
+                return;
+            }
+        }
+        if (self.codeEditorInstance) {
+            self.codeEditorInstance.minifySelection();
+        }
+    });
+    leftTools.appendChild(minifyBtn);
+    this.minifyBtn = minifyBtn;
+
+    // Divider
     var div1 = document.createElement('span');
     div1.innerHTML = '|';
-    div1.style.margin = '0 10px 0 2px'; // Balanced spacing (Matches ~10px visual gap from prev btn margin)
+    div1.style.margin = '0 10px 0 2px';
     div1.style.color = 'var(--border-color)';
     div1.style.opacity = '0.5';
     leftTools.appendChild(div1);
 
+    // [New] Indentation Tools (Standard)
+    var indentBtn = createHeaderBtn('fas fa-indent', 'Increase Indent', function () {
+        if (self.item.deleted) return;
+        if (self.codeEditorInstance) {
+            self.codeEditorInstance.indentSelection();
+        }
+    });
+    leftTools.appendChild(indentBtn);
+    this.indentBtn = indentBtn;
+
+    var outdentBtn = createHeaderBtn('fas fa-outdent', 'Decrease Indent', function () {
+        if (self.item.deleted) return;
+        if (self.codeEditorInstance) {
+            self.codeEditorInstance.outdentSelection();
+        }
+    });
+    leftTools.appendChild(outdentBtn);
+    this.outdentBtn = outdentBtn;
+
+    // Divider 2
+    var div2 = document.createElement('span');
+    div2.innerHTML = '|';
+    div2.style.margin = '0 10px 0 2px';
+    div2.style.color = 'var(--border-color)';
+    div2.style.opacity = '0.5';
+    leftTools.appendChild(div2);
+
+    leftTools.appendChild(createHeaderBtn('fas fa-mouse-pointer', 'Select All', function () {
+        if (self.codeEditorInstance) {
+            self.codeEditorInstance.selectAll();
+        } else {
+            var ta = document.getElementById('sourcecode');
+            if (ta) ta.select();
+        }
+    }));
 
     leftTools.appendChild(createHeaderBtn('far fa-copy', 'Copy the selected text to clipboard', function () {
         document.execCommand('copy');
@@ -428,6 +496,24 @@ ProcedureFileEditor.prototype.updateToolbarButtons = function () {
     if (this.discardBtn) {
         this.discardBtn.disabled = isDeleted || !hasChanges;
         this.discardBtn.style.opacity = (isDeleted || !hasChanges) ? '0.5' : '1';
+    }
+
+    if (this.formatBtn) {
+        this.formatBtn.disabled = isDeleted;
+        this.formatBtn.style.opacity = isDeleted ? '0.5' : '1';
+    }
+    if (this.minifyBtn) {
+        this.minifyBtn.disabled = isDeleted;
+        this.minifyBtn.style.opacity = isDeleted ? '0.5' : '1';
+    }
+
+    if (this.indentBtn) {
+        this.indentBtn.disabled = isDeleted;
+        this.indentBtn.style.opacity = isDeleted ? '0.5' : '1';
+    }
+    if (this.outdentBtn) {
+        this.outdentBtn.disabled = isDeleted;
+        this.outdentBtn.style.opacity = isDeleted ? '0.5' : '1';
     }
 }
 
@@ -1112,8 +1198,13 @@ ProcedureFileEditor.prototype.translateAndSave = function () {
         } else {
             // Processing Errors
             if (isBatch) {
-                // Batch: Show Alert with list
-                alert("Translated " + successes + " item(s).\n\nErrors:\n" + errors.join("\n"));
+                // Batch: Show Dialog with list (Limited to 20)
+                var displayErrors = errors;
+                if (errors.length > 20) {
+                    displayErrors = errors.slice(0, 20);
+                    displayErrors.push("... and " + (errors.length - 20) + " more errors.");
+                }
+                DialogManager.showErrorDialog("Translated " + successes + " item(s).\n\nErrors:\n" + displayErrors.join("\n"));
             } else {
                 // Single Item Error logic
                 var msg = errors[0];
@@ -1138,8 +1229,11 @@ ProcedureFileEditor.prototype.translateAndSave = function () {
                         if (statusEl) statusEl.style.color = "";
                         // Do NOT restore Checksum here. It stays hidden in Editor Context.
                     }, 5000);
-                } else {
-                    alert("Error: " + msg);
+                }
+
+                // Show Dialog unless suppressed (and only if not in batch mode which handles its own alert)
+                if (!OptionsManager.getOption('suppressConfirmations')) {
+                    DialogManager.showErrorDialog("Error: in " + targets[0].name + ": - " + msg);
                 }
             }
         }

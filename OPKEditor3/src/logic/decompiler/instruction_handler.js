@@ -364,7 +364,7 @@
             if (op === 0x20) { stack.push({ text: args.B.toString(), prec: PRECEDENCE.ATOM }); return null; }
             if (op === 0x21 || op === 0x22) { stack.push({ text: args.I.toString(), prec: PRECEDENCE.ATOM }); return null; }
             if (op === 0x23) { stack.push({ text: args.F.toString(), prec: PRECEDENCE.ATOM }); return null; }
-            if (op === 0x24) { stack.push({ text: `"${args.S}"`, prec: PRECEDENCE.ATOM }); return null; }
+            if (op === 0x24) { stack.push({ text: `"${args.S.replace(/"/g, '""')}"`, prec: PRECEDENCE.ATOM }); return null; }
             if (op === 0x06) { stack.push({ text: `M${args.W / 8}`, prec: PRECEDENCE.ATOM }); return null; }
             if (op === 0x13) { stack.push({ text: `M${args.W / 8}`, prec: PRECEDENCE.ATOM }); return null; }
 
@@ -578,12 +578,15 @@
             if (op === 0xF8) return "PRINT ;";
 
             if (op === 0x89) {
+                let asmOutput = "";
                 if (typeof OptionsManager !== 'undefined' && OptionsManager.getOption('decompileInlineAssembly') && typeof HD6303Disassembler !== 'undefined') {
                     const disassembler = new HD6303Disassembler();
                     const codeBytes = codeBlock.slice(pc + 1, pc + size);
-                    return disassembler.disassemble(codeBytes);
+                    asmOutput = disassembler.disassemble(codeBytes);
+                } else {
+                    asmOutput = `REM Inline Assembly (${size} bytes)`;
                 }
-                return `REM Inline Assembly (${size} bytes)`;
+                return `REM **ASSEMBLER** - The following assembly language will not compile (in this version).\nREM __asm\n${asmOutput}`;
             }
             if (op === 0xCA) return `REM Debug Procedure Name: ${args.S}`;
             if (op === 0xCB) return `REM Debug Line: ${args.I}, Col: ${args.I_1}`;

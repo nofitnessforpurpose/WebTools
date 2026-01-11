@@ -48,6 +48,8 @@ var OptionsManager = {
         targetSystem: 'Standard', // 'Standard' (CM/XP/LA) or 'LZ' (Model LZ)
         enableHexView: false,
         lastPackSize: 3, // Default 32KB
+        defaultLanguage: 'OPL',
+        indentSize: 2,
     },
 
     init: function () {

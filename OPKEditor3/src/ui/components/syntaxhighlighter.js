@@ -107,16 +107,27 @@ var SyntaxHighlighter = {
 
                 // Check for comment (REM or ')
                 // Note: REM must be a separate word or at start
-                if (char === '\'' || (line.substr(j).toUpperCase().startsWith("REM") && (j === 0 || line[j - 1] === ' '))) {
+                // Added support for :REM and made matching stricter (word boundary)
+                if (char === '\'' || (line.substr(j, 3).toUpperCase() === "REM" && (j === 0 || /[\s:]/.test(line[j - 1])) && (j + 3 >= line.length || /[^A-Za-z0-9%$]/.test(line[j + 3])))) {
                     highlightedLine += '<span class="opl-comment">' + line.substr(j) + '</span>';
                     break; // Rest of line is comment
                 }
 
                 // Check for string
                 if (char === '"') {
-                    var end = line.indexOf('"', j + 1);
-                    if (end === -1) end = line.length;
-                    else end++; // Include closing quote
+                    var end = j + 1;
+                    while (end < line.length) {
+                        if (line[end] === '"') {
+                            if (end + 1 < line.length && line[end + 1] === '"') {
+                                end += 2; // skip ""
+                                continue;
+                            } else {
+                                end++; // End of string (include closing quote)
+                                break;
+                            }
+                        }
+                        end++;
+                    }
                     highlightedLine += '<span class="opl-string">' + line.substring(j, end) + '</span>';
                     j = end;
                     continue;
@@ -206,3 +217,7 @@ var SyntaxHighlighter = {
         return output;
     }
 };
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { SyntaxHighlighter };
+}

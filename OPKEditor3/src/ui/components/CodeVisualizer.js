@@ -1127,8 +1127,8 @@ var CodeVisualizer = window.CodeVisualizer = (function () {
         // Use index.html with child mode
         var win = window.open("index.html?mode=child&feature=visualizer", "OPKSystemMap", `width=${width},height=${height},top=${top},left=${left}`);
 
-        if (!win) {
-            console.warn("Please allow popups to view the System Map.");
+        if (!win) {// 
+//             console.warn("Please allow popups to view the System Map.");
             return null;
         }
 

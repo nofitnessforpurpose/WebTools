@@ -169,6 +169,9 @@
             }
 
             while (pc < endPC) {
+                if (pc >= 0x3C0 && pc <= 0x3D0) {
+                    console.log(`[SourceGen] PC:${pc.toString(16)} Targets:${flow.targets[pc] ? JSON.stringify(flow.targets[pc]) : 'None'}`);
+                }
                 let op = codeBlock[pc];
 
                 if (op === undefined) break; // Robustness
@@ -203,7 +206,14 @@
                         } else if (struct.type === 'ENDIF') {
                             const startStructs = flow.starts[struct.start];
                             const originIF = startStructs && startStructs.find(s => s.type === 'IF');
-                            if (originIF && originIF.isElseIf) {
+
+                            // Check for Empty ELSE case (pendingElse for this IF)
+                            if (pendingElse && originIF && (originIF.end === pendingElse.outerEnd)) {
+                                // We reached the ENDIF of the block that has a pending ELSE.
+                                // This means the ELSE block was empty.
+                                // Indentation was already decremented at the ELSE target, so we don't decrement again.
+                                pendingElse = null;
+                            } else if (originIF && originIF.isElseIf) {
                                 // Suppress ENDIF for IFs that were promoted to ELSEIF
                             } else {
                                 indentLevel--;
@@ -348,15 +358,30 @@
                                 const loopTop = (currentLoop.type === 'DO' && currentLoop.cond) ? currentLoop.cond : currentLoop.top;
 
                                 if (target === loopTop) {
+                                    if (pendingElse) {
+                                        source += this.indent(pendingElse.indent) + "ELSE\n";
+                                        indentLevel++;
+                                        pendingElse = null;
+                                    }
                                     source += this.indent(indentLevel) + "CONTINUE\n";
                                     foundBreakContinue = true;
                                 } else if (target === currentLoop.end) {
+                                    if (pendingElse) {
+                                        source += this.indent(pendingElse.indent) + "ELSE\n";
+                                        indentLevel++;
+                                        pendingElse = null;
+                                    }
                                     source += this.indent(indentLevel) + "BREAK\n";
                                     foundBreakContinue = true;
                                 }
                             }
 
                             if (!foundBreakContinue) {
+                                if (pendingElse) {
+                                    source += this.indent(pendingElse.indent) + "ELSE\n";
+                                    indentLevel++;
+                                    pendingElse = null;
+                                }
                                 expr = this.instHandler.handleInstruction(op, def, args, stack, varMap, pc, size, codeBlock, labelMap, usedSystemVars);
                                 if (expr) {
                                     source += this.indent(indentLevel) + expr + "\n";
@@ -374,6 +399,11 @@
                         let isLPrintNL = (op === 0x78);
 
                         if (isPrintVal || isLPrintVal) {
+                            if (pendingElse) {
+                                source += this.indent(pendingElse.indent) + "ELSE\n";
+                                indentLevel++;
+                                pendingElse = null;
+                            }
                             const keyword = (isLPrintVal) ? 'LPRINT' : 'PRINT';
                             if (pendingPrint !== null && !pendingPrint.startsWith(keyword)) {
                                 source += this.indent(indentLevel) + pendingPrint + ";\n";

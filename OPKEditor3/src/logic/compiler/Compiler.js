@@ -1,7 +1,7 @@
 /**
  * Compiler.js
  * 
- * Basic OPL to QCode Translator (Compiler).
+ * OPL to QCode Translator (Compiler).
  * Translates OPL Source Code into QCode (Object Code) for Psion Organiser II.
  */
 
@@ -13,7 +13,7 @@ var OPLCompiler = (function () {
 
     // Shared Keywords (XP/LZ)
     var KEYWORDS_SHARED = [
-        'PROC', 'ENDP', 'LOCAL', 'GLOBAL', 'EXTERNAL',
+        'LOCAL', 'GLOBAL', 'EXTERNAL',
         'IF', 'ELSE', 'ELSEIF', 'ENDIF',
         'WHILE', 'ENDWH', 'DO', 'UNTIL',
         'GOTO', 'ONERR', 'TRAP',
@@ -82,10 +82,31 @@ var OPLCompiler = (function () {
 
                 // String Literal
                 if (char === '"') {
-                    var end = line.indexOf('"', ptr + 1);
-                    if (end === -1) throw new Error("Error on line " + (i + 1) + ": Unterminated string");
-                    tokens.push({ type: 'STRING', value: line.substring(ptr + 1, end), line: i + 1 });
-                    ptr = end + 1;
+                    var startToken = ptr;
+                    var current = ptr + 1;
+                    var value = "";
+                    while (current < line.length) {
+                        var c = line[current];
+                        if (c === '"') {
+                            if (current + 1 < line.length && line[current + 1] === '"') {
+                                value += '"'; // unescape "" -> "
+                                current += 2;
+                            } else {
+                                // End of string
+                                break;
+                            }
+                        } else {
+                            value += c;
+                            current++;
+                        }
+                    }
+
+                    if (current >= line.length && line[current - 1] !== '"') {
+                        throw new Error("Error on line " + (i + 1) + ": Unterminated string");
+                    }
+
+                    tokens.push({ type: 'STRING', value: value, line: i + 1, col: startToken });
+                    ptr = current + 1;
                     continue;
                 }
 
@@ -95,9 +116,9 @@ var OPLCompiler = (function () {
                     while (ptr < line.length && /[0-9.]/.test(line[ptr])) ptr++;
                     var val = line.substring(start, ptr);
                     if (val.includes('.')) {
-                        tokens.push({ type: 'FLOAT', value: parseFloat(val), line: i + 1 });
+                        tokens.push({ type: 'FLOAT', value: parseFloat(val), line: i + 1, col: start });
                     } else {
-                        tokens.push({ type: 'INTEGER', value: parseInt(val, 10), line: i + 1 });
+                        tokens.push({ type: 'INTEGER', value: parseInt(val, 10), line: i + 1, col: start });
                     }
                     continue;
                 }
@@ -108,7 +129,7 @@ var OPLCompiler = (function () {
                     ptr++;
                     while (ptr < line.length && /[0-9A-Fa-f]/.test(line[ptr])) ptr++;
                     var hex = line.substring(start + 1, ptr);
-                    tokens.push({ type: 'INTEGER', value: parseInt(hex, 16), line: i + 1 });
+                    tokens.push({ type: 'INTEGER', value: parseInt(hex, 16), line: i + 1, col: start });
                     continue;
                 }
 
@@ -127,16 +148,16 @@ var OPLCompiler = (function () {
                     }
 
                     if (activeKeywords.indexOf(upper) !== -1 || OPERATORS.indexOf(upper) !== -1) {
-                        tokens.push({ type: 'KEYWORD', value: upper, line: i + 1 });
+                        tokens.push({ type: 'KEYWORD', value: upper, line: i + 1, col: start });
                     } else {
-                        tokens.push({ type: 'IDENTIFIER', value: word, line: i + 1 });
+                        tokens.push({ type: 'IDENTIFIER', value: word, line: i + 1, col: start });
                     }
                     continue;
                 }
 
                 // Operators / Punctuation
                 if ([':', ',', ';', '(', ')'].indexOf(char) !== -1) {
-                    tokens.push({ type: 'PUNCTUATION', value: char, line: i + 1 });
+                    tokens.push({ type: 'PUNCTUATION', value: char, line: i + 1, col: ptr });
                     ptr++;
                     continue;
                 }
@@ -150,11 +171,11 @@ var OPLCompiler = (function () {
                         ptr++;
                         while (ptr < line.length && /[0-9]/.test(line[ptr])) ptr++;
                         var val = line.substring(start, ptr);
-                        tokens.push({ type: 'FLOAT', value: parseFloat(val), line: i + 1 });
+                        tokens.push({ type: 'FLOAT', value: parseFloat(val), line: i + 1, col: start });
                         continue;
                     } else {
                         // Punctuation
-                        tokens.push({ type: 'PUNCTUATION', value: '.', line: i + 1 });
+                        tokens.push({ type: 'PUNCTUATION', value: '.', line: i + 1, col: ptr });
                         ptr++;
                         continue;
                     }
@@ -163,21 +184,21 @@ var OPLCompiler = (function () {
                 // Multi-char operators
                 if (char === '<' || char === '>' || char === ':') {
                     if (line[ptr + 1] === '=' || line[ptr + 1] === '>') {
-                        tokens.push({ type: 'OPERATOR', value: char + line[ptr + 1], line: i + 1 });
+                        tokens.push({ type: 'OPERATOR', value: char + line[ptr + 1], line: i + 1, col: ptr });
                         ptr += 2;
                         continue;
                     }
                 }
                 if (char === '*') {
                     if (line[ptr + 1] === '*') {
-                        tokens.push({ type: 'OPERATOR', value: '**', line: i + 1 });
+                        tokens.push({ type: 'OPERATOR', value: '**', line: i + 1, col: ptr });
                         ptr += 2;
                         continue;
                     }
                 }
 
                 if (OPERATORS.indexOf(char) !== -1) {
-                    tokens.push({ type: 'OPERATOR', value: char, line: i + 1 });
+                    tokens.push({ type: 'OPERATOR', value: char, line: i + 1, col: ptr });
                     ptr++;
                     continue;
                 }
@@ -535,11 +556,27 @@ var OPLCompiler = (function () {
 
             // PROC Name:
             // Relaxed check: First matching pattern if procName not set
-            if (!procName && t.type === 'IDENTIFIER') {
-                // Check for PROC definition: Name: or Name(args):
+            // PROC Name:
+            // Relaxed check: First matching pattern if procName not set
+            if (!procName) {
                 var isProc = false;
-                if (peek() && peek().value === ':') isProc = true;
-                else if (peek() && peek().value === '(') isProc = true;
+
+                if (t.type === 'IDENTIFIER') {
+                    // Check for PROC definition: Name: or Name(args):
+                    if (peek() && peek().value === ':') isProc = true;
+                    else if (peek() && peek().value === '(') isProc = true;
+                } else if (t.type === 'KEYWORD') {
+                    // Check for Keyword used as Proc Name (e.g. NEXT:)
+                    // MUST be adjacent to Colon. (NEXT: vs NEXT <space> :)
+                    var p = peek();
+                    if (p && p.value === ':') {
+                        // Check Adjacency
+                        // p.col === t.col + t.value.length
+                        if (p.col === (t.col + t.value.length)) {
+                            isProc = true;
+                        }
+                    }
+                }
 
                 if (isProc) {
                     procName = t.value;
@@ -559,7 +596,22 @@ var OPLCompiler = (function () {
                             if (pTok.type === 'IDENTIFIER') {
                                 var pName = pTok.value.toUpperCase();
                                 var pType = parseType(pName);
-                                locals.push({ name: pName, type: pType, dims: [], isParam: true });
+                                var pDims = [];
+
+                                // Check for Array Param: Name()
+                                if (peek() && peek().value === '(') {
+                                    next(); // Eat (
+                                    if (peek() && peek().value === ')') {
+                                        next(); // Eat )
+                                        // Mark as Array
+                                        pDims.push(0); // Dummy dim
+                                        if (pType === 0) pType = 3;
+                                        else if (pType === 1) pType = 4;
+                                        else if (pType === 2) pType = 5;
+                                    }
+                                }
+
+                                locals.push({ name: pName, type: pType, dims: pDims, isParam: true });
                                 params.push(pType);
                             }
                             if (peek() && peek().value === ',') { next(); continue; }
@@ -625,6 +677,10 @@ var OPLCompiler = (function () {
             }
         }
 
+        // Check if ProcName found
+        if (!procName) {
+            error("Procedure must start with a Name Label (e.g. 'MYPROC:')");
+        }
 
         // --- Pass 1.2: Scan for Implicit Externals ---
         // Find variables used in body but not declared.
@@ -758,10 +814,23 @@ var OPLCompiler = (function () {
                     else if (type === 1) type = 4;
                     else if (type === 2) type = 5;
                 }
+                // Check if likely a function/procedure call (followed by '(')
+                // Note: Procedure calls CAN be bare (no parens), but if we treat ALL bare identifiers
+                // as externals, we lose implicit bare procedure calls (like 'MYRPOC').
+                // However, OPL usually requires 'proc:' or 'proc' (if 0 args).
+                // Ambiguity: 'X' could be running proc X, or reading var X.
+                // User Requirement: "Treat a%=myproc%:(ln%) as var".
+                // So priority: Variable.
 
-                // Add to Externals
-                externals.push({ name: name, type: type, dims: [], isExtern: true });
+                // If followed by '(', it is definitely a call. ignore.
+                if (nextTok && nextTok.value === '(') continue;
+
+                // Otherwise, assume Variable (Implicit External).
+                // Warning: This overrides implicit 0-arg proc calls unless they are known built-ins.
+
                 declaredNames[name] = true;
+                externals.push({ name: name, type: parseType(name), dims: [] });
+                //                 console.log("Implicitly defined External:", name);
             }
         }
         var varSpaceSize = 2;
@@ -1143,7 +1212,7 @@ var OPLCompiler = (function () {
                             if (rhsStart !== undefined) {
                                 qcode.splice(rhsStart, 0, 0x86); // Inject FLT
                             } else {
-                                console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
+                                //                                 console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
                             }
                             type = 1; // Promoted to Float
                         } else if (type === 1 && rhsType === 0) {
@@ -1259,7 +1328,7 @@ var OPLCompiler = (function () {
                     if (rhsStart !== undefined) {
                         qcode.splice(rhsStart, 0, 0x86); // Inject FLT
                     } else {
-                        console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
+                        //                         console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
                     }
                 }
                 if (t2 === 0) {
@@ -1354,6 +1423,12 @@ var OPLCompiler = (function () {
                     var tVar = next();
                     if (tVar && tVar.type === 'IDENTIFIER') {
                         var targetName = tVar.value.toUpperCase();
+
+                        // Check for Field Access (A.Field) and ERROR
+                        if (peek() && peek().value === '.') {
+                            throw new Error("Error on line " + t.line + ": Field access not supported in ADDR");
+                        }
+
                         var hasIndices = (peek() && peek().value === '(');
 
                         // Parse Indices first (if any)
@@ -1390,6 +1465,7 @@ var OPLCompiler = (function () {
                                 else if (sym.type === 2) sym.type = 5;
                             }
                             externals.push(sym);
+                            symbols[targetName] = sym; // Add to symbols map!
                         }
 
                         var type = sym.type;
@@ -1545,10 +1621,12 @@ var OPLCompiler = (function () {
                 }
 
                 var sym = symbols[valName];
+                var forceProc = false;
+                if (peek() && peek().value === ':') forceProc = true;
 
-                // If Symbol Not Found -> Assume PROCEDURE CALL (Not Implicit External)
-                if (!sym) {
-                    if (t.type === 'KEYWORD') {
+                // If Symbol Not Found OR Explicit Colon -> Assume PROCEDURE CALL
+                if (!sym || forceProc) {
+                    if (!sym && t.type === 'KEYWORD') {
                         throw new Error("Error on line " + t.line + ": Reserved keyword '" + valName + "' cannot be used as an identifier or function.");
                     }
 
@@ -1562,6 +1640,9 @@ var OPLCompiler = (function () {
 
                     // Parse Arguments (if any)
                     var argCount = 0;
+                    // Allow optional colon before args: MyProc:(Args)
+                    if (peek() && peek().value === ':') next();
+
                     if (peek() && peek().value === '(') {
                         next(); // Eat (
                         while (true) {
@@ -1633,6 +1714,40 @@ var OPLCompiler = (function () {
                     // Return type based on variable base type
                     var retType = sym.type;
                     if (retType >= 3) retType -= 3;
+
+                    // String Slicing Syntactic Sugar: s$(x) -> MID$(s$, x, 1)
+                    if (sym.type === 2) { // Scalar String
+                        if (peek() && peek().value === '(') {
+                            next(); // Eat (
+
+                            // We have emitted code to push s$ (0x02 + offset)
+                            // Now we need to emit arguments for MID$: s$, x, 1
+                            // BUT, we already emitted the Push of s$.
+                            // MID$ opcode (0xC2) expects Stack: [Str] [Start] [Len]
+                            // So we just need to push Start and Len.
+
+                            // Parse Index (Start)
+                            parseExpression();
+
+                            // Check for comma (unlikely for slicing? usually s$(x))
+                            // If s$(x,y) -> MID$(s$, x, y)?
+                            // OPL Manual: a$(x,y) -> MID$(a$,x,y)
+
+                            if (peek() && peek().value === ',') {
+                                next();
+                                parseExpression(); // Length
+                            } else {
+                                // Default Length 1
+                                emit(0x22); emitWord(1); // Push Int 1
+                            }
+
+                            if (peek() && peek().value === ')') next(); // Eat )
+
+                            emit(0xC2); // Emit MID$
+                            return 2; // Return String
+                        }
+                    }
+
                     return retType;
                 }
             } else if (t.value === '(') {
@@ -1669,21 +1784,37 @@ var OPLCompiler = (function () {
         // Skip Header (Blind Check for First Identifier: or Identifier(..) pattern)
         // We assume the first construct is the PROC header.
         var skipHeader = false;
-        if (tokens.length > 1 && tokens[0].type === 'IDENTIFIER') {
+        if (tokens.length > 1 && (tokens[0].type === 'IDENTIFIER' || tokens[0].type === 'KEYWORD')) {
             if (tokens[1].value === ':') {
                 ptr = 2; // Name:
                 // Check if Params follow: Name:(...)
                 if (ptr < tokens.length && tokens[ptr].value === '(') {
                     ptr++; // Eat (
-                    while (ptr < tokens.length && tokens[ptr].value !== ')') ptr++;
-                    ptr++; // Eat )
+                    var depth = 1;
+                    while (ptr < tokens.length) {
+                        if (tokens[ptr].value === '(') depth++;
+                        else if (tokens[ptr].value === ')') {
+                            depth--;
+                            if (depth === 0) break;
+                        }
+                        ptr++;
+                    }
+                    ptr++; // Eat final )
                 }
                 skipHeader = true;
             } else if (tokens[1].value === '(') {
                 // Name(params):
                 ptr = 2; // Name(
-                while (ptr < tokens.length && tokens[ptr].value !== ')') ptr++;
-                ptr++; // Eat )
+                var depth = 1; // We are inside (
+                while (ptr < tokens.length) {
+                    if (tokens[ptr].value === '(') depth++;
+                    else if (tokens[ptr].value === ')') {
+                        depth--;
+                        if (depth === 0) break;
+                    }
+                    ptr++;
+                }
+                ptr++; // Eat final )
                 if (ptr < tokens.length && tokens[ptr].value === ':') ptr++;
                 skipHeader = true;
             }
@@ -1705,28 +1836,58 @@ var OPLCompiler = (function () {
                 while (ptr < tokens.length && tokens[ptr].type !== 'EOL' && tokens[ptr].value !== ':') ptr++;
                 continue;
             }
+            if (t.type === 'PUNCTUATION' && t.value === ':') {
+                continue;
+            }
+
             // Label Check moved to IDENTIFIER block
 
+
+            // Label Check moved to IDENTIFIER block
+
+
+            if (t.type === 'KEYWORD') {
+                // Check for Ambiguity: Keyword as Label/Proc Call? (e.g. NEXT:)
+                // Heuristic: If followed by ':' AND Adjacent -> Treat as IDENTIFIER.
+                if (peek() && peek().value === ':') {
+                    var p = peek();
+                    // If adjacent (NEXT:), treat as IDENTIFIER (Label/Call)
+                    if (p.col === (t.col + t.value.length)) {
+                        t.type = 'IDENTIFIER'; // Downgrade to Identifier for this statement
+                    }
+                }
+            }
 
             if (t.type === 'KEYWORD') {
                 if (t.value === 'PRINT' || t.value === 'LPRINT') {
                     var isLPrint = (t.value === 'LPRINT');
                     var suppressNewline = false;
 
+                    var depth = 0;
                     while (true) {
                         var p = peek();
-                        if (!p || p.type === 'EOL' || p.value === ':') break;
 
-                        // Case 1: Comma Separator
-                        if (p.value === ',') {
+                        // Break if End of Line or Statement Separator (Colon not inside Parens/String)
+                        if (!p || p.type === 'EOL') break;
+
+                        if (p.value === ':') {
+                            if (p.type !== 'STRING' && depth === 0) break;
+                        }
+
+                        // Track parentheses depth to ignore separators inside function calls
+                        if (p.value === '(') depth++;
+                        if (p.value === ')') depth--;
+
+                        // Case 1: Comma Separator (Only at top level)
+                        if (p.value === ',' && depth === 0) {
                             next(); // Consume ','
                             emit(isLPrint ? 0x77 : 0x72);
                             suppressNewline = true;
                             continue;
                         }
 
-                        // Case 2: Semicolon Separator
-                        if (p.value === ';') {
+                        // Case 2: Semicolon Separator (Only at top level)
+                        if (p.value === ';' && depth === 0) {
                             next(); // Consume ';'
                             suppressNewline = true;
                             continue;
@@ -1990,8 +2151,40 @@ var OPLCompiler = (function () {
                     // INPUT var
                     var tVar = next();
                     if (!tVar || tVar.type !== 'IDENTIFIER') error("INPUT expects variable");
-
                     var targetName = tVar.value.toUpperCase();
+
+                    // Check for Field Access (A.Field)
+                    if (peek() && peek().value === '.') {
+                        var logChar = targetName;
+                        if (logChar.length === 1 && ['A', 'B', 'C', 'D'].includes(logChar)) {
+                            next(); // Consume .
+                            var fTok = next(); // Consume Field Name
+                            if (fTok && fTok.type === 'IDENTIFIER') {
+                                var fName = fTok.value.toUpperCase();
+                                var logVal = logChar.charCodeAt(0) - 65;
+                                var type = 1; // Flt
+                                if (fName.endsWith('%')) type = 0;
+                                else if (fName.endsWith('$')) type = 2;
+
+                                // 1. Push Field Name String
+                                emit(0x24);
+                                emit(fName.length);
+                                for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
+
+                                // 2. Emit Field Ref (1D/1E/1F)
+                                emit(0x1D + type);
+                                emit(logVal);
+
+                                // 3. Emit INPUT Opcode
+                                if (type === 0) emitCommand(0x6C);
+                                else if (type === 1) emitCommand(0x6D);
+                                else if (type === 2) emitCommand(0x6E);
+
+                                continue;
+                            }
+                        }
+                    }
+
                     var hasIndices = (peek() && peek().value === '(');
 
                     // Parse Indices first (if any)
@@ -2136,6 +2329,35 @@ var OPLCompiler = (function () {
                     var tVar = next();
                     if (tVar.type !== 'IDENTIFIER') error("EDIT expects variable");
                     var targetName = tVar.value.toUpperCase();
+
+                    // Check for Field Access (A.Field)
+                    if (peek() && peek().value === '.') {
+                        var logChar = targetName;
+                        if (logChar.length === 1 && ['A', 'B', 'C', 'D'].includes(logChar)) {
+                            next(); // Consume .
+                            var fTok = next(); // Consume Field Name
+                            if (fTok && fTok.type === 'IDENTIFIER') {
+                                var fName = fTok.value.toUpperCase();
+                                var logVal = logChar.charCodeAt(0) - 65;
+                                var type = 1; // Flt
+                                if (fName.endsWith('%')) type = 0;
+                                else if (fName.endsWith('$')) type = 2;
+
+                                // 1. Push Field Name String
+                                emit(0x24);
+                                emit(fName.length);
+                                for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
+
+                                // 2. Emit Field Ref (1D/1E/1F)
+                                emit(0x1D + type);
+                                emit(logVal);
+
+                                emitCommand(0x6B); // EDIT
+                                continue;
+                            }
+                        }
+                    }
+
                     var hasIndices = (peek() && peek().value === '(');
 
                     // Parse Indices first (if any)
@@ -2421,15 +2643,36 @@ var OPLCompiler = (function () {
                             labels[t.value] = qcode.length; // Record Label Address
                         }
                         else {
-                            if (t.value.toUpperCase() === procName.toUpperCase()) isLabel = true;
+                            if (t.value.toUpperCase() === procName.toUpperCase()) {
+                                // Ambiguity: ProcName: could be Label or Recursive Call.
+                                // If followed by '(', it is definitely a call.
+                                if (peek() && peek().value === '(') {
+                                    isCall = true;
+                                } else {
+                                    // If no params, could be Label or 0-arg Call.
+                                    // Treat as Label for compatibility? Or Call?
+                                    // "Procedure call ... must be followed by ':'" -> imply Call.
+                                    // But Labels are also Identifiers followed by Colon.
+                                    // Since ProcName label is redundant (loops to start), we prefer Call (Recursion).
+                                    isCall = true;
+                                }
+                            }
                             else isCall = true;
                         }
+
                     } else {
                         // Strict Syntax: Procedure calls must have arguments OR be followed by a colon
                         if (peek() && peek().value === '(') {
                             isCall = true;
                         } else {
-                            error("Procedure call '" + t.value + "' must be followed by ':' or have arguments");
+                            // Check if it is a 0-arg Built-in (e.g. GET, GET$)
+                            var upper = t.value.toUpperCase();
+                            var op = activeOpcodes[upper];
+                            if (op && QCODE_DEFS[op] && QCODE_DEFS[op].pops === '') {
+                                isCall = true;
+                            } else {
+                                error("Procedure call '" + t.value + "' must be followed by ':' or have arguments");
+                            }
                         }
                     }
                 }
@@ -2586,6 +2829,10 @@ var OPLCompiler = (function () {
                     if (returnType === 0) emit(0x83);
                     else if (returnType === 2) emit(0x85);
                     else emit(0x84);
+                }
+            } else {
+                if (t.type !== 'EOL' && t.value !== undefined) {
+                    throw new Error("Error on line " + t.line + ": Unexpected token '" + t.value + "'");
                 }
             }
         }

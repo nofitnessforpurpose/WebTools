@@ -304,6 +304,26 @@ var DialogManager = {
                 if (AppStore.state.currentEditor instanceof MemoryMapEditor) AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
             });
 
+            // Compiler Options
+            var langSelect = element.querySelector('#opt-language');
+            if (langSelect) {
+                langSelect.value = OptionsManager.getOption('defaultLanguage') || 'OPL';
+                langSelect.addEventListener('change', function () {
+                    OptionsManager.setOption('defaultLanguage', this.value);
+                });
+            }
+
+            var indentInput = element.querySelector('#opt-indent-size');
+            if (indentInput) {
+                indentInput.value = OptionsManager.getOption('indentSize') || 2;
+                indentInput.addEventListener('change', function () {
+                    var val = parseInt(this.value);
+                    if (val < 1) val = 1;
+                    if (val > 8) val = 8;
+                    OptionsManager.setOption('indentSize', val);
+                });
+            }
+
             var mmOrientation = element.querySelector('#opt-mm-orientation');
             if (mmOrientation) {
                 mmOrientation.value = OptionsManager.getOption('memoryMapOrientation') || 'horizontal';
@@ -432,6 +452,46 @@ var DialogManager = {
         dialog.start();
     },
 
+    showErrorDialog: function (msg) {
+        var element = document.createElement('div');
+        element.innerHTML = `
+            <div style="padding: 10px; font-family: sans-serif; min-width: 400px;">
+                <h3 style="margin-top: 0; color: #d32f2f; border-bottom: 2px solid #d32f2f; padding-bottom: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i> Compilation Error
+                </h3>
+                <div style="background: var(--input-bg, #f5f5f5); border: 1px solid var(--border-color, #ccc); padding: 15px; margin: 15px 0; max-height: 300px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; color: var(--text-color, #333); font-size: 13px;">${msg}</div>
+                <div style="text-align: right;">
+                    <button id="btn-copy-error" class="modal-btn" style="margin-right: 10px;">
+                        <i class="fa-copy copy-btn fas"></i> Copy Error
+                    </button>
+                </div>
+            </div>`;
+
+        var dialog = new ModalDialog(element, null, null, "Close");
+
+        // Add Copy Listener
+        var copyBtn = element.querySelector('#btn-copy-error');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                navigator.clipboard.writeText(msg).then(function () {
+                    var originalHTML = copyBtn.innerHTML;
+                    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                    copyBtn.style.color = 'green';
+                    setTimeout(function () {
+                        copyBtn.innerHTML = originalHTML;
+                        copyBtn.style.color = '';
+                    }, 2000);
+                }).catch(function (err) {
+                    console.error('Failed to copy text: ', err);
+                    alert("Failed to copy to clipboard.");
+                });
+            });
+        }
+
+        dialog.start();
+    },
+
     _getOptionsTemplate: function () {
         return `
         <div class="tabs-container">
@@ -441,6 +501,7 @@ var DialogManager = {
                 <button class="tab-btn" data-tab="tab-theme-select">Theme Selection</button>
                 <button class="tab-btn" data-tab="tab-theme-editor">Theme Editor</button>
                 <button class="tab-btn" data-tab="tab-memory-map">Memory Map</button>
+                <button class="tab-btn" data-tab="tab-compiler">Compiler</button>
             </div>
             
             <div class="tab-content active" id="tab-general">
@@ -610,6 +671,33 @@ var DialogManager = {
                       <div><label>Record</label><br><input type="color" id="mm-color-record" data-var="--mm-color-record" style="width: 100%;"></div>
                       <div><label>Unknown</label><br><input type="color" id="mm-color-unknown" data-var="--mm-color-unknown" style="width: 100%;"></div>
                       <div><label>Empty Space</label><br><input type="color" id="mm-color-free" data-var="--mm-color-free" style="width: 100%;"></div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="tab-compiler">
+                <h4>Language Options</h4>
+                <div style="margin-bottom: 15px;">
+                    <label>Default Language: 
+                        <select id="opt-language" style="margin-left: 5px; padding: 2px;">
+                            <option value="Assembler" disabled>Assembler</option>
+                            <option value="BASIC" disabled>BASIC</option>
+                            <option value="BrainFSK" disabled>Brain FSK</option> <!-- Note: BrainFSK is always to be used never Brain FUCK or any use of FUCK. -->
+                            <option value="C" disabled>C</option>
+                            <option value="MicroPython" disabled>MicroPython</option>
+                            <option value="OPL">OPL</option>
+                            <option value="Rust" disabled>Rust</option>
+                            <option value="Wiring" disabled>Wiring</option>
+                            <option value="Zig" disabled>Zig</option>
+                        </select>
+                    </label>
+                    <div style="font-size: 11px; margin-top: 5px; opacity: 0.7;">Select the default language for new procedures. Currently only OPL is supported.</div>
+                </div>
+
+                <h4>Indentation</h4>
+                <div style="margin-bottom: 10px;">
+                    <label>Indent Size (Spaces): 
+                        <input type="number" id="opt-indent-size" min="1" max="8" style="margin-left: 5px; width: 50px; padding: 2px;">
+                    </label>
                 </div>
             </div>
         </div>
