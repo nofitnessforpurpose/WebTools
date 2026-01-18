@@ -24,6 +24,17 @@ const SYSTEM_CONSTANTS = {
     0x1B: "POB_TCSR3 - TIMER 3 CONTROL/STATUS REGISTER",
     0x1C: "POB_TCONR - TIMER CONSTANT REGISTER",
 
+    // LZ 
+    0x69: "Horizontal scroll delay counter",
+    0x6A: "Horizontal scroll delay counter",
+    0x6B: "Vertical scroll delay counter",
+    0x6C: "Vertical scroll delay counter",
+    0x77: "Delay before keyboard auto-repeat",
+    0x78: "Keyboard auto-repeat counter",
+    0x7C: "Auto-switch off flag, 0 disables",
+
+    0xA4: "Buzzer mute. Non-zero mutes",
+
     // Semi-Custom Chip Addresses
     0x0180: "SCA_LCDCONTROL - LCD CONTROL REGISTER",
     0x0181: "SCA_LCDDATA - LCD DATA REGISTER",
@@ -101,8 +112,12 @@ const SYSTEM_CONSTANTS = {
     0x2080: "DPT_BLIN",
     0x2090: "DPT_SAVE",
 
+    0x2099: "Border character round 2-line mode procedure.",
+
+    0x20A7: "Sets bits for workday alarms. Default $1F - Monday to Friday",
+
     0x20B0: "KBT_BUFF",
-    0x20C0: "KBB_CLIK",
+    0x20C0: "KBB_CLIK - Length of key click. 0 is silent",
     0x20C1: "KBB_PKOF",
     0x20C2: "KBB_CAPK",
     0x20C3: "KBB_NUMK",
@@ -114,8 +129,8 @@ const SYSTEM_CONSTANTS = {
     0x20C8: "TMB_HOUR",
     0x20C9: "TMB_MINS",
     0x20CA: "TMB_SECS",
-    0x20CB: "TMW_FRAM",
-    0x20CD: "TMW_TCNT",
+    0x20CB: "TMW_FRAM - Frame counter, increments every 50ms",
+    0x20CD: "TMW_TCNT - Default number of seconds to auto-switch off",
 
     0x20CF: "UTT_TBUF",
 

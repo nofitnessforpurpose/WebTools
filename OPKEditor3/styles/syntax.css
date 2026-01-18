@@ -90,7 +90,8 @@
 }
 
 .opl-string {
-    color: var(--syntax-string);
+    color: var(--syntax-type-string, #C678DD);
+    /* Magenta */
 }
 
 .opl-comment {
@@ -98,12 +99,35 @@
 }
 
 .opl-number {
+    /* Fallback if logic misses - usually specific types will catch it */
     color: var(--syntax-number);
+}
+
+/* Data Types */
+.opl-integer,
+.opl-var-integer,
+.opl-proc-integer {
+    color: var(--syntax-type-integer, #98C379);
+    /* Green */
+}
+
+.opl-float,
+.opl-var-float,
+.opl-proc-float {
+    color: var(--syntax-type-float, #D19A66);
+    /* Orange */
+}
+
+.opl-var-string,
+.opl-proc-string {
+    color: var(--syntax-type-string, #C678DD);
+    /* Magenta */
 }
 
 .opl-label {
     color: var(--syntax-label);
 }
+
 
 .opl-operator {
     color: var(--syntax-operator);

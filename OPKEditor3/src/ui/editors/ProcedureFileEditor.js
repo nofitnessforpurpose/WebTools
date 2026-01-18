@@ -1395,7 +1395,8 @@ ProcedureFileEditor.prototype.getDecompiledSource = function (item) {
         var decomp = new window.OPLDecompiler();
         // Use empty procMap to avoid side-effects from dirty pack state
         var analysis = decomp.getRawAnalysis(stamped, procName, { procMap: {} });
-        return decomp.sourceGen.generateSource(analysis.header, analysis.varMap, analysis.flow, stamped, analysis.finalProcName, { oplBase: decomp.oplBase });
+        var genResult = decomp.sourceGen.generateSource(analysis.header, analysis.varMap, analysis.flow, stamped, analysis.finalProcName, { oplBase: decomp.oplBase });
+        return (genResult && typeof genResult === 'object' && genResult.source) ? genResult.source : genResult;
     } catch (e) {
         // 
         // console.warn("Decompile failed for " + procName, e);
@@ -1840,7 +1841,10 @@ ProcedureFileEditor.prototype.refreshDecompilerLog = function (hasSource) {
 
             // Return decompiled source if we didn't have any (used in initialise)
             if (!hasSource) {
-                // var lines = decompiled.split('\n');
+                // Decompiler now returns { source, references }, handle both string and object
+                if (decompiled && typeof decompiled === 'object' && decompiled.source !== undefined) {
+                    return decompiled.source;
+                }
                 return decompiled; // Do not trim
             }
         } catch (e) {

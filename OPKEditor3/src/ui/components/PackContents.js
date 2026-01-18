@@ -237,9 +237,20 @@ class PackContentsView {
         // Feature: Click Pack Folder to visualize System Map
         icon.classList.add('clickable');
         icon.title = "Click to visualize System Map";
+
+        // Prevent focus stealing by parent on click
+        icon.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
         icon.addEventListener('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
+
+            // Ensure pack is selected first (Memory Map context)
+            // selectPack(pIdx);
+
             var viz = (typeof CodeVisualizer !== 'undefined') ? CodeVisualizer : window.CodeVisualizer;
             if (viz) {
                 viz.showSystemMap(packs);
@@ -252,6 +263,15 @@ class PackContentsView {
         var title = document.createElement('span');
         title.className = 'pack-title';
         title.innerText = pack.filename ? pack.filename : "Untitled Pack " + (pIdx + 1);
+
+        // Tooltip Events for Pack Title (Discovery)
+        title.addEventListener('mouseenter', function (e) {
+            var rect = e.target.getBoundingClientRect();
+            TooltipManager.show(rect.left, rect.bottom, this.generatePackTooltip(pack));
+        }.bind(this));
+        title.addEventListener('mouseleave', function () {
+            TooltipManager.hide();
+        });
 
         // Collapse/Expand Toggle
         var toggle = document.createElement('i');
@@ -563,6 +583,8 @@ class PackContentsView {
         var descText = getItemDescription(item); // Global function
 
         // Feature: Click Icon to view Code Visualization
+        // REMOVED at user request: Procedure icons should open the record viewer, not the visualizer.
+        /*
         if (item.type === 3 && (descText === "OPL Procedure" || descText === "OPL Object")) {
             itemIcon.classList.add('clickable');
             itemIcon.title = "Click to view Code Visualization"; // Native title
@@ -578,6 +600,7 @@ class PackContentsView {
                 }
             });
         }
+        */
 
         // Item Address
         var itemAddr = document.createElement('span');
@@ -596,7 +619,7 @@ class PackContentsView {
         itemDesc.className = 'item-desc';
         itemDesc.innerText = descText;
 
-        if (item.type === 3 && (descText === "OPL Procedure" || descText === "OPL Object")) {
+        if (item.type === 3 && (descText === "OPL Procedure" || descText === "OPL Object" || descText === "OPL Text")) {
             itemDesc.classList.add('clickable');
             itemDesc.style.textDecoration = "none";
             itemDesc.title = "Click to view Translated Q-Code (Hex)";
@@ -607,7 +630,7 @@ class PackContentsView {
                 if (item.getFullData) {
                     var data = item.getFullData();
                     if (data && data.length > 0) {
-                        if (typeof HexViewer !== 'undefined') HexViewer.show(data, "OPL Procedure Record: " + item.name);
+                        if (typeof HexViewer !== 'undefined') HexViewer.show(data, descText + " Record: " + item.name);
                     } else {
                         alert("No Data found.");
                     }
@@ -615,7 +638,7 @@ class PackContentsView {
                     // Safety Check for nested properties
                     var data = item.child.child.data;
                     if (data && data.length > 0) {
-                        if (typeof HexViewer !== 'undefined') HexViewer.show(data, "OPL Procedure Record: " + item.name);
+                        if (typeof HexViewer !== 'undefined') HexViewer.show(data, descText + " Record: " + item.name);
                     } else {
                         alert("No Data found.");
                     }
@@ -741,9 +764,46 @@ class PackContentsView {
     }
 
     generatePackTooltip(pack) {
-        return "<h4>" + (pack.filename || "Untitled Pack") + "</h4>" +
-            "<div>Items: " + pack.items.length + "</div>" +
-            "<div>Size: " + pack.getLength() + " bytes</div>";
+        var totals = {
+            dataFiles: 0,
+            records: 0,
+            procedures: 0,
+            text: 0
+        };
+
+        pack.items.forEach(function (item) {
+            if (item.deleted) return;
+            var type = item.type;
+            if (type === 1) {
+                totals.dataFiles++;
+            } else if (type >= 16 && type <= 126) {
+                totals.records++;
+            } else if (type === 3) {
+                // Determine if it's a Procedure (Compiled) or Text (Source)
+                var isProc = false;
+                if (item.child && item.child.child && item.child.child.data) {
+                    var data = item.child.child.data;
+                    if (data.length >= 4) {
+                        var obLen = (data[0] << 8) | data[1];
+                        if (obLen > 0) isProc = true;
+                    }
+                }
+                if (isProc) totals.procedures++;
+                else totals.text++;
+            }
+        });
+
+        var html = "<h4>" + (pack.filename || "Untitled Pack") + "</h4>";
+        html += "<div class='tooltip-row'><span class='tooltip-label'>Total Items:</span><span class='tooltip-value'>" + pack.items.length + "</span></div>";
+        html += "<div class='tooltip-row'><span class='tooltip-label'>Size:</span><span class='tooltip-value'>" + pack.getLength() + " bytes</span></div>";
+        html += "<hr class='tooltip-divider'>";
+
+        if (totals.dataFiles > 0) html += "<div class='tooltip-row'><span class='tooltip-label'>Data Files:</span><span class='tooltip-value'>" + totals.dataFiles + "</span></div>";
+        if (totals.records > 0) html += "<div class='tooltip-row'><span class='tooltip-label'>Records:</span><span class='tooltip-value'>" + totals.records + "</span></div>";
+        if (totals.procedures > 0) html += "<div class='tooltip-row'><span class='tooltip-label'>OPL Procedures:</span><span class='tooltip-value'>" + totals.procedures + "</span></div>";
+        if (totals.text > 0) html += "<div class='tooltip-row'><span class='tooltip-label'>OPL Text:</span><span class='tooltip-value'>" + totals.text + "</span></div>";
+
+        return html;
     }
 
     generateItemTooltip(item, address, childCount) {
@@ -756,6 +816,14 @@ class PackContentsView {
             html += "<div class='tooltip-row'><span class='tooltip-label'>Records:</span><span class='tooltip-value'>" + childCount + "</span></div>";
         }
         html += "<div class='tooltip-row'><span class='tooltip-label'>Status:</span><span class='tooltip-value'>" + (item.deleted ? "Deleted" : "Active") + "</span></div>";
+
+        // Checksum (CRC-32)
+        if (typeof Checksums !== 'undefined' && item.getFullData) {
+            var data = item.getFullData();
+            var crc = Checksums.crc32(data);
+            html += "<div class='tooltip-row'><span class='tooltip-label'>CRC32:</span><span class='tooltip-value'>0x" + crc.toString(16).toUpperCase().padStart(8, '0') + "</span></div>";
+        }
+
         return html;
     }
 

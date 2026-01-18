@@ -13,6 +13,7 @@ var OPLCompiler = (function () {
 
     // Shared Keywords (XP/LZ)
     var KEYWORDS_SHARED = [
+        'PROC', 'ENDP',
         'LOCAL', 'GLOBAL', 'EXTERNAL',
         'IF', 'ELSE', 'ELSEIF', 'ENDIF',
         'WHILE', 'ENDWH', 'DO', 'UNTIL',
@@ -129,7 +130,7 @@ var OPLCompiler = (function () {
                     ptr++;
                     while (ptr < line.length && /[0-9A-Fa-f]/.test(line[ptr])) ptr++;
                     var hex = line.substring(start + 1, ptr);
-                    tokens.push({ type: 'INTEGER', value: parseInt(hex, 16), line: i + 1, col: start });
+                    tokens.push({ type: 'HEX', value: parseInt(hex, 16), line: i + 1, col: start });
                     continue;
                 }
 
@@ -228,7 +229,7 @@ var OPLCompiler = (function () {
     const BUILTIN_OPCODES_SHARED = {
         'GET': 0x91, 'KEY': 0x95, 'POS': 0xA5, 'COUNT': 0xA2, 'EOF': 0xA3, 'ERR': 0x8E,
         'FREE': 0x90, 'RECSIZE': 0x9D, 'FIND': 0x8F, 'LEN': 0x96, 'LOC': 0x97, 'ASC': 0x8B,
-        'ADDR': 0x8A, 'ABS': 0xA6, 'IABS': 0x93, 'INT': 0x94, 'FLT': 0x86, 'DIR$': 0xB7, 'KEY$': 0xBF,
+        'ADDR': 0x8A, 'ABS': 0xA6, 'IABS': 0x93, 'INT': 0x94, 'FLT': 0xAB, 'DIR$': 0xB7, 'KEY$': 0xBF,
         'CHR$': 0xB8, 'EXIST': 0xA4,
         'DAY': 0x8C, 'HOUR': 0x92, 'MINUTE': 0x99, 'MONTH': 0x9A, 'SECOND': 0x9E, 'YEAR': 0xA1,
         'PEEKB': 0x9B, 'PEEKW': 0x9C, 'USR': 0x9F, 'USR$': 0xC8,
@@ -241,7 +242,7 @@ var OPLCompiler = (function () {
         'DISP': 0x8D
     };
 
-    const BUILTIN_OPCODES_LZ = {
+    var BUILTIN_OPCODES_LZ = {
         'CLOCK': 0xD6, 'DOW': 0xD7, 'FINDW': 0xD8, 'MENUN': 0xD9, 'WEEK': 0xDA,
         'ACOS': 0xDB, 'ASIN': 0xDC, 'DAYS': 0xDD, 'MAX': 0xDE, 'MEAN': 0xDF,
         'MIN': 0xE0, 'STD': 0xE1, 'SUM': 0xE2, 'VAR': 0xE3,
@@ -370,7 +371,7 @@ var OPLCompiler = (function () {
         0X76: { args: '', pops: 'S', pushes: '', desc: 'LPRINT' },
         0X77: { args: '', pops: '', pushes: '', desc: 'LPRINT ,' },
         0X78: { args: '', pops: '', pushes: '', desc: 'LPRINT (NL)' },
-        0X79: { args: '', pops: '?', pushes: '', desc: 'RETURN' },
+        0X79: { args: '?', pops: '', pushes: '', desc: 'RETURN' },
         0X7A: { args: '', pops: '', pushes: '', desc: 'RETURN' },
         0X7B: { args: '', pops: '', pushes: '', desc: 'RETURN' },
         0X7C: { args: '', pops: '', pushes: '', desc: 'RETURN' },
@@ -406,7 +407,7 @@ var OPLCompiler = (function () {
         0X9A: { args: '', pops: '', pushes: 'I', desc: 'MONTH' },
         0X9B: { args: '', pops: 'I', pushes: 'I', desc: 'PEEKB' },
         0X9C: { args: '', pops: 'I', pushes: 'I', desc: 'PEEKW' },
-        0X9D: { args: '', pops: '', pushes: 'I', desc: 'RECSIZE' },
+        0X9D: { args: '', pops: 'I', pushes: 'I', desc: 'RECSIZE' },
         0X9E: { args: '', pops: '', pushes: 'I', desc: 'SECOND' },
         0X9F: { args: '', pops: 'I I', pushes: 'I', desc: 'USR' },
         0XA0: { args: '', pops: 'I S', pushes: 'I', desc: 'VIEW' },
@@ -420,7 +421,7 @@ var OPLCompiler = (function () {
         0XA8: { args: '', pops: 'F', pushes: 'F', desc: 'COS' },
         0XA9: { args: '', pops: 'F', pushes: 'F', desc: 'DEG' },
         0XAA: { args: '', pops: 'F', pushes: 'F', desc: 'EXP' },
-        0XAB: { args: '', pops: 'F', pushes: 'F', desc: 'FLT' },
+        0XAB: { args: '', pops: 'I', pushes: 'F', desc: 'FLT' },
         0XAC: { args: '', pops: 'F', pushes: 'F', desc: 'INTF' },
         0XAD: { args: '', pops: 'F', pushes: 'F', desc: 'LN' },
         0XAE: { args: '', pops: 'F', pushes: 'F', desc: 'LOG' },
@@ -520,925 +521,1867 @@ var OPLCompiler = (function () {
         }
 
 
-        // Pass 1: Scan Declarations & Header Info
-        var globals = [];
-        var locals = [];
-        var externals = [];
-        var params = [];
-        var globalStrFixups = [];
-        var globalArrFixups = [];
-        var localStrFixups = [];
-        var localArrFixups = [];
-        var ptr = 0;
+        try {
+            // Pass 1: Scan Declarations & Header Info
+            var globals = [];
+            var locals = [];
+            var externals = [];
+            var params = [];
+            var globalStrFixups = [];
+            var globalArrFixups = [];
+            var localStrFixups = [];
+            var localArrFixups = [];
+            var ptr = 0;
 
-        function peek() { return tokens[ptr]; }
-        function next() { return tokens[ptr++]; }
+            function peek() { return tokens[ptr]; }
+            function next() { return tokens[ptr++]; }
 
-        function error(msg) {
-            var lineInfo = (t && t.line) ? "Error on line " + t.line + ": " : "Error: ";
-            throw new Error(lineInfo + msg);
-        }
+            function error(msg) {
+                var lineInfo = (t && t.line) ? "Error on line " + t.line + ": " : "Error: ";
+                throw new Error(lineInfo + msg);
+            }
 
-        // Skip blank lines / comments handled by tokenizer
+            function expect(val) {
+                var p = peek();
+                if (p && p.value === val) {
+                    next();
+                    return;
+                }
+                var line = p ? p.line : (tokens.length > 0 ? tokens[tokens.length - 1].line : "?");
+                throw new Error("Error on line " + line + ": Expected '" + val + "'");
+            }
 
-        // Header parsing loop (Declarative section)
-        // OPL declarations usually come before executable code?
-        // We will scan for GLOBAL/EXTERNAL/PROC until we hit executable code?
-        // Or just scan the whole file for them? (GLOBALs usually must be at top)
+            // Skip blank lines / comments handled by tokenizer
 
-        // Reset Ptr
-        ptr = 0;
+            // Header parsing loop (Declarative section)
+            // OPL declarations usually come before executable code?
+            // We will scan for GLOBAL/EXTERNAL/PROC until we hit executable code?
+            // Or just scan the whole file for them? (GLOBALs usually must be at top)
 
-        var procName = null;
+            // Reset Ptr
+            ptr = 0;
 
-        while (ptr < tokens.length) {
-            var t = next();
+            var procName = null;
 
-            // PROC Name:
-            // Relaxed check: First matching pattern if procName not set
-            // PROC Name:
-            // Relaxed check: First matching pattern if procName not set
+            while (ptr < tokens.length) {
+                var t = next();
+
+                // PROC Name:
+                // Relaxed check: First matching pattern if procName not set
+                // PROC Name:
+                // Relaxed check: First matching pattern if procName not set
+                if (!procName) {
+                    var isProc = false;
+
+                    if (t.type === 'IDENTIFIER') {
+                        // Check for PROC definition: Name: or Name(args):
+                        if (peek() && peek().value === ':') isProc = true;
+                        else if (peek() && peek().value === '(') isProc = true;
+                    } else if (t.type === 'KEYWORD') {
+                        // Check for Keyword used as Proc Name (e.g. NEXT:)
+                        // MUST be adjacent to Colon. (NEXT: vs NEXT <space> :)
+                        var p = peek();
+                        if (p && p.value === ':') {
+                            // Check Adjacency
+                            // p.col === t.col + t.value.length
+                            if (p.col === (t.col + t.value.length)) {
+                                isProc = true;
+                            }
+                        }
+                    }
+
+                    if (isProc) {
+                        procName = t.value;
+                        var ateColon = false;
+
+                        // Handle 'Name:' case first
+                        if (peek() && peek().value === ':') {
+                            next(); // Eat :
+                            ateColon = true;
+                        }
+
+                        // Check for Params
+                        if (peek() && peek().value === '(') {
+                            next(); // Eat (
+                            while (true) {
+                                var pTok = next();
+                                if (pTok.type === 'IDENTIFIER') {
+                                    var pName = pTok.value.toUpperCase();
+                                    var pType = parseType(pName);
+                                    var pDims = [];
+
+                                    // Check for Array Param: Name()
+                                    if (peek() && peek().value === '(') {
+                                        next(); // Eat (
+                                        if (peek() && peek().value === ')') {
+                                            next(); // Eat )
+                                            // Mark as Array
+                                            pDims.push(0); // Dummy dim
+                                            if (pType === 0) pType = 3;
+                                            else if (pType === 1) pType = 4;
+                                            else if (pType === 2) pType = 5;
+                                        }
+                                    }
+
+                                    locals.push({ name: pName, type: pType, dims: pDims, isParam: true });
+                                    params.push(pType);
+                                }
+                                if (peek() && peek().value === ',') { next(); continue; }
+                                if (peek() && peek().value === ')') { next(); break; }
+                                break;
+                            }
+                        }
+
+                        // Handle 'Name(Args):' case
+                        if (!ateColon && peek() && peek().value === ':') next();
+
+                        continue;
+                    }
+                }
+
+                if (t.type === 'KEYWORD') {
+                    if (t.value === 'GLOBAL' || t.value === 'EXTERNAL' || t.value === 'LOCAL') {
+                        // Check if this is a Label or Procedure Call (followed by colon)
+                        // If so, skip Declaration parsing and treat as Identifier
+                        if (peek() && peek().value === ':') {
+                            // Fall through to Identifier/Keyword handling
+                        } else {
+                            // Parse: GLOBAL name[(dim1[,dim2...])]
+                            var isExt = (t.value === 'EXTERNAL');
+                            var isLocal = (t.value === 'LOCAL');
+                            var declList = (isExt ? externals : (isLocal ? locals : globals));
+
+                            while (true) { // Loop for comma separated list: LOCAL a, b, c
+                                var varNameTok = next();
+                                if (varNameTok && varNameTok.type === 'IDENTIFIER') {
+                                    var rawName = varNameTok.value.toUpperCase();
+                                    // Reserved Check: m0-m9
+                                    if (/^M[0-9]$/.test(rawName)) {
+                                        throw new Error("Error on line " + varNameTok.line + ": Variable name '" + rawName + "' is reserved for calculator memory.");
+                                    }
+                                    var type = parseType(rawName);
+                                    var storedName = rawName;
+
+                                    var dim = [];
+                                    if (peek() && peek().value === '(') {
+                                        next(); // (
+                                        while (true) {
+                                            var d = next();
+                                            if (d.type === 'INTEGER') dim.push(d.value);
+                                            if (peek() && peek().value === ',') { next(); continue; }
+                                            if (peek() && peek().value === ')') { next(); break; }
+                                            if (!peek()) break;
+                                        }
+                                    }
+
+                                    // Upgrade Type for Arrays
+                                    if (dim.length > 0) {
+                                        if (type === 0) type = 3;
+                                        else if (type === 1) type = 4;
+                                        else if (type === 2 && dim.length > 1) type = 5;
+                                    }
+
+                                    declList.push({ name: storedName, type: type, dims: dim });
+                                } else {
+                                    var errTok = varNameTok || t;
+                                    var errVal = errTok.value || errTok.type || "EOF";
+                                    throw new Error("Error on line " + (errTok.line || "?") + ": Expected Variable Name, found '" + errVal + "'");
+                                }
+
+                                if (peek() && peek().value === ',') {
+                                    next(); // Consume comma and continue
+                                    continue;
+                                }
+                                break; // No comma, end of list
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check if ProcName found
             if (!procName) {
-                var isProc = false;
+                error("Procedure must start with a Name Label (e.g. 'MYPROC:')");
+            }
+
+            // --- Pass 1.2: Scan for Implicit Externals ---
+            // Find variables used in body but not declared.
+            // Skip until first non-declaration/label token?
+            // Actually, scan ALL tokens. If Identifier and not Keyword and not in Globals/Locals/Params/ExplicitExternals, add it.
+            // Be careful about Label definitions "Label::".
+            // Be careful about Proc name.
+
+            // Build Set of known names
+            var declaredNames = {};
+            for (var i = 0; i < globals.length; i++) declaredNames[globals[i].name] = true;
+            for (var i = 0; i < locals.length; i++) declaredNames[locals[i].name] = true;
+            for (var i = 0; i < externals.length; i++) declaredNames[externals[i].name] = true;
+            // Also Params are in locals (isParam=true).
+
+            // Scan tokens
+            // We need a helper to iterate 'tokens' array manually since 'next()' logic is stateful?
+            // Actually 'tokens' is available.
+            var skipNext = false; // logic to skip property access etc? OPL doesn't have object.property
+
+            // Context tracking for CREATE/OPEN to avoid detecting Logical Names/Fields as Externals
+            var scanContext = {
+                cmd: null,       // 'CREATE', 'OPEN', or null
+                parens: 0,
+                argIndex: 0
+            };
+
+            for (var i = 0; i < tokens.length; i++) {
+                var t = tokens[i];
+
+                // Reset Context on Statement Boundary
+                if (t.type === 'PUNCTUATION' && t.value === ':') {
+                    scanContext.cmd = null;
+                    scanContext.parens = 0;
+                    scanContext.argIndex = 0;
+                    continue;
+                }
+
+                // Update Context
+                if (t.type === 'KEYWORD' && (t.value === 'CREATE' || t.value === 'OPEN' || t.value === 'USE')) {
+                    scanContext.cmd = t.value;
+                    scanContext.parens = 0;
+                    scanContext.argIndex = 0;
+                } else if (t.type === 'EOL') {
+                    scanContext.cmd = null;
+                } else if (scanContext.cmd) {
+                    if (t.value === '(') scanContext.parens++;
+                    else if (t.value === ')') scanContext.parens--;
+                    else if (t.value === ',' && scanContext.parens === 0) {
+                        scanContext.argIndex++;
+                    }
+                }
 
                 if (t.type === 'IDENTIFIER') {
-                    // Check for PROC definition: Name: or Name(args):
-                    if (peek() && peek().value === ':') isProc = true;
-                    else if (peek() && peek().value === '(') isProc = true;
-                } else if (t.type === 'KEYWORD') {
-                    // Check for Keyword used as Proc Name (e.g. NEXT:)
-                    // MUST be adjacent to Colon. (NEXT: vs NEXT <space> :)
-                    var p = peek();
-                    if (p && p.value === ':') {
-                        // Check Adjacency
-                        // p.col === t.col + t.value.length
-                        if (p.col === (t.col + t.value.length)) {
-                            isProc = true;
-                        }
-                    }
-                }
+                    // Check Context: If we are in CREATE/OPEN/USE
 
-                if (isProc) {
-                    procName = t.value;
-                    var ateColon = false;
-
-                    // Handle 'Name:' case first
-                    if (peek() && peek().value === ':') {
-                        next(); // Eat :
-                        ateColon = true;
-                    }
-
-                    // Check for Params
-                    if (peek() && peek().value === '(') {
-                        next(); // Eat (
-                        while (true) {
-                            var pTok = next();
-                            if (pTok.type === 'IDENTIFIER') {
-                                var pName = pTok.value.toUpperCase();
-                                var pType = parseType(pName);
-                                var pDims = [];
-
-                                // Check for Array Param: Name()
-                                if (peek() && peek().value === '(') {
-                                    next(); // Eat (
-                                    if (peek() && peek().value === ')') {
-                                        next(); // Eat )
-                                        // Mark as Array
-                                        pDims.push(0); // Dummy dim
-                                        if (pType === 0) pType = 3;
-                                        else if (pType === 1) pType = 4;
-                                        else if (pType === 2) pType = 5;
-                                    }
-                                }
-
-                                locals.push({ name: pName, type: pType, dims: pDims, isParam: true });
-                                params.push(pType);
-                            }
-                            if (peek() && peek().value === ',') { next(); continue; }
-                            if (peek() && peek().value === ')') { next(); break; }
-                            break;
+                    if (scanContext.cmd === 'USE') {
+                        // USE A
+                        // Arg 0 is Logical Name (ignore if A-D)
+                        if (scanContext.argIndex === 0) {
+                            var val = t.value.toUpperCase();
+                            if (val.length === 1 && ['A', 'B', 'C', 'D'].includes(val)) continue;
                         }
                     }
 
-                    // Handle 'Name(Args):' case
-                    if (!ateColon && peek() && peek().value === ':') next();
+                    if (scanContext.cmd === 'OPEN' || scanContext.cmd === 'CREATE') {
+                        // Arg 0 (File Expression): Process (Is Variable)
+                        // Arg 1 (Logical Name): Skip (Not Variable)
+                        // Arg 2+ (Fields): Skip (Not Variable)
+                        if (scanContext.argIndex >= 1) continue;
+                    }
 
-                    continue;
-                }
-            }
+                    var name = t.value.toUpperCase();
 
-            if (t.type === 'KEYWORD') {
-                if (t.value === 'GLOBAL' || t.value === 'EXTERNAL' || t.value === 'LOCAL') {
-                    // Parse: GLOBAL name[(dim1[,dim2...])]
-                    var isExt = (t.value === 'EXTERNAL');
-                    var isLocal = (t.value === 'LOCAL');
-                    var declList = (isExt ? externals : (isLocal ? locals : globals));
+                    // Check for Field Access: A.Field => "Field" is not external
+                    // But we are currently iterating tokens.
+                    // If THIS token is followed by DOT, check if LHS is logical.
+                    // OR if THIS token is PRECEDED by DOT, it is a field name.
 
-                    while (true) { // Loop for comma separated list: LOCAL a, b, c
-                        var varNameTok = next();
-                        if (varNameTok && varNameTok.type === 'IDENTIFIER') {
-                            var rawName = varNameTok.value.toUpperCase();
-                            var type = parseType(rawName);
-                            var storedName = rawName;
+                    // Be careful: "A.B" -> Is B a field? Yes. Is A a var? No, if it's logical.
 
-                            var dim = [];
-                            if (peek() && peek().value === '(') {
-                                next(); // (
-                                while (true) {
-                                    var d = next();
-                                    if (d.type === 'INTEGER') dim.push(d.value);
-                                    if (peek() && peek().value === ',') { next(); continue; }
-                                    if (peek() && peek().value === ')') { next(); break; }
-                                    if (!peek()) break;
-                                }
-                            }
-
-                            // Upgrade Type for Arrays
-                            if (dim.length > 0) {
-                                if (type === 0) type = 3;
-                                else if (type === 1) type = 4;
-                                else if (type === 2 && dim.length > 1) type = 5;
-                            }
-
-                            declList.push({ name: storedName, type: type, dims: dim });
-                        } else {
-                            var errTok = varNameTok || t;
-                            var errVal = errTok.value || errTok.type || "EOF";
-                            throw new Error("Error on line " + (errTok.line || "?") + ": Expected Variable Name, found '" + errVal + "'");
-                        }
-
-                        if (peek() && peek().value === ',') {
-                            next(); // Consume comma and continue
+                    // Check Previous Token
+                    var prev = tokens[i - 1];
+                    if (prev) {
+                        if (prev.value === '.') {
+                            // We are a field name! Skip.
                             continue;
                         }
-                        break; // No comma, end of list
+                        if (prev.value === '%') {
+                            // We are an ASCII literal (e.g. %C) -> Not an external
+                            continue;
+                        }
+                    }
+
+                    // Check Next Token (if we are LHS of dot)
+                    var nextTok = tokens[i + 1];
+                    if (nextTok && nextTok.value === '.') {
+                        // We are LHS.
+                        // If we are A,B,C,D -> Logicals. Not External.
+                        if (name.length === 1 && ['A', 'B', 'C', 'D'].includes(name)) continue;
+                        // If we are variable (e.g. MyVar.Field), MyVar SHOULD be processed (detected as external or whatever).
+                        // So we fall through.
+                    }
+
+                    // Exclude Keywords
+                    if (activeKeywords.indexOf(name.toUpperCase()) !== -1) continue;
+                    if (OPERATORS.indexOf(name.toUpperCase()) !== -1) continue; // AND/OR/NOT are identifiers in scanner?
+
+                    // Exclude Definition contexts (LOCAL A, GLOBAL B) - handled by declaredNames check
+                    // But we must assume if we see "LOCAL A", A is already in declaredNames.
+
+                    // Exclude Procedure Name (Start of file) -> "PROC MyProc:"
+                    // MyProc is usually not a variable.
+                    if (i === 1 && tokens[0].value.toUpperCase() === 'PROC') continue;
+                    if (i === 0 && tokens[1] && tokens[1].value === ':') continue; // Label definition? "VS09:"
+
+                    // Exclude Labels "MyLabel::"
+                    if (tokens[i + 1] && tokens[i + 1].value === ':' && tokens[i + 2] && tokens[i + 2].value === ':') continue;
+                    if (tokens[i + 1] && tokens[i + 1].value === ':') continue; // Simple Label "Lab:"
+
+                    // Exclude Built-in Opcodes (e.g. FIX$, GEN$, etc.)
+                    if (activeOpcodes[name]) continue;
+
+                    // Known?
+                    if (declaredNames[name]) continue;
+
+                    // New Implicit External!
+                    // Check for Calculator Memory (Reserve m0-m9) - Do not treat as External
+                    if (/^M[0-9]$/.test(name)) continue;
+
+                    // Determine type
+                    var type = 1; // Float default
+                    if (name.endsWith('%')) type = 0;
+                    else if (name.endsWith('$')) type = 2;
+                    else type = 1; // Default Float
+
+                    // Check for Array usage "Name("
+                    if (tokens[i + 1] && tokens[i + 1].value === '(') {
+                        if (type === 0) type = 3;
+                        else if (type === 1) type = 4;
+                        else if (type === 2) type = 5;
+                    }
+                    // Check if likely a function/procedure call (followed by '(')
+                    // Note: Procedure calls CAN be bare (no parens), but if we treat ALL bare identifiers
+                    // as externals, we lose implicit bare procedure calls (like 'MYRPOC').
+                    // However, OPL usually requires 'proc:' or 'proc' (if 0 args).
+                    // Ambiguity: 'X' could be running proc X, or reading var X.
+                    // User Requirement: "Treat a%=myproc%:(ln%) as var".
+                    // So priority: Variable.
+
+                    // If followed by '(', it is definitely a call OR an array assignment.
+                    // If Array Assignment (Name(...) = ...), it is a Variable (Implicit External).
+                    // If Procedure Call (Name(...)), we ignore it in Pass 1.
+                    if (nextTok && nextTok.value === '(') {
+                        var isArrayAssign = false;
+                        var p = i + 2;
+                        var depth = 1;
+                        while (p < tokens.length) {
+                            if (tokens[p].value === '(') depth++;
+                            else if (tokens[p].value === ')') depth--;
+
+                            if (depth === 0) break;
+                            p++;
+                        }
+                        if (depth === 0 && tokens[p + 1] && tokens[p + 1].value === '=') {
+                            isArrayAssign = true;
+                        }
+
+                        if (!isArrayAssign) continue;
+                    }
+
+                    // Otherwise, assume Variable (Implicit External).
+                    // Warning: This overrides implicit 0-arg proc calls unless they are known built-ins.
+
+                    declaredNames[name] = true;
+                    externals.push({ name: name, type: type, dims: [], isImplicit: true });
+                    //                 console.log("Implicitly defined External:", name);
+                }
+            }
+            var varSpaceSize = 2;
+
+            // 2. Calculate Global Table Size
+            // Format per entry: [Len(1)] [Name(N)] [Type(1)] [Offset(2)]
+            // Total = 4 + NameLen
+            var globalTableSize = 0;
+            for (var i = 0; i < globals.length; i++) {
+                globalTableSize += (4 + globals[i].name.length);
+            }
+
+            // Add to VarSpace
+            // Tight Packing: No alignment padding for GT
+            varSpaceSize += globalTableSize;
+
+            // 3. Base Offset calculation
+            // Stack Top -> [GT Length (2)] @ FFFE
+            //           -> [Global Table (Size)] @ FFFE - Size
+            //           -> [Values] @ ...
+
+            var currentOffset = -2; // Start after GT Length
+            currentOffset -= globalTableSize; // Skip past the table
+
+            // 4. Allocate Param/External Pointers?
+            // User request focuses on Global Table. 
+            // Standard OPL usually has Ptrs for Params/Externs.  
+            // We will keep them for now, but they take 0 space if empty.
+
+            // Param Pointers
+            // Store offsets for Params here (they correspond to locals with isParam=true)
+            var paramIdx = 0;
+            // Re-instituted per user request: Params follow Global Table
+            for (var i = 0; i < locals.length; i++) {
+                if (locals[i].isParam) {
+                    locals[i].offset = currentOffset - 2;
+                    currentOffset -= 2;
+                    varSpaceSize += 2;
+                    paramIdx++;
+                }
+            }
+
+            // External Pointers
+            for (var i = 0; i < externals.length; i++) {
+                if (externals[i].isImplicit) continue;
+                externals[i].ptrOffset = currentOffset - 2;
+                currentOffset -= 2;
+                varSpaceSize += 2;
+            }
+
+            // 5. Size Calculator (Helper)
+            function calculateSize(item, scope) {
+                // Parameters & Externals
+                if (item.isParam) return 2;
+
+                // Check for Arrays
+                // Logic: Int(0)/Float(1) with dims > 0 is Array
+                // String(2) with dims > 1 is Array (dims[0]=Count, dims[1]=MaxLen)
+
+                var isArray = false;
+                if (item.dims.length > 0) {
+                    if (item.type === 0 || item.type === 1 || item.type === 3 || item.type === 4) isArray = true;
+                    else if ((item.type === 2 || item.type === 5) && item.dims.length > 1) isArray = true;
+                }
+
+                if (isArray) {
+                    // Array Length is product of dimensions (excluding String Length dimension)
+                    var arrayLength = 1;
+                    var dimCount = item.dims.length;
+                    if (item.type === 2 || item.type === 5) dimCount -= 1; // Last dim is String Length
+
+                    for (var d = 0; d < dimCount; d++) {
+                        arrayLength *= item.dims[d];
+                    }
+
+                    if (item.type === 0 || item.type === 3) { // Int Array
+                        return 2 + (2 * arrayLength);
+                    } else if (item.type === 1 || item.type === 4) { // Float Array
+                        return 2 + (8 * arrayLength);
+                    } else if (item.type === 2 || item.type === 5) { // String Array
+                        var maxLen = item.dims[item.dims.length - 1];
+                        // Both Local and Global String Arrays appear to use 2-byte Header (Allocator)
+                        // The MaxLen byte is presumably handled differently or included in payload logic
+                        return 2 + ((1 + maxLen) * arrayLength);
+                    }
+                } else {
+                    // Scalar
+                    if (item.type === 0) return 2; // Int
+                    else if (item.type === 1) return 8; // Float
+                    else if (item.type === 2) { // String
+                        // String Scalar declared as e.g. LOCAL A$(10) -> dims=[10]
+                        var maxLen = (item.dims.length > 0) ? item.dims[0] : 255;
+                        return 1 + maxLen;
                     }
                 }
-            }
-        }
-
-        // Check if ProcName found
-        if (!procName) {
-            error("Procedure must start with a Name Label (e.g. 'MYPROC:')");
-        }
-
-        // --- Pass 1.2: Scan for Implicit Externals ---
-        // Find variables used in body but not declared.
-        // Skip until first non-declaration/label token?
-        // Actually, scan ALL tokens. If Identifier and not Keyword and not in Globals/Locals/Params/ExplicitExternals, add it.
-        // Be careful about Label definitions "Label::".
-        // Be careful about Proc name.
-
-        // Build Set of known names
-        var declaredNames = {};
-        for (var i = 0; i < globals.length; i++) declaredNames[globals[i].name] = true;
-        for (var i = 0; i < locals.length; i++) declaredNames[locals[i].name] = true;
-        for (var i = 0; i < externals.length; i++) declaredNames[externals[i].name] = true;
-        // Also Params are in locals (isParam=true).
-
-        // Scan tokens
-        // We need a helper to iterate 'tokens' array manually since 'next()' logic is stateful?
-        // Actually 'tokens' is available.
-        var skipNext = false; // logic to skip property access etc? OPL doesn't have object.property
-
-        // Context tracking for CREATE/OPEN to avoid detecting Logical Names/Fields as Externals
-        var scanContext = {
-            cmd: null,       // 'CREATE', 'OPEN', or null
-            parens: 0,
-            argIndex: 0
-        };
-
-        for (var i = 0; i < tokens.length; i++) {
-            var t = tokens[i];
-
-            // Reset Context on Statement Boundary
-            if (t.type === 'PUNCTUATION' && t.value === ':') {
-                scanContext.cmd = null;
-                scanContext.parens = 0;
-                scanContext.argIndex = 0;
-                continue;
+                return 8; // Default
             }
 
-            // Update Context
-            if (t.type === 'KEYWORD' && (t.value === 'CREATE' || t.value === 'OPEN' || t.value === 'USE')) {
-                scanContext.cmd = t.value;
-                scanContext.parens = 0;
-                scanContext.argIndex = 0;
-            } else if (t.type === 'EOL') {
-                scanContext.cmd = null;
-            } else if (scanContext.cmd) {
-                if (t.value === '(') scanContext.parens++;
-                else if (t.value === ')') scanContext.parens--;
-                else if (t.value === ',' && scanContext.parens === 0) {
-                    scanContext.argIndex++;
+            // 4. Allocate Storage (Globals)
+            for (var i = 0; i < globals.length; i++) {
+                var g = globals[i];
+
+                // Tight Packing: No start alignment
+                var size = calculateSize(g, 'global');
+
+                // Allocate
+                g.offset = currentOffset - size;
+                currentOffset -= size;
+                varSpaceSize += size;
+
+                // Unified String Array/Scalar Padding (Globals)
+                if ((g.type === 2 || g.type === 5) && g.dims.length > 0) { // String (Scalar or Array)
+                    currentOffset--;
+                    varSpaceSize++;
+                }
+
+                // Fixups
+                var isArray = (g.dims.length > 0 && (g.type !== 2 || g.dims.length > 1));
+
+                if ((g.type === 2 || g.type === 5) && !g.isParam) {
+                    var maxLen = g.dims[g.dims.length - 1];
+                    globalStrFixups.push({ addr: g.offset - 1, len: maxLen });
+                }
+                if (isArray) {
+                    var fixupElements = 1;
+                    var dimCount = g.dims.length;
+                    if (g.type === 2 || g.type === 5) dimCount -= 1;
+                    for (var d = 0; d < dimCount; d++) fixupElements *= g.dims[d];
+                    globalArrFixups.push({ addr: g.offset, len: fixupElements });
                 }
             }
 
-            if (t.type === 'IDENTIFIER') {
-                // Check Context: If we are in CREATE/OPEN/USE
+            // --- ALLOCATE LOCALS ---
+            // Locals start where Globals left off
+            var localOffset = currentOffset;
 
-                if (scanContext.cmd === 'USE') {
-                    // USE A
-                    // Arg 0 is Logical Name (ignore if A-D)
-                    if (scanContext.argIndex === 0) {
-                        var val = t.value.toUpperCase();
-                        if (val.length === 1 && ['A', 'B', 'C', 'D'].includes(val)) continue;
+            for (var i = 0; i < locals.length; i++) {
+                var l = locals[i];
+
+                if (l.isParam) continue; // Already allocated in Pointers phase
+
+                // Tight Packing
+                var size = calculateSize(l, 'local');
+                l.offset = localOffset - size;
+                localOffset -= size;
+                varSpaceSize += size;
+
+                // Unified String Array/Scalar Padding (Locals)
+                if ((l.type === 2 || l.type === 5) && l.dims.length > 0) { // String (Scalar or Array)
+                    localOffset--; // Pad
+                    varSpaceSize++;
+                }
+
+                var isArray = (l.dims.length > 0 && (l.type !== 2 || l.dims.length > 1));
+
+                if ((l.type === 2 || l.type === 5) && !l.isParam) {
+                    var maxLen = l.dims[l.dims.length - 1];
+                    localStrFixups.push({ addr: l.offset - 1, len: maxLen });
+                }
+                if (isArray) {
+                    var fixupElements = 1;
+                    var dimCount = l.dims.length;
+                    if (l.type === 2 || l.type === 5) dimCount -= 1;
+                    for (var d = 0; d < dimCount; d++) fixupElements *= l.dims[d];
+                    localArrFixups.push({ addr: l.offset, len: fixupElements });
+                }
+            }
+
+            // --- ALLOCATE IMPLICIT EXTERNALS (Scanned in Pass 1) ---
+            for (var i = 0; i < externals.length; i++) {
+                var e = externals[i];
+                if (!e.isImplicit) continue;
+
+                // Tight Packing
+                // Use 'local' scope as they are effectively locals in this context
+                // For implicit arrays, we might not have 'dims' populated yet in Pass 1?
+                // Wait. Pass 1 sets dims=[] for implicit.
+                // If C%(1) is used, we only know it is Type 3 (Int Array), but we don't know the SIZE (dims).
+                // Existing Pass 2 logic for 'New Implicit External' used 'varSize=2' for Arrays/Pointers?
+                // Line 2923: "String/Array Pointer? else varSize = 2;"
+                // So Implicit Arrays are allocated as Pointers (2 bytes).
+                // Scalars are allocated by size (2 or 8).
+
+                var size = 2; // Int/Float/String/Array Implicit Externals are allocated as Pointers (2 bytes)
+
+                e.offset = localOffset - size;
+                localOffset -= size;
+                varSpaceSize += size;
+            }
+
+            // Combine Fixups: Locals FIRST, then Globals (per OPL Spec)
+            // Combine Fixups: Locals FIRST, then Globals (Match Golden Binary)
+            var strFixups = localStrFixups.concat(globalStrFixups);
+            var arrFixups = localArrFixups.concat(globalArrFixups);
+
+            // Final varSpaceSize: Tight Packing, no alignment to even.
+
+
+
+            // Pass 2: QCode Generation (Body)
+            var qcode = [];
+            // Emit LZ Header if required
+            if (targetSystem === 'LZ') {
+                qcode.push(0x59, 0xB2);
+            }
+
+            var pendingTrap = false;
+
+            // --- CodeGen Helpers ---
+            function emit(b) {
+                qcode.push(b & 0xFF);
+            }
+            function emitWord(w) { emit(w >> 8); emit(w & 0xFF); }
+            function emitOp(op) { emit(op); }
+
+            function emitCommand(op) {
+                if (pendingTrap) {
+                    emit(0x5A); // TRAP
+                    pendingTrap = false;
+                }
+                emit(op);
+            }
+
+            function emitFloat(val) {
+
+
+                var str = Math.abs(val).toString();
+                if (str.includes('e')) {
+                    if (str.includes('e-')) {
+                        // Minimal scientific support
+                        var p = str.split('e-');
+                        // ... for now assume literals key matched ...
                     }
                 }
 
-                if (scanContext.cmd === 'OPEN' || scanContext.cmd === 'CREATE') {
-                    // Arg 0 (File Expression): Process (Is Variable)
-                    // Arg 1 (Logical Name): Skip (Not Variable)
-                    // Arg 2+ (Fields): Skip (Not Variable)
-                    if (scanContext.argIndex >= 1) continue;
+                var s = str;
+                if (s.indexOf('.') === -1) s += ".";
+
+                var cleanDigits = "";
+                var dotPos = 0;
+                var firstDigitIdx = -1;
+                var dotSeen = false;
+
+                for (var i = 0; i < s.length; i++) {
+                    var c = s[i];
+                    if (c === '.') {
+                        dotSeen = true;
+                        dotPos = cleanDigits.length;
+                    } else {
+                        if (firstDigitIdx === -1 && c !== '0') firstDigitIdx = cleanDigits.length;
+                        cleanDigits += c;
+                    }
                 }
 
-                var name = t.value.toUpperCase();
+                if (firstDigitIdx === -1) firstDigitIdx = cleanDigits.length;
 
-                // Check for Field Access: A.Field => "Field" is not external
-                // But we are currently iterating tokens.
-                // If THIS token is followed by DOT, check if LHS is logical.
-                // OR if THIS token is PRECEDED by DOT, it is a field name.
+                var finalDigits = cleanDigits.substring(firstDigitIdx);
+                var exponent = (dotPos - firstDigitIdx) - 1;
 
-                // Be careful: "A.B" -> Is B a field? Yes. Is A a var? No, if it's logical.
+                if (finalDigits.length === 0) {
+                    // Zero Case
+                    finalDigits = "00";
+                    exponent = 0;
+                }
 
-                // Check Previous Token
-                var prev = tokens[i - 1];
-                if (prev && prev.value === '.') {
-                    // We are a field name! Skip.
+                if (finalDigits.length % 2 !== 0) finalDigits += "0";
+
+                var bcdBytes = [];
+                for (var i = 0; i < finalDigits.length; i += 2) {
+                    var h = parseInt(finalDigits[i], 16);
+                    var l = parseInt(finalDigits[i + 1], 16);
+                    bcdBytes.push((h << 4) | l);
+                }
+
+                bcdBytes.reverse();
+
+                var expByte = exponent & 0xFF;
+                bcdBytes.push(expByte);
+
+                var len = bcdBytes.length;
+                var sign = (val < 0 ? 0x80 : 0x00);
+
+                emit(sign | len);
+                for (var i = 0; i < bcdBytes.length; i++) emit(bcdBytes[i]);
+            }
+
+
+            // --- Symbol Table Setup ---
+            // Map: Name -> { type, offset, isParam, isGlobal, isExtern }
+            // --- Symbol Table Setup ---
+            // Map: Name -> { type, offset, isParam, isGlobal, isExtern }
+            // OVERLOAD SUPPORT: Split into Scalars and Arrays
+            var symbolScalars = {};
+            var symbolArrays = {};
+
+            function addSymbol(s) {
+                // Determine if Array
+                var isArray = false;
+                // Type 0,1,2 with dim check?
+                if (s.dims && s.dims.length > 0) {
+                    if (s.type === 0 || s.type === 1 || s.type === 3 || s.type === 4) isArray = true;
+                    else if ((s.type === 2 || s.type === 5) && s.dims.length > 1) isArray = true;
+                }
+                // Types 3,4,5 are explicitly arrays if set that way
+                if (s.type >= 3) isArray = true;
+
+                if (isArray) symbolArrays[s.name] = s;
+                else symbolScalars[s.name] = s;
+            }
+
+            function getSymbol(name, isArray) {
+                if (isArray) return symbolArrays[name];
+                return symbolScalars[name];
+            }
+
+            // Globals (Offsets already calculated in Pass 1)
+            for (var i = 0; i < globals.length; i++) {
+                var g = globals[i];
+                g.isGlobal = true;
+                addSymbol(g);
+            }
+            for (var i = 0; i < locals.length; i++) {
+                var l = locals[i];
+                l.isLocal = true;
+                l.isGlobal = false;
+                addSymbol(l);
+            }
+
+            // Externals
+            for (var i = 0; i < externals.length; i++) {
+                var e = externals[i];
+                e.isExtern = true;
+                e.index = i;
+                addSymbol(e);
+            }
+
+            // --- Parser ---
+
+            // Reset Ptr for Pass 2
+            ptr = 0;
+
+            // --- Expression Parser ---
+
+            function parseExpression() {
+                return parseLogical();
+            }
+
+            function parseLogical() {
+                var type = parseComparison();
+                // DEBUG
+                if (peek()) {
+
+                }
+                while (peek() && peek().type !== 'STRING' && ['AND', 'OR'].includes(peek().value)) {
+                    var op = next().value;
+
+                    var rhsType = parseComparison();
+
+                    if (op === 'AND') emit(0x34);
+                    else emit(0x35);
+
+                    type = 0;
+                }
+                return type;
+            }
+
+            function parseComparison() {
+                var type = parseAddSub();
+                while (peek() && peek().type !== 'STRING' && ['=', '<', '>', '<=', '>=', '<>'].includes(peek().value)) {
+                    var op = next().value;
+                    var rhsStart = qcode.length; // Capture start of RHS
+                    var rhsType = parseAddSub();
+                    var usePercent = false;
+
+                    // Check for LZ Percentage Modifier
+                    if (peek() && peek().value === '%') {
+                        next(); // Consume %
+                        usePercent = true;
+                    }
+
+                    if (usePercent) {
+                        // LZ Percentage Comparison always implies Float logic
+                        // Ops: <% (CC), >% (CD). Others? Manual implied only < and >?
+                        // constants.js has <% and >%. What about =% or <=%?
+                        // Assuming only <% and >% supported as per constants.js list.
+                        // Fallback to Float comparison for others or error?
+                        // Let's support <% and >% explicitly.
+                        // Actually, emitMathOp/emitLogicOp handles this? 
+                        // Inline here for comparison:
+
+                        // If LHS was Int, it's already on stack. Cannot convert easily.
+                        if (type === 0) console.warn("Compiler: Implicit Int->Float cast required (LHS) for Percentage comparison - Unsafe!");
+                        if (rhsType === 0) emit(0x86); // FLT RHS (Top of stack)
+
+                        if (op === '<') emit(0xCC);      // <%
+                        else if (op === '>') emit(0xCD); // >%
+                        else {
+                            throw new Error("Compiler: Operator " + op + "% is not supported (Only <% and >%).");
+                        }
+                        type = 0; // Result is Int (True/False)
+                    } else {
+                        // Standard Comparison
+                        if (type === rhsType) {
+                            if (type === 0) { // Int
+                                if (op === '=') emit(0x2C);
+                                else if (op === '<') emit(0x27);
+                                else if (op === '>') emit(0x29);
+                                else if (op === '<=') emit(0x28);
+                                else if (op === '>=') emit(0x2A);
+                                else if (op === '<>') emit(0x2B);
+                            } else if (type === 1) { // Float
+                                if (op === '=') emit(0x3B);
+                                else if (op === '<') emit(0x36);
+                                else if (op === '>') emit(0x38);
+                                else if (op === '<=') emit(0x37);
+                                else if (op === '>=') emit(0x39);
+                                else if (op === '<>') emit(0x3A);
+                            } else if (type === 2) { // String
+                                if (op === '=') emit(0x4A);
+                                else if (op === '<') emit(0x45);
+                                else if (op === '>') emit(0x47);
+                                else if (op === '<=' || op === '=<') emit(0x46);
+                                else if (op === '>=' || op === '=>') emit(0x48);
+                                else if (op === '<>') emit(0x49);
+                            }
+                        } else {
+                            // Simple mixed mode support:
+                            if (type === 0 && rhsType === 1) {
+                                // Int LHS, Float RHS -> Promote LHS? 
+                                // Backpatch: Insert FLT before RHS
+                                if (rhsStart !== undefined) {
+                                    qcode.splice(rhsStart, 0, 0x86); // Inject FLT
+                                } else {
+                                    //                                 console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
+                                }
+                                type = 1; // Promoted to Float
+                            } else if (type === 1 && rhsType === 0) {
+                                // Float LHS, Int RHS -> Promote RHS
+                                emit(0x86); // FLT RHS
+                            }
+
+                            // Re-evaluate comparison for Float (since mixed mode implies Float)
+                            if (type === 1) { // Float Comparison
+                                if (op === '=') emit(0x3B);
+                                else if (op === '<') emit(0x36);
+                                else if (op === '>') emit(0x38);
+                                else if (op === '<=') emit(0x37);
+                                else if (op === '>=') emit(0x39);
+                                else if (op === '<>') emit(0x3A);
+                            }
+                        }
+                        type = 0; // Result is Int
+                    }
+                }
+                return type;
+            }
+
+            // --- Refactored Expression Parser Hierarchy ---
+
+
+
+            // Comparison calls AddSub
+            // AddSub calls MulDiv
+            // MulDiv calls Power
+            // Power calls Factor
+
+            function parseAddSub() {
+                var type = parseMulDiv();
+                while (peek() && peek().type !== 'STRING' && ['+', '-'].includes(peek().value)) {
+                    var op = next().value;
+                    var rhsStart = qcode.length; // Capture start of RHS
+                    var rhsType = parseMulDiv();
+                    var usePercent = false;
+
+                    if (peek() && peek().value === '%') {
+                        next(); // Consume %
+                        usePercent = true;
+                    }
+
+                    type = emitMathOp(op, type, rhsType, usePercent, rhsStart);
+                }
+                return type;
+            }
+
+            function parseMulDiv() {
+                var type = parsePower();
+                while (peek() && peek().type !== 'STRING' && ['*', '/'].includes(peek().value)) {
+                    var op = next().value;
+                    var rhsStart = qcode.length; // Capture start of RHS
+                    var rhsType = parsePower();
+                    var usePercent = false;
+
+                    if (peek() && peek().value === '%') {
+                        next(); // Consume %
+                        usePercent = true;
+                    }
+
+                    type = emitMathOp(op, type, rhsType, usePercent, rhsStart);
+                }
+                return type;
+            }
+
+            function parsePower() {
+                var type = parseFactor();
+                if (peek() && peek().type !== 'STRING' && peek().value === '**') {
+                    var op = next().value;
+                    var rhsStart = qcode.length; // Capture start of RHS
+                    var rhsType = parsePower(); // Recursive for Right-to-Left Associativity
+                    type = emitMathOp(op, type, rhsType, false, rhsStart);
+                }
+                return type;
+            }
+
+            function emitMathOp(op, t1, t2, usePercent, rhsStart) {
+                if (t1 === 2 && t2 === 2 && op === '+' && !usePercent) {
+                    emit(0x4B); // Str + Str
+                    return 2;
+                }
+
+                var method = 0; // 0=Int, 1=Float
+                if (t1 === 1 || t2 === 1 || usePercent) method = 1;
+
+                if (usePercent) {
+                    if (t1 === 0) console.warn("Compiler: Implicit Int->Float cast required (LHS) for Percentage op - Unsafe!");
+                    if (t2 === 0) {
+                        emit(0x86); // Convert RHS
+                    }
+
+                    if (op === '+') emit(0xCE);      // +%
+                    else if (op === '-') emit(0xCF); // -%
+                    else if (op === '*') emit(0xD0); // *%
+                    else if (op === '/') emit(0xD1); // /%
+                    else throw new Error("Percent modifier not supported for " + op);
+                    return 1;
+                }
+
+                if (method === 0) { // Int
+                    if (op === '+') emit(0x2D);
+                    else if (op === '-') emit(0x2E);
+                    else if (op === '*') emit(0x2F);
+                    else if (op === '/') emit(0x30);
+                    else if (op === '**') emit(0x31);
+                    return 0;
+                } else { // Float
+                    if (t1 === 0) {
+                        // Backpatch: Insert FLT before RHS
+                        if (rhsStart !== undefined) {
+                            qcode.splice(rhsStart, 0, 0x86); // Inject FLT
+                        } else {
+                            //                         console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
+                        }
+                    }
+                    if (t2 === 0) {
+                        emit(0x86);
+                    }
+
+                    if (op === '+') emit(0x3C);
+                    else if (op === '-') emit(0x3D);
+                    else if (op === '*') emit(0x3E);
+                    else if (op === '/') emit(0x3F);
+                    else if (op === '**') emit(0x40);
+                    return 1;
+                }
+            }
+
+            function parseFactor() {
+                var t = peek();
+                // Check for Unary Minus
+                if (t && t.type !== 'STRING' && (t.value === '-' || (t.type === 'PUNCTUATION' && t.value === '-'))) { // Tokenizer might mark - as PUNCTUATION or KEYWORD depending on logic?
+                    next(); // Consume '-'
+                    var type = parseFactor(); // Recurse
+
+                    // Emit Unary Minus Opcode
+                    if (type === 0) emit(0x32); // Int Neg (0x32)
+                    else if (type === 1) emit(0x41); // Flt Neg (0x41)
+                    else console.warn("Compiler: Unary minus on String?");
+                    return type;
+                }
+                if (t && t.type !== 'STRING' && (t.value === 'NOT')) {
+                    next(); // Value
+                    var type = parseFactor();
+                    if (type === 1) emit(0x42); // NOT (Float)
+                    else emit(0x33); // NOT (Int)
+                    return 0; // Result is Int
+                }
+
+                // ASCII Literal %C
+                if (t && t.type !== 'STRING' && t.value === '%') {
+                    next(); // Consume %
+                    var charTick = next(); // Consume Character
+                    if (!charTick || charTick.value === undefined) throw new Error("Error on line " + ((t && t.line) || "?") + ": Expected character after %");
+                    var strVal = charTick.value.toString();
+                    if (strVal.length !== 1) throw new Error("Error on line " + ((t && t.line) || "?") + ": ASCII literal % must be followed by a single character");
+                    if (strVal.length === 0) throw new Error("Error on line " + ((t && t.line) || "?") + ": Empty literal after %");
+                    var ascii = strVal.charCodeAt(0);
+                    emit(0x22); emitWord(ascii); // Push Int
+                    return 0; // Int
+                }
+
+                t = next(); // Consume
+                if (!t) return 0;
+
+                if (t.type === 'INTEGER') {
+                    // Check Range for standard OPL Integer (-32768 to 32767)
+                    if (t.value >= -32768 && t.value <= 32767) {
+                        emit(0x22); emitWord(t.value);
+                        return 0; // Int
+                    } else {
+                        // Promote to Float
+                        emit(0x23);
+                        emitFloat(t.value);
+                        return 1; // Float
+                    }
+                } else if (t.type === 'HEX') {
+                    // Check Range for Unsigned 16-bit (0 to 65535) treated as Signed Int
+                    if (t.value >= 0 && t.value <= 65535) {
+                        // Map to signed equivalent
+                        var signedVal = (t.value > 32767) ? t.value - 65536 : t.value;
+                        emit(0x22); emitWord(signedVal);
+                        return 0; // Int
+                    } else {
+                        // Promote to Float (Large Hex)
+                        emit(0x23);
+                        emitFloat(t.value);
+                        return 1; // Float
+                    }
+                } else if (t.type === 'FLOAT') {
+                    emit(0x23);
+                    emitFloat(t.value);
+                    return 1; // Float
+                } else if (t.type === 'STRING') {
+                    emit(0x24); emit(t.value.length);
+                    for (var k = 0; k < t.value.length; k++) emit(t.value.charCodeAt(k));
+                    return 2; // String
+                } else if ((t.type === 'KEYWORD' || t.type === 'IDENTIFIER') &&
+                    (t.value === 'LEN' || t.value === 'ASC' || t.value === 'MID$' ||
+                        t.value === 'PEEKB' || t.value === 'PEEKW' || t.value === 'ADDR')) {
+
+                    var op = t.value;
+                    if (peek() && peek().value === '(') next(); // Eat (
+                    else throw new Error("Error on line " + t.line + ": Expected '('");
+
+
+                    if (op === 'LEN') { // 0x96 S->I
+                        parseExpression();
+                        emit(0x96);
+                        expect(')');
+
+                        return 0; // Int
+                    } else if (op === 'ASC') { // 0x8B S->I
+                        parseExpression();
+                        emit(0x8B);
+                        expect(')');
+
+                        return 0; // Int
+                    } else if (op === 'MID$') { // 0xC2 S I I -> S
+                        parseExpression(); // S
+                        expect(',');
+                        parseExpression(); // I
+                        expect(',');
+                        parseExpression(); // I
+                        emit(0xC2);
+                        expect(')');
+                        return 2; // String
+                    } else if (op === 'PEEKB') { // 0x9B I->I
+                        var addrType = parseExpression();
+                        if (addrType !== 0) throw new Error("Error on line " + t.line + ": PEEKB address must be an integer (-32768 to 32767)");
+                        emit(0x9B);
+                        expect(')');
+
+                        return 0; // Int
+                    } else if (op === 'PEEKW') { // 0x9C I->I
+                        var addrType = parseExpression();
+                        if (addrType !== 0) throw new Error("Error on line " + t.line + ": PEEKW address must be an integer (-32768 to 32767)");
+                        emit(0x9C);
+
+                        expect(')');
+
+                        return 0; // Int
+                    } else if (op === 'ADDR') {
+                        // Expect Variable Name
+                        var tVar = next();
+                        if (tVar && tVar.type === 'IDENTIFIER') {
+                            var targetName = tVar.value.toUpperCase();
+
+                            // Check for Field Access (A.Field) and ERROR
+                            if (peek() && peek().value === '.') {
+                                throw new Error("Error on line " + t.line + ": Field access not supported in ADDR");
+                            }
+
+                            var hasIndices = (peek() && peek().value === '(');
+
+                            // Parse Indices first (if any)
+                            if (hasIndices) {
+                                next(); // Eat (
+
+                                // Check for empty parens: ADDR(arr())
+                                if (peek() && peek().value === ')') {
+                                    next(); // Eat )
+                                    // Implicitly reference the first element (Index 1)
+                                    emit(0x22); emitWord(1);
+                                } else {
+                                    while (true) {
+                                        parseExpression();
+                                        if (peek() && peek().value === ',') { next(); continue; }
+                                        if (peek() && peek().value === ')') { next(); break; }
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Lookup Symbol
+                            var sym = getSymbol(targetName, hasIndices);
+                            if (!sym) {
+                                // Create temporary external symbol just for address?
+                                // Logic borrowed from Assignment
+                                sym = { name: targetName, type: 1, isExtern: true, index: externals.length };
+                                var suffix = targetName.slice(-1);
+                                if (suffix === '%') sym.type = 0;
+                                else if (suffix === '$') sym.type = 2;
+                                if (hasIndices) {
+                                    if (sym.type === 0) sym.type = 3;
+                                    else if (sym.type === 1) sym.type = 4;
+                                    else if (sym.type === 2) sym.type = 5;
+                                }
+                                externals.push(sym);
+                                addSymbol(sym); // Add to symbols map!
+                            }
+
+                            var type = sym.type;
+                            if (hasIndices) {
+                                if (type === 0) type = 3;
+                                else if (type === 1) type = 4;
+                                else if (type === 2) type = 5;
+                            }
+
+                            // Emit Push Addr
+                            if (sym.isGlobal || sym.isLocal) {
+                                emit(0x0D + type);
+                                emitWord(sym.offset);
+                            } else if (sym.isExtern) {
+                                emit(0x14 + type);
+                                if (sym.offset !== undefined) emitWord(sym.offset);
+                                else emitWord(sym.index);
+                            }
+
+                            // Emit ADDR op
+                            if (type === 2 || type === 5) {
+                                //                             console.log("Emit ADDR String");
+                                emit(0xC9); // String
+                            }
+                            else {
+                                //                             console.log("Emit ADDR Int/Float (0x8A)");
+                                emit(0x8A); // Int/Float
+                            }
+                        }
+                    }
+                    expect(')');
+                    return 0; // Int (Address)
+                } else if (t.type === 'IDENTIFIER' || t.type === 'KEYWORD') {
+
+
+                    var valName = t.value.toUpperCase(); // Full Name Lookup
+
+                    // --- 0. Calculator Memory Read (m0-m9) ---
+                    if (/^M[0-9]$/.test(valName)) {
+                        // Syntax Check: No indices allowed
+                        if (peek() && peek().value === '(') throw new Error("Error on line " + t.line + ": Calculator memory '" + valName + "' cannot have indices.");
+
+                        var memIdx = parseInt(valName.substring(1), 10);
+                        emit(0x06); // Push Calculator Memory
+                        emitWord(memIdx * 8);
+                        return 1; // Float
+                    }
+
+                    // --- 1. Field Access Check (A.Field) ---
+                    if (peek() && peek().value === '.') {
+                        next(); // Consume .
+                        // Expect Field Name
+                        var tField = next();
+                        if (tField && tField.type === 'IDENTIFIER') {
+                            var logChar = valName; // A, B, C, D?
+                            var logVal = -1;
+                            if (logChar === 'A') logVal = 0;
+                            else if (logChar === 'B') logVal = 1;
+                            else if (logChar === 'C') logVal = 2;
+                            else if (logChar === 'D') logVal = 3;
+
+                            if (logVal !== -1) {
+                                // Emit Field Access
+                                // Opcode depends on type:
+                                // 0x1A (Int), 0x1B (Flt), 0x1C (Str)
+                                // 0x1D (IntRef), 0x1E (FltRef), 0x1F (StrRef) -- References?
+                                // Expression result is usually Value.
+
+                                var fName = tField.value.toUpperCase();
+                                var type = 1; // Flt
+                                if (fName.endsWith('%')) type = 0; // Int
+                                else if (fName.endsWith('$')) type = 2; // Str
+
+                                // 0x1A + type?
+                                // 1A(Int), 1B(Flt), 1C(Str) -> 1A + 0=1A, 1A+1=1B, 1A+2=1C. Correct.
+                                // 1. Push Field Name (String Literal)
+                                emit(0x24);
+                                emit(fName.length);
+                                for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
+
+                                // 2. Emit Opcode (1A/1B/1C)
+                                emit(0x1A + type);
+                                // 3. Emit Logical Name Index
+                                emit(logVal);
+
+                                return type;
+                            }
+                        }
+                        // If fall through (invalid logical name?), treat as error or weird syntax
+                        error("Invalid Field Access syntax: " + valName + "." + (tField ? tField.value : ""));
+                    }
+
+
+                    // --- 2. Built-in Opcodes ---
+                    var builtinOp = activeOpcodes[valName];
+
+                    // FIX: Check for Adjacency Override (Keyword: -> Proc Call)
+                    // If this Identifier was a Keyword (or looks like one) and has an ADJACENT COLON,
+                    // we must treat it as a PROC call (or Label), NOT a built-in command.
+                    if (builtinOp && peek() && peek().value === ':') {
+                        var colonTok = peek();
+                        // Check Adjacency
+                        if (colonTok.col === (t.col + t.value.length)) {
+                            builtinOp = null; // Disable Built-in
+                        }
+                    }
+
+                    if (builtinOp) {
+                        var def = QCODE_DEFS[builtinOp];
+                        if (def && def.pushes === '') {
+                            throw new Error("Error on line " + t.line + ": Syntax Error: '" + valName + "' is a command, not a function.");
+                        }
+
+                        // Check if it's a function using parenthesis: GET()
+                        if (peek() && peek().value === '(') {
+                            next(); // Eat (
+
+                            // Handle arguments
+                            if (def && def.args === 'Flist') {
+                                // Flist (Variable Arguments - Stats functions)
+                                var argCount = 0;
+                                if (peek() && peek().value !== ')') {
+                                    while (true) {
+                                        var argType = parseExpression();
+                                        if (argType === 0) emit(0x86); // Force Float
+                                        argCount++;
+                                        if (peek() && peek().value === ',') next();
+                                        else break;
+                                    }
+                                }
+                                expect(')');
+                                // Push Count
+                                emit(0x22); emitWord(argCount);
+                            } else {
+                                // Standard Fixed Arguments
+                                var expectedArgs = [];
+                                if (def && def.pops) {
+                                    expectedArgs = def.pops.split(' ');
+                                }
+
+                                var argIdx = 0;
+                                if (peek() && peek().value !== ')') {
+                                    while (true) {
+                                        var argType = parseExpression();
+
+                                        // Auto-Cast based on Opcode Signature
+                                        if (argIdx < expectedArgs.length) {
+                                            var req = expectedArgs[argIdx];
+                                            if (req === 'F' && argType === 0) emit(0x86); // FLT
+                                            else if (req === 'I' && argType === 1) emit(0x87); // INT
+                                        }
+
+                                        argIdx++;
+                                        if (peek() && peek().value === ',') {
+                                            next();
+                                            continue;
+                                        }
+                                        if (peek() && peek().value === ')') break;
+                                        break;
+                                    }
+                                }
+                                expect(')');
+                            }
+                        }
+
+                        emit(builtinOp);
+
+                        // Dynamically determine return type from QCODE definitions
+                        // This handles polymorphic functions (like ABS) where the opcode changes based on argument types.
+                        if (QCODE_DEFS[builtinOp]) {
+                            var pushes = QCODE_DEFS[builtinOp].pushes;
+                            if (pushes === 'I') return 0; // Int
+                            if (pushes === 'S') return 2; // String
+                            return 1; // Default Float
+                        }
+
+                        // Fallback (Legacy behavior)
+                        if (valName.endsWith('$')) return 2;
+                        return 1; // Default Float
+                    }
+
+                    var hasIndices = (peek() && peek().value === '(');
+                    var sym = getSymbol(valName, hasIndices);
+                    var forceProc = false;
+
+
+                    // If Symbol Not Found OR Explicit Colon -> Assume PROCEDURE CALL
+                    // New Rule: Colon must be ADJACENT to be a Call (MyProc:)
+                    if (peek() && peek().value === ':') {
+                        var colonTok = peek();
+                        if (colonTok.col === (t.col + t.value.length)) {
+                            forceProc = true;
+                        }
+                    }
+
+                    if (!sym || forceProc) {
+                        if (!sym && t.type === 'KEYWORD' && !forceProc) {
+                            throw new Error("Error on line " + t.line + ": Reserved keyword '" + valName + "' cannot be used as an identifier or function.");
+                        }
+
+                        // Implicit Externals are dangerous (e.g. GETKEY%).
+                        // OPL usually assumes undeclared ID is a PROC call.
+                        // We emit 0x7D (PROC).
+
+                        var procCallName = t.value; // Keep original case? Or User Pref?
+                        // Usually Keep Case for Proc Names in calls, but Upper for lookup?
+                        // QCode stores name.
+
+                        // Parse Arguments (if any)
+                        var argCount = 0;
+                        // Allow optional colon before args: MyProc:(Args)
+                        if (peek() && peek().value === ':') next();
+
+                        if (peek() && peek().value === '(') {
+                            next(); // Eat (
+                            while (true) {
+                                var tArg = parseExpression();
+                                // Type Safety? 0x20 + type?
+                                // Standard PROC arg passing? 
+                                // The standard says: Pushes arguments?
+                                // OPL runtime handles checking?
+                                // We need to match 'emit' logic from line 1230ish (PROC statement).
+                                // But here we are in expression.
+                                // Does PROC return value? Yes.
+
+                                // Replicate Proc Call argument logic:
+                                // We just emit the expression code.
+                                // But do we need type bytes?
+                                // Line 1967 (Compiler view) logic for Call:
+                                // "Interleave Type Byte (0=Int, 1=Float, 2=String)"
+                                emit(0x20); emit(tArg);
+
+                                argCount++;
+                                if (peek() && peek().value === ',') { next(); continue; }
+                                if (peek() && peek().value === ')') break;
+                                break;
+                            }
+                            expect(')');
+
+                        }
+
+                        // Emit Arg Count
+                        emit(0x20); emit(argCount);
+
+                        emit(0x7D); // PROC
+                        emit(procCallName.length);
+                        for (var k = 0; k < procCallName.length; k++) {
+                            emit(procCallName.charCodeAt(k));
+                        }
+
+                        // Return Type
+                        if (procCallName.endsWith('%')) return 0;
+                        if (procCallName.endsWith('$')) return 2;
+                        return 1;
+                    }
+
+                    if (sym) {
+                        // Array Indices?
+                        if (sym.type >= 3) {
+                            if (peek() && peek().value === '(') {
+                                next(); // Eat (
+                                while (true) {
+                                    parseExpression(); // Push Index
+                                    if (peek() && peek().value === ',') { next(); continue; }
+                                    if (peek() && peek().value === ')') break;
+                                    break;
+                                }
+                                expect(')');
+
+                            } else {
+                                // Array used without indices -> Error
+                                throw new Error("Error on line " + t.line + ": Array variable '" + valName + "' requires indices.");
+                            }
+                        }
+
+                        if (sym.isParam || sym.isExtern) {
+                            // Parameters and Externals use Opcodes 0x07+
+                            emit(0x07 + sym.type);
+                            // For Params, offset is set. For Externs, usually index or ptrOffset?
+                            // If it's a Param, it definitely has an offset.
+                            if (sym.offset !== undefined) emitWord(sym.offset);
+                            else emitWord(sym.index);
+                        } else if (sym.isGlobal || sym.isLocal) {
+                            // Locals and Globals use Opcodes 0x00+
+                            emit(0x00 + sym.type);
+                            emitWord(sym.offset);
+                        }
+
+                        // Return type based on variable base type
+                        var retType = sym.type;
+                        if (retType >= 3) retType -= 3;
+
+                        // String Slicing Syntactic Sugar: s$(x) -> MID$(s$, x, 1)
+                        if (sym.type === 2) { // Scalar String
+                            if (peek() && peek().value === '(') {
+                                next(); // Eat (
+
+                                // We have emitted code to push s$ (0x02 + offset)
+                                // Now we need to emit arguments for MID$: s$, x, 1
+                                // BUT, we already emitted the Push of s$.
+                                // MID$ opcode (0xC2) expects Stack: [Str] [Start] [Len]
+                                // So we just need to push Start and Len.
+
+                                // Parse Index (Start)
+                                parseExpression();
+
+                                // Check for comma (unlikely for slicing? usually s$(x))
+                                // If s$(x,y) -> MID$(s$, x, y)?
+                                // OPL Manual: a$(x,y) -> MID$(a$,x,y)
+
+                                if (peek() && peek().value === ',') {
+                                    next();
+                                    parseExpression(); // Length
+                                } else {
+                                    // Default Length 1
+                                    emit(0x22); emitWord(1); // Push Int 1
+                                }
+
+                                expect(')');
+
+
+                                emit(0xC2); // Emit MID$
+                                return 2; // Return String
+                            }
+                        }
+
+                        return retType;
+                    }
+                } else if (t.value === '(') {
+                    var type = parseExpression();
+                    if (peek() && peek().value === ')') {
+                        next(); // Eat )
+                    } else {
+                        throw new Error("Error on line " + ((t && t.line) || "?") + ": Expected ')'");
+                    }
+                    return type;
+                }
+                return 0; // Fallback
+                throw new Error("Error on line " + ((t && t.line) || "?") + ": Unexpected token '" + (t ? t.value : "EOF") + "' in expression");
+            }
+
+            // --- Fixup System ---
+            var fixups = []; // Stack of { addr: int, type: 'IF'|'WHILE'|'ELSE' }
+            var loops = [];  // Stack of { start: int }
+            var labels = {}; // Map Name -> Addr
+            var labelFixups = []; // List of { addr: int, name: string }
+
+            function emitFixup() {
+                var addr = qcode.length;
+                emitWord(0x0000); // Placeholder
+                return addr;
+            }
+
+            function patchFixup(addr, target) {
+                // Offset = Target - AddrOfOffset (which is addr)
+                var offset = target - addr;
+                qcode[addr] = (offset >> 8) & 0xFF;
+                qcode[addr + 1] = offset & 0xFF;
+            }
+
+            // Pass 2: Generate Code
+            ptr = 0;
+            var implOffset = localOffset; // Start allocating after Locals (chaining)
+
+            // Skip Header (Blind Check for First Identifier: or Identifier(..) pattern)
+            // We assume the first construct is the PROC header.
+            var skipHeader = false;
+            if (tokens.length > 1 && (tokens[0].type === 'IDENTIFIER' || tokens[0].type === 'KEYWORD')) {
+                if (tokens[1].value === ':' || (tokens.length > 2 && tokens[0].value.toUpperCase() === 'PROC' && tokens[2].value === ':')) {
+                    ptr = (tokens[1].value === ':') ? 2 : 3;
+                    // Check if Params follow: Name:(...)
+                    if (ptr < tokens.length && tokens[ptr].value === '(') {
+                        ptr++; // Eat (
+                        var depth = 1;
+                        while (ptr < tokens.length) {
+                            if (tokens[ptr].value === '(') depth++;
+                            else if (tokens[ptr].value === ')') {
+                                depth--;
+                                if (depth === 0) break;
+                            }
+                            ptr++;
+                        }
+                        ptr++; // Eat final )
+                    }
+                    skipHeader = true;
+                } else if (tokens[1].value === '(') {
+                    // Name(params):
+                    ptr = 2; // Name(
+                    var depth = 1; // We are inside (
+                    while (ptr < tokens.length) {
+                        if (tokens[ptr].value === '(') depth++;
+                        else if (tokens[ptr].value === ')') {
+                            depth--;
+                            if (depth === 0) break;
+                        }
+                        ptr++;
+                    }
+                    ptr++; // Eat final )
+                    if (ptr < tokens.length && tokens[ptr].value === ':') ptr++;
+                    skipHeader = true;
+                }
+            }
+
+
+            // If blind skip failed, rely on procName check fallback inside loop? 
+            // No, blind skip covers 99% cases.
+            // If file starts with empty line? Tokenizer usually skips EOL at start? 
+            // If Header is token 4? 
+            // Let's assume standard format.
+
+            while (ptr < tokens.length) {
+                var t = next();
+
+
+
+                // Skip Declarations (already handled)
+                if (t.type === 'KEYWORD' && (t.value === 'GLOBAL' || t.value === 'LOCAL')) {
+                    // Skip Identifier and Dims (Loop until EOL or :)
+                    while (ptr < tokens.length && tokens[ptr].type !== 'EOL' && tokens[ptr].value !== ':') ptr++;
+                    continue;
+                }
+                if (t.type === 'PUNCTUATION' && t.value === ':') {
                     continue;
                 }
 
-                // Check Next Token (if we are LHS of dot)
-                var nextTok = tokens[i + 1];
-                if (nextTok && nextTok.value === '.') {
-                    // We are LHS.
-                    // If we are A,B,C,D -> Logicals. Not External.
-                    if (name.length === 1 && ['A', 'B', 'C', 'D'].includes(name)) continue;
-                    // If we are variable (e.g. MyVar.Field), MyVar SHOULD be processed (detected as external or whatever).
-                    // So we fall through.
-                }
+                // Label Check moved to IDENTIFIER block
 
-                // Exclude Keywords
-                if (activeKeywords.indexOf(name.toUpperCase()) !== -1) continue;
-                if (OPERATORS.indexOf(name.toUpperCase()) !== -1) continue; // AND/OR/NOT are identifiers in scanner?
 
-                // Exclude Definition contexts (LOCAL A, GLOBAL B) - handled by declaredNames check
-                // But we must assume if we see "LOCAL A", A is already in declaredNames.
+                // Label Check moved to IDENTIFIER block
 
-                // Exclude Procedure Name (Start of file) -> "PROC MyProc:"
-                // MyProc is usually not a variable.
-                if (i === 1 && tokens[0].value.toUpperCase() === 'PROC') continue;
-                if (i === 0 && tokens[1] && tokens[1].value === ':') continue; // Label definition? "VS09:"
 
-                // Exclude Labels "MyLabel::"
-                if (tokens[i + 1] && tokens[i + 1].value === ':' && tokens[i + 2] && tokens[i + 2].value === ':') continue;
-                if (tokens[i + 1] && tokens[i + 1].value === ':') continue; // Simple Label "Lab:"
-
-                // Exclude Built-in Opcodes (e.g. FIX$, GEN$, etc.)
-                if (activeOpcodes[name]) continue;
-
-                // Known?
-                if (declaredNames[name]) continue;
-
-                // New Implicit External!
-                // Determine type
-                var type = 1; // Float default
-                if (name.endsWith('%')) type = 0;
-                else if (name.endsWith('$')) type = 2;
-                else type = 1; // Default Float
-
-                // Check for Array usage "Name("
-                if (tokens[i + 1] && tokens[i + 1].value === '(') {
-                    if (type === 0) type = 3;
-                    else if (type === 1) type = 4;
-                    else if (type === 2) type = 5;
-                }
-                // Check if likely a function/procedure call (followed by '(')
-                // Note: Procedure calls CAN be bare (no parens), but if we treat ALL bare identifiers
-                // as externals, we lose implicit bare procedure calls (like 'MYRPOC').
-                // However, OPL usually requires 'proc:' or 'proc' (if 0 args).
-                // Ambiguity: 'X' could be running proc X, or reading var X.
-                // User Requirement: "Treat a%=myproc%:(ln%) as var".
-                // So priority: Variable.
-
-                // If followed by '(', it is definitely a call. ignore.
-                if (nextTok && nextTok.value === '(') continue;
-
-                // Otherwise, assume Variable (Implicit External).
-                // Warning: This overrides implicit 0-arg proc calls unless they are known built-ins.
-
-                declaredNames[name] = true;
-                externals.push({ name: name, type: parseType(name), dims: [] });
-                //                 console.log("Implicitly defined External:", name);
-            }
-        }
-        var varSpaceSize = 2;
-
-        // 2. Calculate Global Table Size
-        // Format per entry: [Len(1)] [Name(N)] [Type(1)] [Offset(2)]
-        // Total = 4 + NameLen
-        var globalTableSize = 0;
-        for (var i = 0; i < globals.length; i++) {
-            globalTableSize += (4 + globals[i].name.length);
-        }
-
-        // Add to VarSpace
-        // Tight Packing: No alignment padding for GT
-        varSpaceSize += globalTableSize;
-
-        // 3. Base Offset calculation
-        // Stack Top -> [GT Length (2)] @ FFFE
-        //           -> [Global Table (Size)] @ FFFE - Size
-        //           -> [Values] @ ...
-
-        var currentOffset = -2; // Start after GT Length
-        currentOffset -= globalTableSize; // Skip past the table
-
-        // 4. Allocate Param/External Pointers?
-        // User request focuses on Global Table. 
-        // Standard OPL usually has Ptrs for Params/Externs.  
-        // We will keep them for now, but they take 0 space if empty.
-
-        // Param Pointers
-        // Store offsets for Params here (they correspond to locals with isParam=true)
-        var paramIdx = 0;
-        // Re-instituted per user request: Params follow Global Table
-        for (var i = 0; i < locals.length; i++) {
-            if (locals[i].isParam) {
-                locals[i].offset = currentOffset - 2;
-                currentOffset -= 2;
-                varSpaceSize += 2;
-                paramIdx++;
-            }
-        }
-
-        // External Pointers
-        for (var i = 0; i < externals.length; i++) {
-            externals[i].ptrOffset = currentOffset - 2;
-            currentOffset -= 2;
-            varSpaceSize += 2;
-        }
-
-        // 5. Size Calculator (Helper)
-        function calculateSize(item, scope) {
-            // Parameters & Externals
-            if (item.isParam) return 2;
-
-            // Check for Arrays
-            // Logic: Int(0)/Float(1) with dims > 0 is Array
-            // String(2) with dims > 1 is Array (dims[0]=Count, dims[1]=MaxLen)
-
-            var isArray = false;
-            if (item.dims.length > 0) {
-                if (item.type === 0 || item.type === 1 || item.type === 3 || item.type === 4) isArray = true;
-                else if ((item.type === 2 || item.type === 5) && item.dims.length > 1) isArray = true;
-            }
-
-            if (isArray) {
-                // Array Length is product of dimensions (excluding String Length dimension)
-                var arrayLength = 1;
-                var dimCount = item.dims.length;
-                if (item.type === 2 || item.type === 5) dimCount -= 1; // Last dim is String Length
-
-                for (var d = 0; d < dimCount; d++) {
-                    arrayLength *= item.dims[d];
-                }
-
-                if (item.type === 0 || item.type === 3) { // Int Array
-                    return 2 + (2 * arrayLength);
-                } else if (item.type === 1 || item.type === 4) { // Float Array
-                    return 2 + (8 * arrayLength);
-                } else if (item.type === 2 || item.type === 5) { // String Array
-                    var maxLen = item.dims[item.dims.length - 1];
-                    // Both Local and Global String Arrays appear to use 2-byte Header (Allocator)
-                    // The MaxLen byte is presumably handled differently or included in payload logic
-                    return 2 + ((1 + maxLen) * arrayLength);
-                }
-            } else {
-                // Scalar
-                if (item.type === 0) return 2; // Int
-                else if (item.type === 1) return 8; // Float
-                else if (item.type === 2) { // String
-                    // String Scalar declared as e.g. LOCAL A$(10) -> dims=[10]
-                    var maxLen = (item.dims.length > 0) ? item.dims[0] : 255;
-                    return 1 + maxLen;
-                }
-            }
-            return 8; // Default
-        }
-
-        // 4. Allocate Storage (Globals)
-        for (var i = 0; i < globals.length; i++) {
-            var g = globals[i];
-
-            // Tight Packing: No start alignment
-            var size = calculateSize(g, 'global');
-
-            // Allocate
-            g.offset = currentOffset - size;
-            currentOffset -= size;
-            varSpaceSize += size;
-
-            // Unified String Array/Scalar Padding (Globals)
-            if ((g.type === 2 || g.type === 5) && g.dims.length > 0) { // String (Scalar or Array)
-                currentOffset--;
-                varSpaceSize++;
-            }
-
-            // Fixups
-            var isArray = (g.dims.length > 0 && (g.type !== 2 || g.dims.length > 1));
-
-            if ((g.type === 2 || g.type === 5) && !g.isParam) {
-                var maxLen = g.dims[g.dims.length - 1];
-                globalStrFixups.push({ addr: g.offset - 1, len: maxLen });
-            }
-            if (isArray) {
-                var fixupElements = 1;
-                var dimCount = g.dims.length;
-                if (g.type === 2 || g.type === 5) dimCount -= 1;
-                for (var d = 0; d < dimCount; d++) fixupElements *= g.dims[d];
-                globalArrFixups.push({ addr: g.offset, len: fixupElements });
-            }
-        }
-
-        // --- ALLOCATE LOCALS ---
-        // Locals start where Globals left off
-        var localOffset = currentOffset;
-
-        for (var i = 0; i < locals.length; i++) {
-            var l = locals[i];
-
-            if (l.isParam) continue; // Already allocated in Pointers phase
-
-            // Tight Packing
-            var size = calculateSize(l, 'local');
-            l.offset = localOffset - size;
-            localOffset -= size;
-            varSpaceSize += size;
-
-            // Unified String Array/Scalar Padding (Locals)
-            if ((l.type === 2 || l.type === 5) && l.dims.length > 0) { // String (Scalar or Array)
-                localOffset--; // Pad
-                varSpaceSize++;
-            }
-
-            var isArray = (l.dims.length > 0 && (l.type !== 2 || l.dims.length > 1));
-
-            if ((l.type === 2 || l.type === 5) && !l.isParam) {
-                var maxLen = l.dims[l.dims.length - 1];
-                localStrFixups.push({ addr: l.offset - 1, len: maxLen });
-            }
-            if (isArray) {
-                var fixupElements = 1;
-                var dimCount = l.dims.length;
-                if (l.type === 2 || l.type === 5) dimCount -= 1;
-                for (var d = 0; d < dimCount; d++) fixupElements *= l.dims[d];
-                localArrFixups.push({ addr: l.offset, len: fixupElements });
-            }
-        }
-
-        // Combine Fixups: Locals FIRST, then Globals (per OPL Spec)
-        // Combine Fixups: Locals FIRST, then Globals (Match Golden Binary)
-        var strFixups = localStrFixups.concat(globalStrFixups);
-        var arrFixups = localArrFixups.concat(globalArrFixups);
-
-        // Final varSpaceSize: Tight Packing, no alignment to even.
-
-
-
-        // Pass 2: QCode Generation (Body)
-        var qcode = [];
-        // Emit LZ Header if required
-        if (targetSystem === 'LZ') {
-            qcode.push(0x59, 0xB2);
-        }
-
-        var pendingTrap = false;
-
-        // --- CodeGen Helpers ---
-        function emit(b) {
-            qcode.push(b & 0xFF);
-        }
-        function emitWord(w) { emit(w >> 8); emit(w & 0xFF); }
-        function emitOp(op) { emit(op); }
-
-        function emitCommand(op) {
-            if (pendingTrap) {
-                emit(0x5A); // TRAP
-                pendingTrap = false;
-            }
-            emit(op);
-        }
-
-        function emitFloat(val) {
-
-
-            var str = Math.abs(val).toString();
-            if (str.includes('e')) {
-                if (str.includes('e-')) {
-                    // Minimal scientific support
-                    var p = str.split('e-');
-                    // ... for now assume literals key matched ...
-                }
-            }
-
-            var s = str;
-            if (s.indexOf('.') === -1) s += ".";
-
-            var cleanDigits = "";
-            var dotPos = 0;
-            var firstDigitIdx = -1;
-            var dotSeen = false;
-
-            for (var i = 0; i < s.length; i++) {
-                var c = s[i];
-                if (c === '.') {
-                    dotSeen = true;
-                    dotPos = cleanDigits.length;
-                } else {
-                    if (firstDigitIdx === -1 && c !== '0') firstDigitIdx = cleanDigits.length;
-                    cleanDigits += c;
-                }
-            }
-
-            if (firstDigitIdx === -1) firstDigitIdx = cleanDigits.length;
-
-            var finalDigits = cleanDigits.substring(firstDigitIdx);
-            var exponent = (dotPos - firstDigitIdx) - 1;
-
-            if (finalDigits.length === 0) {
-                // Zero Case
-                finalDigits = "00";
-                exponent = 0;
-            }
-
-            if (finalDigits.length % 2 !== 0) finalDigits += "0";
-
-            var bcdBytes = [];
-            for (var i = 0; i < finalDigits.length; i += 2) {
-                var h = parseInt(finalDigits[i], 16);
-                var l = parseInt(finalDigits[i + 1], 16);
-                bcdBytes.push((h << 4) | l);
-            }
-
-            bcdBytes.reverse();
-
-            var expByte = exponent & 0xFF;
-            bcdBytes.push(expByte);
-
-            var len = bcdBytes.length;
-            var sign = (val < 0 ? 0x80 : 0x00);
-
-            emit(sign | len);
-            for (var i = 0; i < bcdBytes.length; i++) emit(bcdBytes[i]);
-        }
-
-
-        // --- Symbol Table Setup ---
-        // Map: Name -> { type, offset, isParam, isGlobal, isExtern }
-        var symbols = {};
-
-        // Globals (Offsets already calculated in Pass 1)
-        for (var i = 0; i < globals.length; i++) {
-            var g = globals[i];
-            symbols[g.name] = { type: g.type, offset: g.offset, isGlobal: true };
-        }
-        for (var i = 0; i < locals.length; i++) {
-            var l = locals[i];
-            symbols[l.name] = { type: l.type, offset: l.offset, isGlobal: false, isLocal: true, isParam: l.isParam };
-        }
-
-        // Externals
-        for (var i = 0; i < externals.length; i++) {
-            var e = externals[i];
-            symbols[e.name] = { type: e.type, index: i, offset: e.ptrOffset, isExtern: true };
-        }
-
-        // --- Parser ---
-
-        // Reset Ptr for Pass 2
-        ptr = 0;
-
-        // --- Expression Parser ---
-
-        function parseExpression() {
-            return parseLogical();
-        }
-
-        function parseLogical() {
-            var type = parseComparison();
-            // DEBUG
-            if (peek()) {
-
-            }
-            while (peek() && peek().type !== 'STRING' && ['AND', 'OR'].includes(peek().value)) {
-                var op = next().value;
-
-                var rhsType = parseComparison();
-
-                if (op === 'AND') emit(0x34);
-                else emit(0x35);
-
-                type = 0;
-            }
-            return type;
-        }
-
-        function parseComparison() {
-            var type = parseAddSub();
-            while (peek() && peek().type !== 'STRING' && ['=', '<', '>', '<=', '>=', '<>'].includes(peek().value)) {
-                var op = next().value;
-                var rhsStart = qcode.length; // Capture start of RHS
-                var rhsType = parseAddSub();
-                var usePercent = false;
-
-                // Check for LZ Percentage Modifier
-                if (peek() && peek().value === '%') {
-                    next(); // Consume %
-                    usePercent = true;
-                }
-
-                if (usePercent) {
-                    // LZ Percentage Comparison always implies Float logic
-                    // Ops: <% (CC), >% (CD). Others? Manual implied only < and >?
-                    // constants.js has <% and >%. What about =% or <=%?
-                    // Assuming only <% and >% supported as per constants.js list.
-                    // Fallback to Float comparison for others or error?
-                    // Let's support <% and >% explicitly.
-                    // Actually, emitMathOp/emitLogicOp handles this? 
-                    // Inline here for comparison:
-
-                    // If LHS was Int, it's already on stack. Cannot convert easily.
-                    if (type === 0) console.warn("Compiler: Implicit Int->Float cast required (LHS) for Percentage comparison - Unsafe!");
-                    if (rhsType === 0) emit(0x86); // FLT RHS (Top of stack)
-
-                    if (op === '<') emit(0xCC);      // <%
-                    else if (op === '>') emit(0xCD); // >%
-                    else {
-                        throw new Error("Compiler: Operator " + op + "% is not supported (Only <% and >%).");
-                    }
-                    type = 0; // Result is Int (True/False)
-                } else {
-                    // Standard Comparison
-                    if (type === rhsType) {
-                        if (type === 0) { // Int
-                            if (op === '=') emit(0x2C);
-                            else if (op === '<') emit(0x27);
-                            else if (op === '>') emit(0x29);
-                            else if (op === '<=') emit(0x28);
-                            else if (op === '>=') emit(0x2A);
-                            else if (op === '<>') emit(0x2B);
-                        } else if (type === 1) { // Float
-                            if (op === '=') emit(0x3B);
-                            else if (op === '<') emit(0x36);
-                            else if (op === '>') emit(0x38);
-                            else if (op === '<=') emit(0x37);
-                            else if (op === '>=') emit(0x39);
-                            else if (op === '<>') emit(0x3A);
-                        } else if (type === 2) { // String
-                            if (op === '=') emit(0x4A);
-                            else if (op === '<') emit(0x45);
-                            else if (op === '>') emit(0x47);
-                            else if (op === '<=') emit(0x46);
-                            else if (op === '>=') emit(0x48);
-                            else if (op === '<>') emit(0x49);
+                if (t.type === 'KEYWORD') {
+                    // Check for Ambiguity: Keyword as Label/Proc Call? (e.g. NEXT:)
+                    // Heuristic: If followed by ':' AND Adjacent -> Treat as IDENTIFIER.
+                    if (peek() && peek().value === ':') {
+                        var p = peek();
+                        // If adjacent (NEXT:), treat as IDENTIFIER (Label/Call)
+                        if (p.col === (t.col + t.value.length)) {
+                            t.type = 'IDENTIFIER'; // Downgrade to Identifier for this statement
                         }
-                    } else {
-                        // Simple mixed mode support:
-                        if (type === 0 && rhsType === 1) {
-                            // Int LHS, Float RHS -> Promote LHS? 
-                            // Backpatch: Insert FLT before RHS
-                            if (rhsStart !== undefined) {
-                                qcode.splice(rhsStart, 0, 0x86); // Inject FLT
-                            } else {
-                                //                                 console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
+                    }
+                }
+
+                if (t.type === 'KEYWORD') {
+                    if (t.value === 'PRINT' || t.value === 'LPRINT') {
+                        var isLPrint = (t.value === 'LPRINT');
+                        var suppressNewline = false;
+
+                        var depth = 0;
+                        while (true) {
+                            var p = peek();
+
+
+
+                            // Break if End of Line or Statement Separator (Colon not inside Parens/String)
+                            if (!p || p.type === 'EOL') break;
+
+                            if (p.value === ':') {
+                                if (p.type !== 'STRING' && depth === 0) break;
                             }
-                            type = 1; // Promoted to Float
-                        } else if (type === 1 && rhsType === 0) {
-                            // Float LHS, Int RHS -> Promote RHS
-                            emit(0x86); // FLT RHS
+
+                            // Track parentheses depth to ignore separators inside function calls
+                            if (p.value === '(') depth++;
+                            if (p.value === ')') depth--;
+
+                            // Case 1: Comma Separator (Only at top level)
+                            if (p.value === ',' && depth === 0) {
+                                next(); // Consume ','
+                                emit(isLPrint ? 0x77 : 0x72);
+                                suppressNewline = true;
+                                continue;
+                            }
+
+                            // Case 2: Semicolon Separator (Only at top level)
+                            if (p.value === ';' && depth === 0) {
+                                next(); // Consume ';'
+                                suppressNewline = true;
+                                continue;
+                            }
+
+                            // Case 3: Expression (Value to print)
+                            var exprType = parseExpression();
+
+                            // Emit the appropriate PRINT/LPRINT opcode based on expression type
+                            if (!isLPrint) {
+                                if (exprType === 0) emit(0x6F); // PRINT INT
+                                else if (exprType === 1) emit(0x70); // PRINT FLT
+                                else emit(0x71); // PRINT STR
+                            } else {
+                                if (exprType === 0) emit(0x74); // LPRINT INT
+                                else if (exprType === 1) emit(0x75); // LPRINT FLT
+                                else emit(0x76); // LPRINT STR
+                            }
+
+                            // Default behavior after a value is to emit a newline unless another separator follows
+                            suppressNewline = false;
                         }
 
-                        // Re-evaluate comparison for Float (since mixed mode implies Float)
-                        if (type === 1) { // Float Comparison
-                            if (op === '=') emit(0x3B);
-                            else if (op === '<') emit(0x36);
-                            else if (op === '>') emit(0x38);
-                            else if (op === '<=') emit(0x37);
-                            else if (op === '>=') emit(0x39);
-                            else if (op === '<>') emit(0x3A);
+                        if (!suppressNewline) {
+                            emit(isLPrint ? 0x78 : 0x73); // Newline (0x73=PRINT \n, 0x78=LPRINT \n)
                         }
-                    }
-                    type = 0; // Result is Int
-                }
-            }
-            return type;
-        }
+                    } else if (t.value === 'IF') {
+                        var exprType = parseExpression(); // Condition
+                        if (exprType === 1) { // Float
+                            emit(0x23); emitFloat(0.0); // Push 0.0
+                            emit(0x3A); // <>
+                            exprType = 0; // Result Int
+                        }
+                        emit(0x7E); // BranchIfFalse
+                        var fixupAddr = emitFixup();
+                        fixups.push({ addr: fixupAddr, type: 'IF' });
+                    } else if (t.value === 'ELSE') {
+                        // 1. Emit Jump to End (BranchAlways)
+                        emit(0x51);
+                        var elseFixup = emitFixup();
 
-        // --- Refactored Expression Parser Hierarchy ---
+                        // 2. Resolve pending IF fixup to here
+                        var ifFixup = fixups.pop();
+                        if (ifFixup && ifFixup.type === 'IF') {
+                            patchFixup(ifFixup.addr, qcode.length);
+                        }
 
+                        // 3. Push ELSE fixup
+                        fixups.push({ addr: elseFixup, type: 'ELSE' });
+                    } else if (t.value === 'ELSEIF') {
+                        // 1. Emit Jump to End (BranchAlways) for the previous block success path
+                        emit(0x51);
+                        var endFixup = emitFixup();
 
+                        // 2. Resolve pending IF/ELSEIF condition failure to HERE
+                        var prevCondFixup = fixups.pop();
+                        if (prevCondFixup && (prevCondFixup.type === 'IF' || prevCondFixup.type === 'ELSEIF')) {
+                            patchFixup(prevCondFixup.addr, qcode.length);
+                        } else {
+                            // Error state? or fallback
+                            if (prevCondFixup) fixups.push(prevCondFixup); // Put back if not matching
+                        }
 
-        // Comparison calls AddSub
-        // AddSub calls MulDiv
-        // MulDiv calls Power
-        // Power calls Factor
+                        // 3. Push ENDIF_MERGE fixup (Jump to End)
+                        // We push it BEFORE the new condition fixup, so ENDIF can unwind it correctly.
+                        // Stack: [Outer..., EndMerge, EndMerge, CurrentIF]
+                        fixups.push({ addr: endFixup, type: 'ENDIF_MERGE' });
 
-        function parseAddSub() {
-            var type = parseMulDiv();
-            while (peek() && peek().type !== 'STRING' && ['+', '-'].includes(peek().value)) {
-                var op = next().value;
-                var rhsStart = qcode.length; // Capture start of RHS
-                var rhsType = parseMulDiv();
-                var usePercent = false;
+                        // 4. Parse New Condition
+                        var exprType = parseExpression();
+                        if (exprType === 1) { // Float
+                            emit(0x23); emitFloat(0.0);
+                            emit(0x3A);
+                            exprType = 0;
+                        }
 
-                if (peek() && peek().value === '%') {
-                    next(); // Consume %
-                    usePercent = true;
-                }
+                        // 5. Emit BranchIfFalse
+                        emit(0x7E); // BranchIfFalse
+                        var fixupAddr = emitFixup();
+                        fixups.push({ addr: fixupAddr, type: 'IF' }); // Treat as IF for next chain
 
-                type = emitMathOp(op, type, rhsType, usePercent, rhsStart);
-            }
-            return type;
-        }
+                    } else if (t.value === 'ENDIF') {
+                        // Resolve pending fixup (IF or ELSE) - The last condition check or ELSE block end
+                        var fixup = fixups.pop();
+                        if (fixup) {
+                            patchFixup(fixup.addr, qcode.length);
+                        }
 
-        function parseMulDiv() {
-            var type = parsePower();
-            while (peek() && peek().type !== 'STRING' && ['*', '/'].includes(peek().value)) {
-                var op = next().value;
-                var rhsStart = qcode.length; // Capture start of RHS
-                var rhsType = parsePower();
-                var usePercent = false;
+                        // Unwind ENDIF_MERGE fixups (Jumps from successful IF/ELSEIF blocks)
+                        while (fixups.length > 0 && fixups[fixups.length - 1].type === 'ENDIF_MERGE') {
+                            fixup = fixups.pop();
+                            patchFixup(fixup.addr, qcode.length);
+                        }
+                    } else if (t.value === 'WHILE') {
+                        var startAddr = qcode.length;
+                        loops.push({ start: startAddr, type: 'WHILE', breaks: [] });
 
-                if (peek() && peek().value === '%') {
-                    next(); // Consume %
-                    usePercent = true;
-                }
+                        var exprType = parseExpression(); // Condition
+                        if (exprType === 1) { // Float
+                            emit(0x23); emitFloat(0.0);
+                            emit(0x3A);
+                            exprType = 0;
+                        }
+                        emit(0x7E); // BranchIfFalse
+                        var fixupAddr = emitFixup();
+                        fixups.push({ addr: fixupAddr, type: 'WHILE' });
+                    } else if (t.value === 'ENDWH') {
+                        var loop = loops.pop();
+                        var fixup = fixups.pop(); // WHILE exit fixup
 
-                type = emitMathOp(op, type, rhsType, usePercent, rhsStart);
-            }
-            return type;
-        }
+                        // Emit Jump back to start
+                        emit(0x51); // BranchAlways
 
-        function parsePower() {
-            var type = parseFactor();
-            while (peek() && peek().type !== 'STRING' && peek().value === '**') {
-                var op = next().value;
-                var rhsStart = qcode.length; // Capture start of RHS
-                var rhsType = parseFactor();
-                type = emitMathOp(op, type, rhsType, false, rhsStart);
-            }
-            return type;
-        }
+                        // Offset = Target - CurrentArgAddr
+                        // CurrentArgAddr = qcode.length;
+                        // Target = loop.start
+                        var offset = loop.start - qcode.length;
+                        emitWord(offset); // Negative offset
 
-        function emitMathOp(op, t1, t2, usePercent, rhsStart) {
-            if (t1 === 2 && t2 === 2 && op === '+' && !usePercent) {
-                emit(0x4B); // Str + Str
-                return 2;
-            }
+                        // Patch loop exit fixup to here
+                        patchFixup(fixup.addr, qcode.length);
 
-            var method = 0; // 0=Int, 1=Float
-            if (t1 === 1 || t2 === 1 || usePercent) method = 1;
+                        // Patch BREAKs
+                        for (var k = 0; k < loop.breaks.length; k++) {
+                            patchFixup(loop.breaks[k], qcode.length);
+                        }
+                    } else if (t.value === 'DO') {
+                        loops.push({ start: qcode.length, type: 'DO', breaks: [], continues: [] });
+                    } else if (t.value === 'UNTIL') {
+                        var loop = loops.pop();
+                        if (!loop || loop.type !== 'DO') error("UNTIL without DO");
 
-            if (usePercent) {
-                if (t1 === 0) console.warn("Compiler: Implicit Int->Float cast required (LHS) for Percentage op - Unsafe!");
-                if (t2 === 0) {
-                    emit(0x86); // Convert RHS
-                }
+                        // Continues target: Condition Check (Here)
+                        for (var k = 0; k < loop.continues.length; k++) {
+                            patchFixup(loop.continues[k], qcode.length);
+                        }
 
-                if (op === '+') emit(0xCE);      // +%
-                else if (op === '-') emit(0xCF); // -%
-                else if (op === '*') emit(0xD0); // *%
-                else if (op === '/') emit(0xD1); // /%
-                else throw new Error("Percent modifier not supported for " + op);
-                return 1;
-            }
+                        var exprType = parseExpression(); // Condition
+                        if (exprType === 1) { // Float
+                            emit(0x23); emitFloat(0.0);
+                            emit(0x3A);
+                            exprType = 0;
+                        }
 
-            if (method === 0) { // Int
-                if (op === '+') emit(0x2D);
-                else if (op === '-') emit(0x2E);
-                else if (op === '*') emit(0x2F);
-                else if (op === '/') emit(0x30);
-                else if (op === '**') emit(0x31);
-                return 0;
-            } else { // Float
-                if (t1 === 0) {
-                    // Backpatch: Insert FLT before RHS
-                    if (rhsStart !== undefined) {
-                        qcode.splice(rhsStart, 0, 0x86); // Inject FLT
-                    } else {
-                        //                         console.warn("Compiler: Implicit Int->Float cast required (LHS) but cannot backpatch.");
-                    }
-                }
-                if (t2 === 0) {
-                    emit(0x86);
-                }
+                        emit(0x7E); // BranchIfFalse (Jump Back)
+                        var offset = loop.start - qcode.length;
+                        emitWord(offset);
 
-                if (op === '+') emit(0x3C);
-                else if (op === '-') emit(0x3D);
-                else if (op === '*') emit(0x3E);
-                else if (op === '/') emit(0x3F);
-                else if (op === '**') emit(0x40);
-                return 1;
-            }
-        }
+                        // Breaks target: After loop (Here)
+                        for (var k = 0; k < loop.breaks.length; k++) {
+                            patchFixup(loop.breaks[k], qcode.length);
+                        }
+                    } else if (t.value === 'BREAK') {
+                        if (loops.length === 0) error("BREAK outside loop");
+                        var loop = loops[loops.length - 1];
+                        emit(0x51); // GOTO
+                        var addr = emitFixup();
+                        loop.breaks.push(addr);
+                    } else if (t.value === 'CONTINUE') {
+                        if (loops.length === 0) error("CONTINUE outside loop");
+                        var loop = loops[loops.length - 1];
+                        if (loop.type === 'WHILE') {
+                            // GOTO Start
+                            emit(0x51);
+                            var offset = loop.start - qcode.length;
+                            emitWord(offset);
+                        } else if (loop.type === 'DO') {
+                            // GOTO Condition (Forward fixup)
+                            emit(0x51);
+                            var addr = emitFixup();
+                            loop.continues.push(addr);
+                        }
+                    } else if (t.value === 'POKEB' || t.value === 'POKEW') {
+                        // POKEB addr, value
+                        // POKEW addr, value
+                        var addrType = parseExpression(); // Addr (Int) -> Stack
+                        if (addrType !== 0) throw new Error("Error on line " + t.line + ": " + t.value + " address must be an integer (-32768 to 32767)");
 
-        function parseFactor() {
-            var t = peek();
-            // Check for Unary Minus
-            if (t && t.type !== 'STRING' && (t.value === '-' || (t.type === 'PUNCTUATION' && t.value === '-'))) { // Tokenizer might mark - as PUNCTUATION or KEYWORD depending on logic?
-                next(); // Consume '-'
-                var type = parseFactor(); // Recurse
+                        expect(',');
+                        parseExpression(); // Value (Int) -> Stack
 
-                // Emit Unary Minus Opcode
-                if (type === 0) emit(0x32); // Int Neg (0x32)
-                else if (type === 1) emit(0x41); // Flt Neg (0x41)
-                else console.warn("Compiler: Unary minus on String?");
-                return type;
-            }
-            if (t && t.type !== 'STRING' && (t.value === 'NOT')) {
-                next(); // Value
-                var type = parseFactor();
-                if (type === 1) emit(0x42); // NOT (Float)
-                else emit(0x33); // NOT (Int)
-                return 0; // Result is Int
-            }
+                        // Emit 0x55 (POKEB) or 0x56 (POKEW)
+                        emitCommand(t.value === 'POKEB' ? 0x55 : 0x56);
+                    } else if (t.value === 'PAUSE') {
+                        parseExpression(); // Duration (Int)
+                        emitCommand(0x54); // PAUSE opcode
+                    } else if (t.value === 'BEEP') {
+                        // BEEP duration, frequency
+                        parseExpression(); // Duration
+                        expect(',');
+                        parseExpression(); // Frequency
+                        emitCommand(0x4D);
+                    } else if (t.value === 'AT') {
+                        // AT column, row
+                        parseExpression(); // Column
+                        expect(',');
+                        parseExpression(); // Row
+                        emitCommand(0x4C);
+                    } else if (t.value === 'CLS') {
+                        emitCommand(0x4E);
+                    } else if (t.value === 'STOP') {
+                        emitCommand(0x59);
+                    } else if (t.value === 'TRAP') {
+                        pendingTrap = true;
+                    } else if (t.value === 'ESCAPE') {
+                        // ESCAPE ON/OFF
+                        var nextT = next();
+                        emitCommand(0x50);
+                        if (nextT.value === 'ON') { emit(0x01); }
+                        else if (nextT.value === 'OFF') { emit(0x00); }
+                        else error("ESCAPE requires ON or OFF");
+                    } else if (t.value === 'CURSOR') {
+                        // CURSOR ON/OFF
+                        var nextT = next();
+                        emitCommand(0x4F);
+                        if (nextT.value === 'ON') { emit(0x01); }
+                        else if (nextT.value === 'OFF') { emit(0x00); }
+                        else error("CURSOR requires ON or OFF");
+                    } else if (t.value === 'RANDOMIZE') {
+                        var type = parseExpression(); // Float Seed
+                        if (type === 0) emit(0x86); // FLT
+                        emitCommand(0x58);
+                    } else if (t.value === 'RAISE') {
+                        parseExpression(); // Int Error Code
+                        emitCommand(0x57);
+                    } else if (t.value === 'OFF') {
+                        // Check for optional duration (LZ OFF: 0xD2)
+                        var hasArg = false;
+                        var p = peek();
+                        if (p && (p.type === 'INTEGER' || p.type === 'FLOAT' || p.type === 'HEX' || p.value === '(' || (p.type === 'IDENTIFIER' && activeKeywords.indexOf(p.value) === -1))) {
+                            hasArg = true;
+                        }
 
-            // ASCII Literal %C
-            if (t && t.value === '%') {
-                next(); // Consume %
-                var charTick = next(); // Consume Character
-                if (!charTick || !charTick.value) throw new Error("Error on line " + ((t && t.line) || "?") + ": Expected character after %");
-                var strVal = charTick.value.toString();
-                if (strVal.length === 0) throw new Error("Error on line " + ((t && t.line) || "?") + ": Empty literal after %");
-                var ascii = strVal.charCodeAt(0);
-                emit(0x22); emitWord(ascii); // Push Int
-                return 0; // Int
-            }
+                        if (hasArg) {
+                            parseExpression();
+                            emitCommand(0xD2);
+                        } else {
+                            emitCommand(0x52);
+                        }
+                    } else if (t.value === 'DISP') {
+                        // DISP(mode, msg$) - Function Syntax Required per docs
+                        expect('(');
+                        parseExpression(); // mode
+                        expect(',');
+                        parseExpression(); // msg$
+                        expect(')');
 
-            t = next(); // Consume
-            if (!t) return 0;
+                        emitCommand(0x8D);
+                        emit(0x83); // DROP Int
+                    } else if (t.value === 'COPYW') {
+                        // COPYW src$, dest$
+                        parseExpression(); // src$
+                        expect(',');
+                        parseExpression(); // dest$
+                        emitCommand(0xD3);
 
-            if (t.type === 'INTEGER') {
-                // Force Push Integer (0x22) to match Reference (Disable Byte Optimization 0x20)
-                // if (t.value >= 0 && t.value <= 255) { emit(0x20); emit(t.value); }
-                // else { emit(0x22); emitWord(t.value); }
-                emit(0x22); emitWord(t.value);
-                return 0; // Int
-            } else if (t.type === 'FLOAT') {
-                emit(0x23);
-                emitFloat(t.value);
-                return 1; // Float
-            } else if (t.type === 'STRING') {
-                emit(0x24); emit(t.value.length);
-                for (var k = 0; k < t.value.length; k++) emit(t.value.charCodeAt(k));
-                return 2; // String
-            } else if ((t.type === 'KEYWORD' || t.type === 'IDENTIFIER') &&
-                (t.value === 'LEN' || t.value === 'ASC' || t.value === 'MID$' ||
-                    t.value === 'PEEKB' || t.value === 'PEEKW' || t.value === 'ADDR')) {
-
-                var op = t.value;
-                if (peek() && peek().value === '(') next(); // Eat (
-
-                if (op === 'LEN') { // 0x96 S->I
-                    parseExpression();
-                    emit(0x96);
-                    if (peek() && peek().value === ')') next();
-                    return 0; // Int
-                } else if (op === 'ASC') { // 0x8B S->I
-                    parseExpression();
-                    emit(0x8B);
-                    if (peek() && peek().value === ')') next();
-                    return 0; // Int
-                } else if (op === 'MID$') { // 0xC2 S I I -> S
-                    parseExpression(); // S
-                    if (peek() && peek().value === ',') next();
-                    parseExpression(); // I
-                    if (peek() && peek().value === ',') next();
-                    parseExpression(); // I
-                    emit(0xC2);
-                    if (peek() && peek().value === ')') next();
-                    return 2; // String
-                } else if (op === 'PEEKB') { // 0x9B I->I
-                    parseExpression();
-                    emit(0x9B);
-                    if (peek() && peek().value === ')') next();
-                    return 0; // Int
-                } else if (op === 'PEEKW') { // 0x9C I->I
-                    parseExpression();
-                    emit(0x9C);
-                    if (peek() && peek().value === ')') next();
-                    return 0; // Int
-                } else if (op === 'ADDR') {
-                    // Expect Variable Name
-                    var tVar = next();
-                    if (tVar && tVar.type === 'IDENTIFIER') {
+                    } else if (t.value === 'DELETE') {
+                        // DELETE file$ (0x5F)
+                        parseExpression(); // file$
+                        emitCommand(0x5F);
+                    } else if (t.value === 'DELETEW') {
+                        // DELETEW file$ (0xD4)
+                        parseExpression(); // file$
+                        emitCommand(0xD4);
+                    } else if (t.value === 'INPUT') {
+                        // INPUT var
+                        var tVar = next();
+                        if (!tVar || tVar.type !== 'IDENTIFIER') error("INPUT expects variable");
                         var targetName = tVar.value.toUpperCase();
 
-                        // Check for Field Access (A.Field) and ERROR
+                        // Check for Field Access (A.Field)
                         if (peek() && peek().value === '.') {
-                            throw new Error("Error on line " + t.line + ": Field access not supported in ADDR");
+                            var logChar = targetName;
+                            if (logChar.length === 1 && ['A', 'B', 'C', 'D'].includes(logChar)) {
+                                next(); // Consume .
+                                var fTok = next(); // Consume Field Name
+                                if (fTok && fTok.type === 'IDENTIFIER') {
+                                    var fName = fTok.value.toUpperCase();
+                                    var logVal = logChar.charCodeAt(0) - 65;
+                                    var type = 1; // Flt
+                                    if (fName.endsWith('%')) type = 0;
+                                    else if (fName.endsWith('$')) type = 2;
+
+                                    // 1. Push Field Name String
+                                    emit(0x24);
+                                    emit(fName.length);
+                                    for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
+
+                                    // 2. Emit Field Ref (1D/1E/1F)
+                                    emit(0x1D + type);
+                                    emit(logVal);
+
+                                    // 3. Emit INPUT Opcode
+                                    if (type === 0) emitCommand(0x6C);
+                                    else if (type === 1) emitCommand(0x6D);
+                                    else if (type === 2) emitCommand(0x6E);
+
+                                    continue;
+                                }
+                            }
                         }
 
                         var hasIndices = (peek() && peek().value === '(');
@@ -1446,27 +2389,209 @@ var OPLCompiler = (function () {
                         // Parse Indices first (if any)
                         if (hasIndices) {
                             next(); // Eat (
+                            while (true) {
+                                parseExpression();
+                                if (peek() && peek().value === ',') { next(); continue; }
+                                if (peek() && peek().value === ')') break;
+                                break;
+                            }
+                            expect(')');
+                        }
 
-                            // Check for empty parens: ADDR(arr())
-                            if (peek() && peek().value === ')') {
-                                next(); // Eat )
-                                // Implicitly reference the first element (Index 1)
-                                emit(0x22); emitWord(1);
+
+
+                        // Lookup Symbol
+                        var sym = getSymbol(targetName, hasIndices);
+                        if (!sym) {
+                            // Implicit External
+                            var suffix = targetName.slice(-1);
+                            var type = 1; // Default Flt
+                            if (suffix === '%') type = 0;
+                            else if (suffix === '$') type = 2;
+
+                            sym = { name: targetName, type: type, isExtern: true, index: externals.length };
+                            if (hasIndices) {
+                                if (type === 0) sym.type = 3; else if (type === 1) sym.type = 4; else if (type === 2) sym.type = 5;
+                            }
+                            externals.push(sym);
+                            addSymbol(sym);
+                        }
+
+                        var type = sym.type;
+                        var baseType = type;
+                        if (hasIndices) {
+                            // Dereference Array Type for Input? 
+                            // No, OPL uses base type opcodes for INPUT, but Address must be element address.
+                            if (type >= 3) baseType -= 3;
+                        } else {
+                            // If it is array name without indices? -> Invalid?
+                            // "INPUT arr()" usually implied?
+                        }
+
+                        // Emit Push Addr
+                        // Locals/Globals: 0x0D + type
+                        // Externals: 0x14 + type
+                        var addrOpBase = (sym.isExtern) ? 0x14 : 0x0D;
+                        emit(addrOpBase + type);
+                        if (sym.isExtern) {
+                            if (sym.offset !== undefined) emitWord(sym.offset);
+                            else emitWord(sym.index);
+                        } else {
+                            emitWord(sym.offset);
+                        }
+
+                        // Emit INPUT Opcode
+                        // 6C=Int, 6D=Flt, 6E=Str
+                        if (baseType === 0) emitCommand(0x6C);
+                        else if (baseType === 1) emitCommand(0x6D);
+                        else if (baseType === 2) emitCommand(0x6E);
+                        else emitCommand(0x6D); // Default Float
+
+                    } else if (t.value === 'CREATE' || t.value === 'OPEN') {
+                        // CREATE/OPEN spec$, log, f1, f2...
+                        var isCreate = (t.value === 'CREATE');
+                        var opcode = isCreate ? 0x5E : 0x65;
+
+                        parseExpression(); // spec$
+                        emitCommand(opcode);
+
+                        expect(',');
+
+
+                        // Logical Name vs Field Heuristic
+                        // OPEN "File", A, f1... vs OPEN "File", f1...
+                        var logVal = 0; // Default A
+                        var consumedLog = false;
+
+                        var tNext = peek();
+                        if (tNext && tNext.type === 'IDENTIFIER') {
+                            var val = tNext.value.toUpperCase();
+                            if (['A', 'B', 'C', 'D'].includes(val) && val.length === 1) {
+                                // Explicit Logical Name
+                                next(); // Consume
+                                logVal = val.charCodeAt(0) - 65;
+                                consumedLog = true;
+                            }
+                        }
+                        emit(logVal);
+
+                        // Fields
+                        // If we consumed LogName, we expect comma before fields.
+                        // If we did NOT, we are already potentially at the first field (or EOL).
+
+                        var firstField = true;
+                        while (true) {
+                            if (firstField && !consumedLog) {
+                                // Implicit A case: First token is field name (no comma)
+                                // Check if valid field name exists
+                                var p = peek();
+                                if (!p || p.type === 'EOL' || p.value === ':') break;
                             } else {
-                                while (true) {
-                                    parseExpression();
-                                    if (peek() && peek().value === ',') { next(); continue; }
-                                    if (peek() && peek().value === ')') { next(); break; }
-                                    break;
+                                // Expect comma separating items
+                                if (peek() && peek().value === ',') {
+                                    next();
+                                } else {
+                                    // Missing comma
+                                    if (consumedLog && firstField) error("Expected ',' after logical name");
+                                    break; // End of field list
+                                }
+                            }
+
+                            // We are now committed to reading a field
+
+
+
+                            var fToken = next();
+                            if (fToken && fToken.type === 'IDENTIFIER') {
+                                var fName = fToken.value.toUpperCase();
+                                var type = 1; // Default Float
+                                var suffix = fName.slice(-1);
+
+                                if (suffix === '%') { type = 0; }
+                                else if (suffix === '$') { type = 2; }
+
+                                emit(type);
+                                emit(fName.length);
+                                for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
+                                firstField = false;
+                            }
+
+                        }
+                        emit(0x88); // Terminator
+                    } else if (t.value === 'VIEW') {
+                        // VIEW(id, str) - Function Syntax Required per docs
+                        expect('(');
+                        parseExpression();
+                        expect(',');
+                        parseExpression();
+                        expect(')');
+
+                        emitCommand(0xA0);
+                        emit(0x83); // DROP explicitly as it pushes 'I'
+
+                    } else if (t.value === 'MENU') {
+                        parseExpression(); emitCommand(0x98);
+                    } else if (t.value === 'KSTAT') {
+                        parseExpression(); emitCommand(0x6A);
+                    } else if (t.value === 'CLOCK') {
+                        // CLOCK(x%)
+                        expect('(');
+                        parseExpression();
+                        expect(')');
+                        emitCommand(0xD6); emit(0x83); // DROP Int
+                    } else if (t.value === 'EDIT') {
+                        // EDIT var$
+                        var tVar = next();
+                        if (tVar.type !== 'IDENTIFIER') error("EDIT expects variable");
+                        var targetName = tVar.value.toUpperCase();
+
+                        // Check for Field Access (A.Field)
+                        if (peek() && peek().value === '.') {
+                            var logChar = targetName;
+                            if (logChar.length === 1 && ['A', 'B', 'C', 'D'].includes(logChar)) {
+                                next(); // Consume .
+                                var fTok = next(); // Consume Field Name
+                                if (fTok && fTok.type === 'IDENTIFIER') {
+                                    var fName = fTok.value.toUpperCase();
+                                    var logVal = logChar.charCodeAt(0) - 65;
+                                    var type = 1; // Flt
+                                    if (fName.endsWith('%')) type = 0;
+                                    else if (fName.endsWith('$')) type = 2;
+
+                                    // 1. Push Field Name String
+                                    emit(0x24);
+                                    emit(fName.length);
+                                    for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
+
+                                    // 2. Emit Field Ref (1D/1E/1F)
+                                    emit(0x1D + type);
+                                    emit(logVal);
+
+                                    emitCommand(0x6B); // EDIT
+                                    continue;
                                 }
                             }
                         }
 
+                        var hasIndices = (peek() && peek().value === '(');
+
+                        // Parse Indices first (if any)
+                        if (hasIndices) {
+                            next(); // Eat (
+                            while (true) {
+                                parseExpression();
+                                if (peek() && peek().value === ',') { next(); continue; }
+                                if (peek() && peek().value === ')') break;
+                                break;
+                            }
+                            expect(')');
+                        }
+
+
                         // Lookup Symbol
-                        var sym = symbols[targetName];
+                        var sym = getSymbol(targetName, hasIndices);
                         if (!sym) {
-                            // Create temporary external symbol just for address?
-                            // Logic borrowed from Assignment
+                            // Create temporary external symbol just for address
                             sym = { name: targetName, type: 1, isExtern: true, index: externals.length };
                             var suffix = targetName.slice(-1);
                             if (suffix === '%') sym.type = 0;
@@ -1477,7 +2602,7 @@ var OPLCompiler = (function () {
                                 else if (sym.type === 2) sym.type = 5;
                             }
                             externals.push(sym);
-                            symbols[targetName] = sym; // Add to symbols map!
+                            addSymbol(sym);
                         }
 
                         var type = sym.type;
@@ -1496,1474 +2621,619 @@ var OPLCompiler = (function () {
                             if (sym.offset !== undefined) emitWord(sym.offset);
                             else emitWord(sym.index);
                         }
-
-                        // Emit ADDR op
-                        if (type === 2 || type === 5) {
-                            //                             console.log("Emit ADDR String");
-                            emit(0xC9); // String
+                        emitCommand(0x6B);
+                    } else if (t.value === 'USE') {
+                        var arg = next(); // Expect A, B, C, D
+                        var val = 0;
+                        if (arg && arg.type === 'IDENTIFIER') {
+                            var name = arg.value.toUpperCase();
+                            if (name === 'B') val = 1;
+                            else if (name === 'C') val = 2;
+                            else if (name === 'D') val = 3;
+                            // Default A=0
                         }
-                        else {
-                            //                             console.log("Emit ADDR Int/Float (0x8A)");
-                            emit(0x8A); // Int/Float
+                        emitCommand(0x69);
+                        emit(val);
+                    } else if (t.value === 'APPEND') {
+                        emitCommand(0x5B);
+                    } else if (t.value === 'UPDATE') {
+                        emitCommand(0x68);
+                    } else if (t.value === 'FIRST') {
+                        emitCommand(0x61);
+                    } else if (t.value === 'LAST') {
+                        emitCommand(0x62);
+                    } else if (t.value === 'NEXT') {
+                        emitCommand(0x63);
+                    } else if (t.value === 'BACK') {
+                        emitCommand(0x64);
+                    } else if (t.value === 'EXT') {
+                        var exprType = parseExpression(); // Should be Int Constant
+                        // Ideally we should check if it was a literal, but parseExpression emits 0x22 (Int) or 0x20.
+                        // Actually EXT opcode ED expects 'b' (byte) param inline?
+                        // Decompiler constants says: 0XED: { args: 'b', ... }
+                        // So we must emit 0xED followed by byte literal.
+                        // But parseExpression emits Pushes.
+                        // We need to parse a CONSTANT here.
+                        // Since parseExpression consumes tokens, we're stuck.
+                        // BUT, EXT is usually `EXT 5`.
+                        // We can backtrack or use next() if we expect a literal.
+                        // Let's assume usage EXT <byte>.
+                        // Wait, parseExpression was called? No, I haven't written the code yet.
+
+                        // Correct Implementation:
+                        if (peek() && (peek().type === 'INTEGER' || peek().type === 'HEX')) {
+                            var val = next().value;
+                            if (val < 0 || val > 255) error("EXT argument out of range");
+                            emit(0xED); emit(val);
+                        } else {
+                            // Fallback: Parse expression? No, EXT requires immediate byte.
+                            error("EXT requires byte constant");
+                        }
+                    } else if (t.value === 'CLOSE') {
+                        emitCommand(0x5C);
+                    } else if (t.value === 'DELETE') {
+                        parseExpression(); // Filename
+                        emitCommand(0x5F);
+                    } else if (t.value === 'POSITION') {
+                        parseExpression(); emitCommand(0x66);
+                    } else if (t.value === 'ERASE') {
+                        emitCommand(0x60);
+                    } else if (t.value === 'RENAME') {
+                        parseExpression(); expect(',');
+                        parseExpression(); emitCommand(0x67);
+                    } else if (t.value === 'COPY') {
+                        parseExpression(); expect(',');
+                        parseExpression(); emitCommand(0x5D);
+                    } else if (t.value === 'GOTO') {
+                        emit(0x51);
+                        var fixupAddr = emitFixup();
+                        var labelName = peek().value;
+
+                        // Valid Label?
+                        if (labelName.length > 8) throw new Error("Error on line " + t.line + ": Invalid Label '" + labelName + "' (Max 8 chars)");
+                        if (!/^[A-Za-z][A-Za-z0-9]*$/.test(labelName)) throw new Error("Error on line " + t.line + ": Invalid Label '" + labelName + "' (Alphanumeric only)");
+
+                        labelFixups.push({ addr: fixupAddr, name: labelName.toUpperCase(), line: t.line });
+                        next(); // Consume Label Name
+
+                        // Strict Syntax: GOTO Label::
+                        if (peek() && peek().value === ':') next(); else throw new Error("Error on line " + t.line + ": Expected '::'");
+                        if (peek() && peek().value === ':') next(); else throw new Error("Error on line " + t.line + ": Expected '::'");
+                    } else if (t.value === 'ONERR') {
+                        if (peek() && peek().value === 'OFF') {
+                            next();
+                            emit(0x53); emit(0x00); emit(0x00); // ONERR OFF (Displace 0000)
+                        } else {
+                            // ONERR Label
+                            emit(0x53);
+                            var fixupAddr = emitFixup();
+                            var labelName = peek().value;
+
+                            // Valid Label?
+                            if (labelName.length > 8) throw new Error("Error on line " + t.line + ": Invalid Label '" + labelName + "' (Max 8 chars)");
+                            if (!/^[A-Za-z][A-Za-z0-9]*$/.test(labelName)) throw new Error("Error on line " + t.line + ": Invalid Label '" + labelName + "' (Alphanumeric only)");
+
+                            labelFixups.push({ addr: fixupAddr, name: labelName.toUpperCase(), line: t.line });
+                            next(); // Consume Label Name
+
+                            // Strict Syntax: ONERR Label::
+                            if (peek() && peek().value === ':') next(); else throw new Error("Error on line " + t.line + ": Expected '::'");
+                            if (peek() && peek().value === ':') next(); else throw new Error("Error on line " + t.line + ": Expected '::'");
+                        }
+                    } else if (t.value === 'UDG') {
+                        // UDG args... (9 integers: Char + 8 Bytes)
+                        for (var u = 0; u < 9; u++) {
+                            parseExpression();
+                            if (u < 8) {
+                                expect(',');
+                            }
+
+                        }
+                        emitCommand(0xD5);
+                    } else if (t.value === 'OFF') {
+                        parseExpression(); emitCommand(0xD2);
+                    } else if (t.value === 'COPYW') {
+                        parseExpression(); expect(',');
+                        parseExpression(); emitCommand(0xD3);
+                    } else if (t.value === 'DELETEW') {
+                        parseExpression(); emitCommand(0xD4);
+                    } else if (t.value === 'RETURN') {
+                        if (peek() && (peek().type === 'EOL' || peek().value === ':')) {
+                            // Bare RETURN -> Default based on Proc Type?
+                            // User spec says default to 7B (Float) generally, 
+                            // But if Proc is Int?
+                            // Existing logic was 7B.
+                            // Let's keep 7B for bare return unless logic dictates otherwise.
+                            emit(0x7B);
+                        } else {
+                            // Special case for literals to match reference optimizations
+                            var pType = parseType(procName);
+
+                            if (peek().type === 'INTEGER' && peek().value === 0) {
+                                // IF Proc is Float, User explicitly requests QCode 86 (FLT) cast for RETURN 0.
+                                // So we DO NOT optimize to 0x7B.
+                                if (pType === 1) {
+                                    // Fall through to standard expression parsing?
+                                    // Parse 0 -> Stack. Cast -> 0x86. Return -> 0x79.
+                                    var exprType = parseExpression(); // Consumes 0
+                                    if (exprType === 0) emit(0x86); // FLT
+                                    emit(0x79);
+                                } else {
+                                    next(); // Consume 0
+                                    emit(0x7A); // Return Int 0
+                                }
+                            } else if (peek().type === 'FLOAT' && peek().value === 0) {
+                                next();
+                                if (pType === 0) {
+                                    emit(0x7A); // Int Proc: Return 0.0 -> Return Int 0 (7A)
+                                } else {
+                                    // Float Proc: Explicit Return 0.0 per user request
+                                    emit(0x23); // Push Float Literal
+                                    emitFloat(0.0);
+                                    emit(0x79); // RET
+                                }
+                            } else if (peek().type === 'STRING' && peek().value === "") {
+                                next(); emit(0x7C);
+                            } else {
+                                var exprType = parseExpression();
+                                // Auto-cast return value?
+                                if (pType === 1 && exprType === 0) emit(0x86); // FLT
+                                else if (pType === 0 && exprType === 1) emit(0x87); // INT
+
+                                emit(0x79);
+                            }
+                        }
+                    } else {
+                        // Bare RETURN -> Return 0.0 (0x7B) per request check? 
+                        // "default return type for a procedure should be changed to 7B"
+                        // User also: "The default return type for a procedure should be changed to 7B (float)."
+                        // This implies bare RETURN is 0.0.
+                        emit(0x7B);
+                    }
+                } else if (t.type === 'IDENTIFIER') {
+                    var isCall = false;
+                    var isLabel = false;
+                    var isAssign = false;
+                    var hasIndices = false;
+
+                    // Lookahead for Assignment
+                    if (peek() && peek().value === '=') {
+                        isAssign = true;
+                    } else if (peek() && peek().value === '(') {
+                        // Check if it is Array Assignment: A(1)=...
+                        // Scan forward respecting parenthesis depth
+                        var p = ptr; // ptr points to next token (the '(' )
+                        var depth = 0;
+                        // We need to scan starting from the '('.
+                        // ptr is index of next token. tokens[ptr] is '('.
+                        while (p < tokens.length) {
+                            if (tokens[p].value === '(') depth++;
+                            else if (tokens[p].value === ')') depth--;
+
+                            p++;
+                            if (depth === 0) break;
+                        }
+
+                        if (p < tokens.length && tokens[p].value === '=') {
+                            isAssign = true;
+                            hasIndices = true;
                         }
                     }
-                    if (peek() && peek().value === ')') next();
-                    return 0; // Int (Address)
-                }
-            } else if (t.type === 'IDENTIFIER' || t.type === 'KEYWORD') {
-                var valName = t.value.toUpperCase(); // Full Name Lookup
 
-                // --- 1. Field Access Check (A.Field) ---
-                if (peek() && peek().value === '.') {
-                    next(); // Consume .
-                    // Expect Field Name
-                    var tField = next();
-                    if (tField && tField.type === 'IDENTIFIER') {
-                        var logChar = valName; // A, B, C, D?
-                        var logVal = -1;
-                        if (logChar === 'A') logVal = 0;
-                        else if (logChar === 'B') logVal = 1;
-                        else if (logChar === 'C') logVal = 2;
-                        else if (logChar === 'D') logVal = 3;
+                    if (!isAssign) {
+                        // Check for Field Access (Logical.Field) in Statement Context
+                        if (peek() && peek().value === '.') {
+                            var logChar = t.value.toUpperCase();
+                            if (logChar.length === 1 && ['A', 'B', 'C', 'D'].includes(logChar)) {
+                                next(); // Consume .
+                                var fTok = next(); // Consume Field Name
+                                if (fTok && fTok.type === 'IDENTIFIER') {
+                                    var fName = fTok.value.toUpperCase();
+                                    var logVal = logChar.charCodeAt(0) - 65;
+                                    var type = 1; // Flt
+                                    if (fName.endsWith('%')) type = 0;
+                                    else if (fName.endsWith('$')) type = 2;
 
-                        if (logVal !== -1) {
-                            // Emit Field Access
-                            // Opcode depends on type:
-                            // 0x1A (Int), 0x1B (Flt), 0x1C (Str)
-                            // 0x1D (IntRef), 0x1E (FltRef), 0x1F (StrRef) -- References?
-                            // Expression result is usually Value.
+                                    // 1. Push Field Name String
+                                    emit(0x24);
+                                    emit(fName.length);
+                                    for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
 
-                            var fName = tField.value.toUpperCase();
-                            var type = 1; // Flt
-                            if (fName.endsWith('%')) type = 0; // Int
-                            else if (fName.endsWith('$')) type = 2; // Str
+                                    // Check for Assignment: A.f = ...
+                                    if (peek() && peek().value === '=') {
+                                        next(); // Consume =
 
-                            // 0x1A + type?
-                            // 1A(Int), 1B(Flt), 1C(Str) -> 1A + 0=1A, 1A+1=1B, 1A+2=1C. Correct.
-                            // 1. Push Field Name (String Literal)
-                            emit(0x24);
-                            emit(fName.length);
-                            for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
+                                        // Emit Field Ref (1D/1E/1F)
+                                        emit(0x1D + type);
+                                        emit(logVal);
 
-                            // 2. Emit Opcode (1A/1B/1C)
-                            emit(0x1A + type);
-                            // 3. Emit Logical Name Index
-                            emit(logVal);
+                                        // Parse RHS
+                                        var rhsType = parseExpression();
 
-                            return type;
+                                        // Auto-Cast
+                                        if (type === 0 && rhsType === 1) emit(0x87); // INT
+                                        else if (type === 1 && rhsType === 0) emit(0x86); // FLT
+
+                                        // Assign Opcode (7F/80/81)
+                                        emit(0x7F + type);
+                                    } else {
+                                        // Statement: A.f (Emit Value + Drop)
+                                        // Emit Field Value (1A/1B/1C)
+                                        emit(0x1A + type);
+                                        emit(logVal);
+
+                                        // Drop
+                                        if (type === 0) emit(0x83);
+                                        else if (type === 2) emit(0x85);
+                                        else emit(0x84);
+                                    }
+                                    continue;
+                                }
+                            }
                         }
+
+                        if (peek() && peek().value === ':') {
+                            next(); // Consume first colon
+                            if (peek() && peek().value === ':') {
+                                next();
+                                isLabel = true;
+                                labels[t.value.toUpperCase()] = qcode.length; // Record Label Address (Case Insensitive)
+                            }
+                            else {
+                                if (t.value.toUpperCase() === procName.toUpperCase()) {
+                                    // Ambiguity: ProcName: could be Label or Recursive Call.
+                                    // If followed by '(', it is definitely a call.
+                                    if (peek() && peek().value === '(') {
+                                        isCall = true;
+                                    } else {
+                                        // If no params, could be Label or 0-arg Call.
+                                        // Treat as Label for compatibility? Or Call?
+                                        // "Procedure call ... must be followed by ':'" -> imply Call.
+                                        // But Labels are also Identifiers followed by Colon.
+                                        // Since ProcName label is redundant (loops to start), we prefer Call (Recursion).
+                                        isCall = true;
+                                    }
+                                }
+                                else isCall = true;
+                            }
+
+                        } else {
+                            // Strict Syntax: Procedure calls must have arguments OR be followed by a colon
+                            if (peek() && peek().value === '(') {
+                                isCall = true;
+                            } else {
+                                // Check if it is a 0-arg Built-in (e.g. GET, GET$)
+                                var upper = t.value.toUpperCase();
+                                var op = activeOpcodes[upper];
+                                if (op && QCODE_DEFS[op] && QCODE_DEFS[op].pops === '') {
+                                    isCall = true;
+                                } else {
+                                    error("Procedure call '" + t.value + "' must be followed by ':' or have arguments");
+                                }
+                            }
+                        }
+
                     }
-                    // If fall through (invalid logical name?), treat as error or weird syntax
-                    error("Invalid Field Access syntax: " + valName + "." + (tField ? tField.value : ""));
-                }
 
-                // --- 2. Built-in Opcodes ---
-                var builtinOp = activeOpcodes[valName];
+                    if (isLabel) continue;
 
-                if (builtinOp) {
-                    var def = QCODE_DEFS[builtinOp];
-                    if (def && def.pushes === '') {
-                        throw new Error("Error on line " + t.line + ": Syntax Error: '" + valName + "' is a command, not a function.");
-                    }
+                    if (isAssign) {
+                        var targetName = t.value.toUpperCase(); // Keep suffix!
 
-                    // Check if it's a function using parenthesis: GET()
-                    // Check if it's a function using parenthesis: GET()
-                    if (peek() && peek().value === '(') {
-                        next(); // Eat (
+                        // Calculator Memory Assignment (m0-m9)
+                        if (/^M[0-9]$/.test(targetName)) {
+                            if (peek() && peek().value === '(') throw new Error("Error on line " + t.line + ": Calculator memory '" + targetName + "' cannot have indices.");
 
-                        var def = QCODE_DEFS[builtinOp];
-                        var expectedArgs = [];
-                        if (def && def.pops) {
-                            expectedArgs = def.pops.split(' ');
+                            next(); // Eat =
+                            var rhsType = parseExpression();
+
+                            // Force Float
+                            if (rhsType === 0) emit(0x86); // FLT (Int->Float)
+
+                            var memIdx = parseInt(targetName.substring(1), 10);
+                            emit(0x13); // Push Calculator Memory Ref
+                            emitWord(memIdx * 8);
+
+                            emit(0x80); // Assign Float
+                            continue;
                         }
 
-                        // Patch for ABS Polymorphism (Int 0x93 vs Float 0xA6)
-                        if (valName === 'ABS') {
-                            // Peek ahead to see likely argument type (naive check)
-                            // or wait until we parse the expression and decide?
-                            // We are inside the loop parsing arguments.
-                            // But we need to set the Opcode *after* parsing arguments?
-                            // No, typically we parse args then emit op.
-                            // But we need to cast args based on expected type.
-                            // Solution: Parse expression first, THEN decide if we need to switch Opcode.
-                            // But we currently use expectedArgs to auto-cast.
-                            // ABS (Int) expects 'I'. ABS (Float) expects 'F'.
+                        var sym = getSymbol(targetName, hasIndices);
 
-                            // Let's defer strict type checking for ABS until we see the arg.
-                            // We can parse the expression, see what we got, and THEN choose the op.
+                        if (!sym) {
+                            // Implicit References are treated as EXTERNAL in this QCode dialect
+                            var suffix = targetName.slice(-1);
+                            var type = 1; // Default Float
+                            if (suffix === '%') type = 0;
+                            else if (suffix === '$') type = 2; // Str
+
+                            // Check for Array usage to upgrade type
+                            if (hasIndices) {
+                                if (type === 0) type = 3; // Int Array
+                                else if (type === 1) type = 4; // Float Array
+                                else if (type === 2) type = 5; // Str Array
+                            }
+
+                            // Determine Size for Offset
+                            var varSize = 8; // Float default
+                            if (type === 0) varSize = 2; // Int
+                            else if (type === 1) varSize = 8; // Float
+                            // Implicit Strings/Arrays treated as Pointers (Size 2)?
+                            // Logic derived from Reference A%(-4), B(-12) -> Diff 8. 
+                            // C? E$? If they are pointers, size 2.
+                            else varSize = 2; // String/Array Pointer?
+
+                            implOffset -= varSize;
+                            var finalOffset = implOffset;
+
+                            // Create External Symbol
+                            sym = {
+                                name: targetName,
+                                type: type,
+                                index: externals.length,
+                                offset: finalOffset, // Save Offset
+                                isExtern: true,
+                                dims: []
+                            };
+
+                            addSymbol(sym);
+                            externals.push(sym);
                         }
 
-                        var argIdx = 0;
-                        while (peek() && peek().value !== ')') {
-                            var argType = parseExpression();
-
-                            // Auto-Cast based on Opcode Signature
-
-                            // Auto-Cast based on Opcode Signature
-                            if (argIdx < expectedArgs.length) {
-                                var req = expectedArgs[argIdx];
-                                if (req === 'F' && argType === 0) {
-                                    emit(0x86); // FLT
-                                } else if (req === 'I' && argType === 1) {
-                                    emit(0x87); // INT
-                                } else if (req === 'L' && argType !== 0) { // Long/Addr? Usually I
-                                    // No specific Long cast standardly used, but checking just in case
+                        if (sym) {
+                            // Parse Indices
+                            if (hasIndices) {
+                                next(); // Eat (
+                                while (true) {
+                                    parseExpression(); // Push Index
+                                    if (peek() && peek().value === ',') { next(); continue; }
+                                    if (peek() && peek().value === ')') { next(); break; }
+                                    break;
                                 }
                             }
 
-                            argIdx++;
-                            if (peek() && peek().value === ',') next();
+                            // Push Ref (LHS)
+                            if (sym.isGlobal || sym.isLocal) {
+                                //                             console.log("Emit LHS Local/Global Ref:", sym.name, "Type:", sym.type, "Offset:", sym.offset);
+                                emit(0x0D + sym.type);
+                                emitWord(sym.offset);
+                            } else if (sym.isExtern) {
+                                //                             console.log("Emit LHS Extern Ref:", sym.name, "Type:", sym.type, "Index:", sym.index);
+                                // External Ref Base is 0x14 for assignment
+                                emit(0x14 + sym.type);
+                                if (sym.offset !== undefined) emitWord(sym.offset);
+                                else emitWord(sym.index);
+                            }
+
+                            next(); // Eat =
+                            var rhsType = parseExpression(); // Value
+                            //                         console.log("RHS Parsed. Type:", rhsType);
+
+                            // Auto-Cast if types differ
+                            var baseType = sym.type;
+                            if (baseType >= 3) baseType -= 3; // Normalize Array types to underlying type
+
+                            if (baseType === 0 && rhsType === 1) {
+                                // Target is Int, Value is Float -> Emit INT
+                                emit(0x87);
+                            } else if (baseType === 1 && rhsType === 0) {
+                                // Target is Float, Value is Int -> Emit FLT
+                                emit(0x86);
+                            }
+
+                            // Assign Opcode
+                            //                         console.log("Emit ASSIGN Opcode:", 0x7F + baseType);
+                            emit(0x7F + baseType);
                         }
-                        if (peek() && peek().value === ')') next(); // Eat )
-                    }
-                    emit(builtinOp);
+                    } else if (isCall) {
+                        // Built-in or Procedure Call
+                        var procCallName = t.value;
+                        var upperName = procCallName.toUpperCase();
+                        var returnType = 1; // Default Float
+                        if (procCallName.endsWith('%')) returnType = 0; // Int
+                        else if (procCallName.endsWith('$')) returnType = 2; // String
 
-                    // Dynamically determine return type from QCODE definitions
-                    // This handles polymorphic functions (like ABS) where the opcode changes based on argument types.
-                    if (QCODE_DEFS[builtinOp]) {
-                        var pushes = QCODE_DEFS[builtinOp].pushes;
-                        if (pushes === 'I') return 0; // Int
-                        if (pushes === 'S') return 2; // String
-                        return 1; // Default Float
-                    }
+                        // Check for Built-in mapping
+                        var builtinOp = activeOpcodes[upperName];
+                        if (builtinOp) {
 
-                    // Fallback (Legacy behavior)
-                    if (valName.endsWith('$')) return 2;
-                    return 1; // Default Float
-                }
-
-                var sym = symbols[valName];
-                var forceProc = false;
-                if (peek() && peek().value === ':') forceProc = true;
-
-                // If Symbol Not Found OR Explicit Colon -> Assume PROCEDURE CALL
-                if (!sym || forceProc) {
-                    if (!sym && t.type === 'KEYWORD') {
-                        throw new Error("Error on line " + t.line + ": Reserved keyword '" + valName + "' cannot be used as an identifier or function.");
-                    }
-
-                    // Implicit Externals are dangerous (e.g. GETKEY%).
-                    // OPL usually assumes undeclared ID is a PROC call.
-                    // We emit 0x7D (PROC).
-
-                    var procCallName = t.value; // Keep original case? Or User Pref?
-                    // Usually Keep Case for Proc Names in calls, but Upper for lookup?
-                    // QCode stores name.
-
-                    // Parse Arguments (if any)
-                    var argCount = 0;
-                    // Allow optional colon before args: MyProc:(Args)
-                    if (peek() && peek().value === ':') next();
-
-                    if (peek() && peek().value === '(') {
-                        next(); // Eat (
-                        while (true) {
-                            var tArg = parseExpression();
-                            // Type Safety? 0x20 + type?
-                            // Standard PROC arg passing? 
-                            // The standard says: Pushes arguments?
-                            // OPL runtime handles checking?
-                            // We need to match 'emit' logic from line 1230ish (PROC statement).
-                            // But here we are in expression.
-                            // Does PROC return value? Yes.
-
-                            // Replicate Proc Call argument logic:
-                            // We just emit the expression code.
-                            // But do we need type bytes?
-                            // Line 1967 (Compiler view) logic for Call:
-                            // "Interleave Type Byte (0=Int, 1=Float, 2=String)"
-                            emit(0x20); emit(tArg);
-
-                            argCount++;
-                            if (peek() && peek().value === ',') { next(); continue; }
-                            if (peek() && peek().value === ')') { next(); break; }
-                            break;
+                            var intBuiltins = [
+                                'GET', 'KEY', 'POS', 'COUNT', 'EOF', 'ERR', 'DAY', 'HOUR', 'MINUTE', 'MONTH', 'SECOND', 'YEAR',
+                                'FREE', 'RECSIZE', 'FIND', 'LEN', 'LOC', 'ASC', 'ADDR', 'VIEW', 'PEEKB', 'PEEKW', 'USR', 'DOW', 'WEEK', 'FDAYS', 'EXIST',
+                                'CLOCK', 'FINDW', 'MENUN'
+                            ];
+                            if (intBuiltins.includes(upperName)) returnType = 0;
+                            if (upperName.endsWith('$')) returnType = 2;
                         }
-                    }
 
-                    // Emit Arg Count
-                    emit(0x20); emit(argCount);
-
-                    emit(0x7D); // PROC
-                    emit(procCallName.length);
-                    for (var k = 0; k < procCallName.length; k++) {
-                        emit(procCallName.charCodeAt(k));
-                    }
-
-                    // Return Type
-                    if (procCallName.endsWith('%')) return 0;
-                    if (procCallName.endsWith('$')) return 2;
-                    return 1;
-                }
-
-                if (sym) {
-                    // Array Indices?
-                    if (sym.type >= 3) {
+                        // Parse Arguments
+                        var argTypes = [];
                         if (peek() && peek().value === '(') {
                             next(); // Eat (
                             while (true) {
-                                parseExpression(); // Push Index
+                                var tArg = parseExpression(); // Emits code for Arg
+                                if (!builtinOp) {
+                                    // Interleave Type Byte (0=Int, 1=Float, 2=String)
+                                    emit(0x20); emit(tArg);
+                                }
+                                argTypes.push(tArg);
                                 if (peek() && peek().value === ',') { next(); continue; }
                                 if (peek() && peek().value === ')') { next(); break; }
                                 break;
                             }
                         }
-                    }
+                        var argCount = argTypes.length;
 
-                    if (sym.isParam || sym.isExtern) {
-                        // Parameters and Externals use Opcodes 0x07+
-                        emit(0x07 + sym.type);
-                        // For Params, offset is set. For Externs, usually index or ptrOffset?
-                        // If it's a Param, it definitely has an offset.
-                        if (sym.offset !== undefined) emitWord(sym.offset);
-                        else emitWord(sym.index);
-                    } else if (sym.isGlobal || sym.isLocal) {
-                        // Locals and Globals use Opcodes 0x00+
-                        emit(0x00 + sym.type);
-                        emitWord(sym.offset);
-                    }
-
-                    // Return type based on variable base type
-                    var retType = sym.type;
-                    if (retType >= 3) retType -= 3;
-
-                    // String Slicing Syntactic Sugar: s$(x) -> MID$(s$, x, 1)
-                    if (sym.type === 2) { // Scalar String
-                        if (peek() && peek().value === '(') {
-                            next(); // Eat (
-
-                            // We have emitted code to push s$ (0x02 + offset)
-                            // Now we need to emit arguments for MID$: s$, x, 1
-                            // BUT, we already emitted the Push of s$.
-                            // MID$ opcode (0xC2) expects Stack: [Str] [Start] [Len]
-                            // So we just need to push Start and Len.
-
-                            // Parse Index (Start)
-                            parseExpression();
-
-                            // Check for comma (unlikely for slicing? usually s$(x))
-                            // If s$(x,y) -> MID$(s$, x, y)?
-                            // OPL Manual: a$(x,y) -> MID$(a$,x,y)
-
-                            if (peek() && peek().value === ',') {
-                                next();
-                                parseExpression(); // Length
-                            } else {
-                                // Default Length 1
-                                emit(0x22); emitWord(1); // Push Int 1
-                            }
-
-                            if (peek() && peek().value === ')') next(); // Eat )
-
-                            emit(0xC2); // Emit MID$
-                            return 2; // Return String
-                        }
-                    }
-
-                    return retType;
-                }
-            } else if (t.value === '(') {
-                var type = parseExpression();
-                if (peek() && peek().value === ')') next(); // Eat )
-                return type;
-            }
-            return 0; // Fallback
-            throw new Error("Error on line " + ((t && t.line) || "?") + ": Unexpected token '" + (t ? t.value : "EOF") + "' in expression");
-        }
-
-        // --- Fixup System ---
-        var fixups = []; // Stack of { addr: int, type: 'IF'|'WHILE'|'ELSE' }
-        var loops = [];  // Stack of { start: int }
-        var labels = {}; // Map Name -> Addr
-        var labelFixups = []; // List of { addr: int, name: string }
-
-        function emitFixup() {
-            var addr = qcode.length;
-            emitWord(0x0000); // Placeholder
-            return addr;
-        }
-
-        function patchFixup(addr, target) {
-            // Offset = Target - AddrOfOffset (which is addr)
-            var offset = target - addr;
-            qcode[addr] = (offset >> 8) & 0xFF;
-            qcode[addr + 1] = offset & 0xFF;
-        }
-
-        // Pass 2: Generate Code
-        ptr = 0;
-        var implOffset = localOffset; // Start allocating after Locals (chaining)
-
-        // Skip Header (Blind Check for First Identifier: or Identifier(..) pattern)
-        // We assume the first construct is the PROC header.
-        var skipHeader = false;
-        if (tokens.length > 1 && (tokens[0].type === 'IDENTIFIER' || tokens[0].type === 'KEYWORD')) {
-            if (tokens[1].value === ':') {
-                ptr = 2; // Name:
-                // Check if Params follow: Name:(...)
-                if (ptr < tokens.length && tokens[ptr].value === '(') {
-                    ptr++; // Eat (
-                    var depth = 1;
-                    while (ptr < tokens.length) {
-                        if (tokens[ptr].value === '(') depth++;
-                        else if (tokens[ptr].value === ')') {
-                            depth--;
-                            if (depth === 0) break;
-                        }
-                        ptr++;
-                    }
-                    ptr++; // Eat final )
-                }
-                skipHeader = true;
-            } else if (tokens[1].value === '(') {
-                // Name(params):
-                ptr = 2; // Name(
-                var depth = 1; // We are inside (
-                while (ptr < tokens.length) {
-                    if (tokens[ptr].value === '(') depth++;
-                    else if (tokens[ptr].value === ')') {
-                        depth--;
-                        if (depth === 0) break;
-                    }
-                    ptr++;
-                }
-                ptr++; // Eat final )
-                if (ptr < tokens.length && tokens[ptr].value === ':') ptr++;
-                skipHeader = true;
-            }
-        }
-
-
-        // If blind skip failed, rely on procName check fallback inside loop? 
-        // No, blind skip covers 99% cases.
-        // If file starts with empty line? Tokenizer usually skips EOL at start? 
-        // If Header is token 4? 
-        // Let's assume standard format.
-
-        while (ptr < tokens.length) {
-            var t = next();
-
-            // Skip Declarations (already handled)
-            if (t.type === 'KEYWORD' && (t.value === 'GLOBAL' || t.value === 'LOCAL')) {
-                // Skip Identifier and Dims (Loop until EOL or :)
-                while (ptr < tokens.length && tokens[ptr].type !== 'EOL' && tokens[ptr].value !== ':') ptr++;
-                continue;
-            }
-            if (t.type === 'PUNCTUATION' && t.value === ':') {
-                continue;
-            }
-
-            // Label Check moved to IDENTIFIER block
-
-
-            // Label Check moved to IDENTIFIER block
-
-
-            if (t.type === 'KEYWORD') {
-                // Check for Ambiguity: Keyword as Label/Proc Call? (e.g. NEXT:)
-                // Heuristic: If followed by ':' AND Adjacent -> Treat as IDENTIFIER.
-                if (peek() && peek().value === ':') {
-                    var p = peek();
-                    // If adjacent (NEXT:), treat as IDENTIFIER (Label/Call)
-                    if (p.col === (t.col + t.value.length)) {
-                        t.type = 'IDENTIFIER'; // Downgrade to Identifier for this statement
-                    }
-                }
-            }
-
-            if (t.type === 'KEYWORD') {
-                if (t.value === 'PRINT' || t.value === 'LPRINT') {
-                    var isLPrint = (t.value === 'LPRINT');
-                    var suppressNewline = false;
-
-                    var depth = 0;
-                    while (true) {
-                        var p = peek();
-
-                        // Break if End of Line or Statement Separator (Colon not inside Parens/String)
-                        if (!p || p.type === 'EOL') break;
-
-                        if (p.value === ':') {
-                            if (p.type !== 'STRING' && depth === 0) break;
-                        }
-
-                        // Track parentheses depth to ignore separators inside function calls
-                        if (p.value === '(') depth++;
-                        if (p.value === ')') depth--;
-
-                        // Case 1: Comma Separator (Only at top level)
-                        if (p.value === ',' && depth === 0) {
-                            next(); // Consume ','
-                            emit(isLPrint ? 0x77 : 0x72);
-                            suppressNewline = true;
-                            continue;
-                        }
-
-                        // Case 2: Semicolon Separator (Only at top level)
-                        if (p.value === ';' && depth === 0) {
-                            next(); // Consume ';'
-                            suppressNewline = true;
-                            continue;
-                        }
-
-                        // Case 3: Expression (Value to print)
-                        var exprType = parseExpression();
-
-                        // Emit the appropriate PRINT/LPRINT opcode based on expression type
-                        if (!isLPrint) {
-                            if (exprType === 0) emit(0x6F); // PRINT INT
-                            else if (exprType === 1) emit(0x70); // PRINT FLT
-                            else emit(0x71); // PRINT STR
+                        if (builtinOp) {
+                            emit(builtinOp);
                         } else {
-                            if (exprType === 0) emit(0x74); // LPRINT INT
-                            else if (exprType === 1) emit(0x75); // LPRINT FLT
-                            else emit(0x76); // LPRINT STR
-                        }
+                            // 1. Push Arg Count LAST
+                            emit(0x20); emit(argCount);
 
-                        // Default behavior after a value is to emit a newline unless another separator follows
-                        suppressNewline = false;
-                    }
+                            // 2. Emit PROC Opcode
+                            emit(0x7D);
 
-                    if (!suppressNewline) {
-                        emit(isLPrint ? 0x78 : 0x73); // Newline (0x73=PRINT \n, 0x78=LPRINT \n)
-                    }
-                } else if (t.value === 'IF') {
-                    var exprType = parseExpression(); // Condition
-                    if (exprType === 1) { // Float
-                        emit(0x23); emitFloat(0.0); // Push 0.0
-                        emit(0x3A); // <>
-                        exprType = 0; // Result Int
-                    }
-                    emit(0x7E); // BranchIfFalse
-                    var fixupAddr = emitFixup();
-                    fixups.push({ addr: fixupAddr, type: 'IF' });
-                } else if (t.value === 'ELSE') {
-                    // 1. Emit Jump to End (BranchAlways)
-                    emit(0x51);
-                    var elseFixup = emitFixup();
-
-                    // 2. Resolve pending IF fixup to here
-                    var ifFixup = fixups.pop();
-                    if (ifFixup && ifFixup.type === 'IF') {
-                        patchFixup(ifFixup.addr, qcode.length);
-                    }
-
-                    // 3. Push ELSE fixup
-                    fixups.push({ addr: elseFixup, type: 'ELSE' });
-                } else if (t.value === 'ELSEIF') {
-                    // 1. Emit Jump to End (BranchAlways) for the previous block success path
-                    emit(0x51);
-                    var endFixup = emitFixup();
-
-                    // 2. Resolve pending IF/ELSEIF condition failure to HERE
-                    var prevCondFixup = fixups.pop();
-                    if (prevCondFixup && (prevCondFixup.type === 'IF' || prevCondFixup.type === 'ELSEIF')) {
-                        patchFixup(prevCondFixup.addr, qcode.length);
-                    } else {
-                        // Error state? or fallback
-                        if (prevCondFixup) fixups.push(prevCondFixup); // Put back if not matching
-                    }
-
-                    // 3. Push ENDIF_MERGE fixup (Jump to End)
-                    // We push it BEFORE the new condition fixup, so ENDIF can unwind it correctly.
-                    // Stack: [Outer..., EndMerge, EndMerge, CurrentIF]
-                    fixups.push({ addr: endFixup, type: 'ENDIF_MERGE' });
-
-                    // 4. Parse New Condition
-                    var exprType = parseExpression();
-                    if (exprType === 1) { // Float
-                        emit(0x23); emitFloat(0.0);
-                        emit(0x3A);
-                        exprType = 0;
-                    }
-
-                    // 5. Emit BranchIfFalse
-                    emit(0x7E); // BranchIfFalse
-                    var fixupAddr = emitFixup();
-                    fixups.push({ addr: fixupAddr, type: 'IF' }); // Treat as IF for next chain
-
-                } else if (t.value === 'ENDIF') {
-                    // Resolve pending fixup (IF or ELSE) - The last condition check or ELSE block end
-                    var fixup = fixups.pop();
-                    if (fixup) {
-                        patchFixup(fixup.addr, qcode.length);
-                    }
-
-                    // Unwind ENDIF_MERGE fixups (Jumps from successful IF/ELSEIF blocks)
-                    while (fixups.length > 0 && fixups[fixups.length - 1].type === 'ENDIF_MERGE') {
-                        fixup = fixups.pop();
-                        patchFixup(fixup.addr, qcode.length);
-                    }
-                } else if (t.value === 'WHILE') {
-                    var startAddr = qcode.length;
-                    loops.push({ start: startAddr, type: 'WHILE', breaks: [] });
-
-                    var exprType = parseExpression(); // Condition
-                    if (exprType === 1) { // Float
-                        emit(0x23); emitFloat(0.0);
-                        emit(0x3A);
-                        exprType = 0;
-                    }
-                    emit(0x7E); // BranchIfFalse
-                    var fixupAddr = emitFixup();
-                    fixups.push({ addr: fixupAddr, type: 'WHILE' });
-                } else if (t.value === 'ENDWH') {
-                    var loop = loops.pop();
-                    var fixup = fixups.pop(); // WHILE exit fixup
-
-                    // Emit Jump back to start
-                    emit(0x51); // BranchAlways
-
-                    // Offset = Target - CurrentArgAddr
-                    // CurrentArgAddr = qcode.length;
-                    // Target = loop.start
-                    var offset = loop.start - qcode.length;
-                    emitWord(offset); // Negative offset
-
-                    // Patch loop exit fixup to here
-                    patchFixup(fixup.addr, qcode.length);
-
-                    // Patch BREAKs
-                    for (var k = 0; k < loop.breaks.length; k++) {
-                        patchFixup(loop.breaks[k], qcode.length);
-                    }
-                } else if (t.value === 'DO') {
-                    loops.push({ start: qcode.length, type: 'DO', breaks: [], continues: [] });
-                } else if (t.value === 'UNTIL') {
-                    var loop = loops.pop();
-                    if (!loop || loop.type !== 'DO') error("UNTIL without DO");
-
-                    // Continues target: Condition Check (Here)
-                    for (var k = 0; k < loop.continues.length; k++) {
-                        patchFixup(loop.continues[k], qcode.length);
-                    }
-
-                    var exprType = parseExpression(); // Condition
-                    if (exprType === 1) { // Float
-                        emit(0x23); emitFloat(0.0);
-                        emit(0x3A);
-                        exprType = 0;
-                    }
-
-                    emit(0x7E); // BranchIfFalse (Jump Back)
-                    var offset = loop.start - qcode.length;
-                    emitWord(offset);
-
-                    // Breaks target: After loop (Here)
-                    for (var k = 0; k < loop.breaks.length; k++) {
-                        patchFixup(loop.breaks[k], qcode.length);
-                    }
-                } else if (t.value === 'BREAK') {
-                    if (loops.length === 0) error("BREAK outside loop");
-                    var loop = loops[loops.length - 1];
-                    emit(0x51); // GOTO
-                    var addr = emitFixup();
-                    loop.breaks.push(addr);
-                } else if (t.value === 'CONTINUE') {
-                    if (loops.length === 0) error("CONTINUE outside loop");
-                    var loop = loops[loops.length - 1];
-                    if (loop.type === 'WHILE') {
-                        // GOTO Start
-                        emit(0x51);
-                        var offset = loop.start - qcode.length;
-                        emitWord(offset);
-                    } else if (loop.type === 'DO') {
-                        // GOTO Condition (Forward fixup)
-                        emit(0x51);
-                        var addr = emitFixup();
-                        loop.continues.push(addr);
-                    }
-                } else if (t.value === 'POKEB' || t.value === 'POKEW') {
-                    // POKEB addr, value
-                    // POKEW addr, value
-                    parseExpression(); // Addr (Int) -> Stack
-                    if (peek() && peek().value === ',') next();
-                    parseExpression(); // Value (Int) -> Stack
-
-                    // Emit 0x55 (POKEB) or 0x56 (POKEW)
-                    emitCommand(t.value === 'POKEB' ? 0x55 : 0x56);
-                } else if (t.value === 'PAUSE') {
-                    parseExpression(); // Duration (Int)
-                    emitCommand(0x54); // PAUSE opcode
-                } else if (t.value === 'BEEP') {
-                    // BEEP duration, frequency
-                    parseExpression(); // Duration
-                    if (peek() && peek().value === ',') next();
-                    parseExpression(); // Frequency
-                    emitCommand(0x4D);
-                } else if (t.value === 'AT') {
-                    // AT column, row
-                    parseExpression(); // Column
-                    if (peek() && peek().value === ',') next();
-                    parseExpression(); // Row
-                    emitCommand(0x4C);
-                } else if (t.value === 'CLS') {
-                    emitCommand(0x4E);
-                } else if (t.value === 'STOP') {
-                    emitCommand(0x59);
-                } else if (t.value === 'TRAP') {
-                    pendingTrap = true;
-                } else if (t.value === 'ESCAPE') {
-                    // ESCAPE ON/OFF
-                    var nextT = next();
-                    emitCommand(0x50);
-                    if (nextT.value === 'ON') { emit(0x01); }
-                    else if (nextT.value === 'OFF') { emit(0x00); }
-                    else error("ESCAPE requires ON or OFF");
-                } else if (t.value === 'CURSOR') {
-                    // CURSOR ON/OFF
-                    var nextT = next();
-                    emitCommand(0x4F);
-                    if (nextT.value === 'ON') { emit(0x01); }
-                    else if (nextT.value === 'OFF') { emit(0x00); }
-                    else error("CURSOR requires ON or OFF");
-                } else if (t.value === 'RANDOMIZE') {
-                    var type = parseExpression(); // Float Seed
-                    if (type === 0) emit(0x86); // FLT
-                    emitCommand(0x58);
-                } else if (t.value === 'RAISE') {
-                    parseExpression(); // Int Error Code
-                    emitCommand(0x57);
-                } else if (t.value === 'OFF') {
-                    // Check for optional duration (LZ OFF: 0xD2)
-                    var hasArg = false;
-                    var p = peek();
-                    if (p && (p.type === 'INTEGER' || p.type === 'FLOAT' || p.type === 'HEX' || p.value === '(' || (p.type === 'IDENTIFIER' && activeKeywords.indexOf(p.value) === -1))) {
-                        hasArg = true;
-                    }
-
-                    if (hasArg) {
-                        parseExpression();
-                        emitCommand(0xD2);
-                    } else {
-                        emitCommand(0x52);
-                    }
-                } else if (t.value === 'DISP') {
-                    // DISP mode, msg$ (Returns Key Code Int -> Needs DROP)
-                    parseExpression(); // mode
-                    if (peek() && peek().value === ',') next();
-                    parseExpression(); // msg$
-                    emitCommand(0x8D);
-                    emit(0x83); // DROP Int
-                } else if (t.value === 'COPYW') {
-                    // COPYW src$, dest$
-                    parseExpression(); // src$
-                    if (peek() && peek().value === ',') next();
-                    parseExpression(); // dest$
-                    emitCommand(0xD3);
-
-                } else if (t.value === 'DELETE') {
-                    // DELETE file$ (0x5F)
-                    parseExpression(); // file$
-                    emitCommand(0x5F);
-                } else if (t.value === 'DELETEW') {
-                    // DELETEW file$ (0xD4)
-                    parseExpression(); // file$
-                    emitCommand(0xD4);
-                } else if (t.value === 'INPUT') {
-                    // INPUT var
-                    var tVar = next();
-                    if (!tVar || tVar.type !== 'IDENTIFIER') error("INPUT expects variable");
-                    var targetName = tVar.value.toUpperCase();
-
-                    // Check for Field Access (A.Field)
-                    if (peek() && peek().value === '.') {
-                        var logChar = targetName;
-                        if (logChar.length === 1 && ['A', 'B', 'C', 'D'].includes(logChar)) {
-                            next(); // Consume .
-                            var fTok = next(); // Consume Field Name
-                            if (fTok && fTok.type === 'IDENTIFIER') {
-                                var fName = fTok.value.toUpperCase();
-                                var logVal = logChar.charCodeAt(0) - 65;
-                                var type = 1; // Flt
-                                if (fName.endsWith('%')) type = 0;
-                                else if (fName.endsWith('$')) type = 2;
-
-                                // 1. Push Field Name String
-                                emit(0x24);
-                                emit(fName.length);
-                                for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
-
-                                // 2. Emit Field Ref (1D/1E/1F)
-                                emit(0x1D + type);
-                                emit(logVal);
-
-                                // 3. Emit INPUT Opcode
-                                if (type === 0) emitCommand(0x6C);
-                                else if (type === 1) emitCommand(0x6D);
-                                else if (type === 2) emitCommand(0x6E);
-
-                                continue;
-                            }
-                        }
-                    }
-
-                    var hasIndices = (peek() && peek().value === '(');
-
-                    // Parse Indices first (if any)
-                    if (hasIndices) {
-                        next(); // Eat (
-                        while (true) {
-                            parseExpression();
-                            if (peek() && peek().value === ',') { next(); continue; }
-                            if (peek() && peek().value === ')') { next(); break; }
-                            break;
-                        }
-                    }
-
-                    // Lookup Symbol
-                    var sym = symbols[targetName];
-                    if (!sym) {
-                        // Implicit External
-                        var suffix = targetName.slice(-1);
-                        var type = 1; // Default Flt
-                        if (suffix === '%') type = 0;
-                        else if (suffix === '$') type = 2;
-
-                        sym = { name: targetName, type: type, isExtern: true, index: externals.length };
-                        if (hasIndices) {
-                            if (type === 0) sym.type = 3; else if (type === 1) sym.type = 4; else if (type === 2) sym.type = 5;
-                        }
-                        externals.push(sym);
-                        symbols[targetName] = sym;
-                    }
-
-                    var type = sym.type;
-                    var baseType = type;
-                    if (hasIndices) {
-                        // Dereference Array Type for Input? 
-                        // No, OPL uses base type opcodes for INPUT, but Address must be element address.
-                        if (type >= 3) baseType -= 3;
-                    } else {
-                        // If it is array name without indices? -> Invalid?
-                        // "INPUT arr()" usually implied?
-                    }
-
-                    // Emit Push Addr
-                    // Locals/Globals: 0x0D + type
-                    // Externals: 0x14 + type
-                    var addrOpBase = (sym.isExtern) ? 0x14 : 0x0D;
-                    emit(addrOpBase + type);
-                    if (sym.isExtern) {
-                        if (sym.offset !== undefined) emitWord(sym.offset);
-                        else emitWord(sym.index);
-                    } else {
-                        emitWord(sym.offset);
-                    }
-
-                    // Emit INPUT Opcode
-                    // 6C=Int, 6D=Flt, 6E=Str
-                    if (baseType === 0) emitCommand(0x6C);
-                    else if (baseType === 1) emitCommand(0x6D);
-                    else if (baseType === 2) emitCommand(0x6E);
-                    else emitCommand(0x6D); // Default Float
-
-                } else if (t.value === 'CREATE' || t.value === 'OPEN') {
-                    // CREATE/OPEN spec$, log, f1, f2...
-                    var isCreate = (t.value === 'CREATE');
-                    var opcode = isCreate ? 0x5E : 0x65;
-
-                    parseExpression(); // spec$
-                    emitCommand(opcode);
-
-                    if (peek() && peek().value === ',') next();
-
-                    // Logical Name vs Field Heuristic
-                    // OPEN "File", A, f1... vs OPEN "File", f1...
-                    var logVal = 0; // Default A
-                    var consumedLog = false;
-
-                    var tNext = peek();
-                    if (tNext && tNext.type === 'IDENTIFIER') {
-                        var val = tNext.value.toUpperCase();
-                        if (['A', 'B', 'C', 'D'].includes(val) && val.length === 1) {
-                            // Explicit Logical Name
-                            next(); // Consume
-                            logVal = val.charCodeAt(0) - 65;
-                            consumedLog = true;
-                        }
-                    }
-                    emit(logVal);
-
-                    // Fields
-                    // If we consumed LogName, we expect comma before fields.
-                    // If we did NOT, we are already potentially at the first field (or EOL).
-
-                    var firstField = true;
-                    while (true) {
-                        if (firstField && !consumedLog) {
-                            // Implicit A case: We might be standing on the field name
-                            // Check if we have a field
-                            var p = peek();
-                            if (!p || p.type === 'EOL' || p.value === ':') break;
-                            // Proceed to process p as field
-                            firstField = false;
-                        } else {
-                            // Standard case: Expect comma
-                            if (peek() && peek().value === ',') {
-                                next(); // Eat comma
-                            } else {
-                                break; // No comma, ensure end
+                            // 3. Emit Name
+                            // Name is stored inline: [Len] [Chars]
+                            emit(procCallName.length);
+                            for (var k = 0; k < procCallName.length; k++) {
+                                emit(procCallName.charCodeAt(k));
                             }
                         }
 
-                        var fToken = next();
-                        if (fToken && fToken.type === 'IDENTIFIER') {
-                            var fName = fToken.value.toUpperCase();
-                            var type = 1; // Default Float
-                            var suffix = fName.slice(-1);
-
-                            if (suffix === '%') { type = 0; }
-                            else if (suffix === '$') { type = 2; }
-
-                            emit(type);
-                            emit(fName.length);
-                            for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
-                        }
-                    }
-                    emit(0x88); // Terminator
-                } else if (t.value === 'VIEW') {
-                    // VIEW(id, str)
-                    if (peek() && peek().value === '(') next();
-                    parseExpression();
-                    if (peek() && peek().value === ',') next();
-                    parseExpression();
-                    if (peek() && peek().value === ')') next();
-                    emitCommand(0xA0);
-                    emit(0x83); // DROP explicitly as it pushes 'I'
-                } else if (t.value === 'MENU') {
-                    parseExpression(); emitCommand(0x98);
-                } else if (t.value === 'KSTAT') {
-                    parseExpression(); emitCommand(0x6A);
-                } else if (t.value === 'CLOCK') {
-                    parseExpression(); emitCommand(0xD6); emit(0x83); // DROP Int
-                } else if (t.value === 'EDIT') {
-                    // EDIT var$
-                    var tVar = next();
-                    if (tVar.type !== 'IDENTIFIER') error("EDIT expects variable");
-                    var targetName = tVar.value.toUpperCase();
-
-                    // Check for Field Access (A.Field)
-                    if (peek() && peek().value === '.') {
-                        var logChar = targetName;
-                        if (logChar.length === 1 && ['A', 'B', 'C', 'D'].includes(logChar)) {
-                            next(); // Consume .
-                            var fTok = next(); // Consume Field Name
-                            if (fTok && fTok.type === 'IDENTIFIER') {
-                                var fName = fTok.value.toUpperCase();
-                                var logVal = logChar.charCodeAt(0) - 65;
-                                var type = 1; // Flt
-                                if (fName.endsWith('%')) type = 0;
-                                else if (fName.endsWith('$')) type = 2;
-
-                                // 1. Push Field Name String
-                                emit(0x24);
-                                emit(fName.length);
-                                for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
-
-                                // 2. Emit Field Ref (1D/1E/1F)
-                                emit(0x1D + type);
-                                emit(logVal);
-
-                                emitCommand(0x6B); // EDIT
-                                continue;
-                            }
-                        }
+                        // 4. Emit DROP (Discard return value if used as statement)
+                        // 0x82=DROP Byte?, 0x83=DROP Int, 0x84=DROP Float, 0x85=DROP String
+                        if (returnType === 0) emit(0x83);
+                        else if (returnType === 2) emit(0x85);
+                        else emit(0x84);
                     }
 
-                    var hasIndices = (peek() && peek().value === '(');
-
-                    // Parse Indices first (if any)
-                    if (hasIndices) {
-                        next(); // Eat (
-                        while (true) {
-                            parseExpression();
-                            if (peek() && peek().value === ',') { next(); continue; }
-                            if (peek() && peek().value === ')') { next(); break; }
-                            break;
-                        }
-                    }
-
-                    // Lookup Symbol
-                    var sym = symbols[targetName];
-                    if (!sym) {
-                        // Create temporary external symbol just for address
-                        sym = { name: targetName, type: 1, isExtern: true, index: externals.length };
-                        var suffix = targetName.slice(-1);
-                        if (suffix === '%') sym.type = 0;
-                        else if (suffix === '$') sym.type = 2;
-                        if (hasIndices) {
-                            if (sym.type === 0) sym.type = 3;
-                            else if (sym.type === 1) sym.type = 4;
-                            else if (sym.type === 2) sym.type = 5;
-                        }
-                        externals.push(sym);
-                    }
-
-                    var type = sym.type;
-                    if (hasIndices) {
-                        if (type === 0) type = 3;
-                        else if (type === 1) type = 4;
-                        else if (type === 2) type = 5;
-                    }
-
-                    // Emit Push Addr
-                    if (sym.isGlobal || sym.isLocal) {
-                        emit(0x0D + type);
-                        emitWord(sym.offset);
-                    } else if (sym.isExtern) {
-                        emit(0x14 + type);
-                        if (sym.offset !== undefined) emitWord(sym.offset);
-                        else emitWord(sym.index);
-                    }
-                    emitCommand(0x6B);
-                } else if (t.value === 'USE') {
-                    var arg = next(); // Expect A, B, C, D
-                    var val = 0;
-                    if (arg && arg.type === 'IDENTIFIER') {
-                        var name = arg.value.toUpperCase();
-                        if (name === 'B') val = 1;
-                        else if (name === 'C') val = 2;
-                        else if (name === 'D') val = 3;
-                        // Default A=0
-                    }
-                    emitCommand(0x69);
-                    emit(val);
-                } else if (t.value === 'APPEND') {
-                    emitCommand(0x5B);
-                } else if (t.value === 'UPDATE') {
-                    emitCommand(0x68);
-                } else if (t.value === 'FIRST') {
-                    emitCommand(0x61);
-                } else if (t.value === 'LAST') {
-                    emitCommand(0x62);
-                } else if (t.value === 'NEXT') {
-                    emitCommand(0x63);
-                } else if (t.value === 'BACK') {
-                    emitCommand(0x64);
-                } else if (t.value === 'EXT') {
-                    var exprType = parseExpression(); // Should be Int Constant
-                    // Ideally we should check if it was a literal, but parseExpression emits 0x22 (Int) or 0x20.
-                    // Actually EXT opcode ED expects 'b' (byte) param inline?
-                    // Decompiler constants says: 0XED: { args: 'b', ... }
-                    // So we must emit 0xED followed by byte literal.
-                    // But parseExpression emits Pushes.
-                    // We need to parse a CONSTANT here.
-                    // Since parseExpression consumes tokens, we're stuck.
-                    // BUT, EXT is usually `EXT 5`.
-                    // We can backtrack or use next() if we expect a literal.
-                    // Let's assume usage EXT <byte>.
-                    // Wait, parseExpression was called? No, I haven't written the code yet.
-
-                    // Correct Implementation:
-                    if (peek() && (peek().type === 'INTEGER' || peek().type === 'HEX')) {
-                        var val = next().value;
-                        if (val < 0 || val > 255) error("EXT argument out of range");
-                        emit(0xED); emit(val);
-                    } else {
-                        // Fallback: Parse expression? No, EXT requires immediate byte.
-                        error("EXT requires byte constant");
-                    }
-                } else if (t.value === 'CLOSE') {
-                    emitCommand(0x5C);
-                } else if (t.value === 'DELETE') {
-                    parseExpression(); // Filename
-                    emitCommand(0x5F);
-                } else if (t.value === 'POSITION') {
-                    parseExpression(); emitCommand(0x66);
-                } else if (t.value === 'ERASE') {
-                    emitCommand(0x60);
-                } else if (t.value === 'RENAME') {
-                    parseExpression(); if (peek() && peek().value === ',') next();
-                    parseExpression(); emitCommand(0x67);
-                } else if (t.value === 'COPY') {
-                    parseExpression(); if (peek() && peek().value === ',') next();
-                    parseExpression(); emitCommand(0x5D);
-                } else if (t.value === 'GOTO') {
-                    emit(0x51);
-                    var fixupAddr = emitFixup();
-                    var labelName = peek().value;
-                    labelFixups.push({ addr: fixupAddr, name: labelName });
-                    next(); // Consume Label Name
-                    // Consume optional ::
-                    if (peek() && peek().value === ':') next();
-                    if (peek() && peek().value === ':') next();
-                } else if (t.value === 'ONERR') {
-                    if (peek() && peek().value === 'OFF') {
-                        next();
-                        emit(0x53); emit(0x00); emit(0x00); // ONERR OFF (Displace 0000)
-                    } else {
-                        // ONERR Label
-                        emit(0x53);
-                        var fixupAddr = emitFixup();
-                        var labelName = peek().value;
-                        labelFixups.push({ addr: fixupAddr, name: labelName });
-                        next(); // Consume Label Name
-                        // Consume optional ::
-                        if (peek() && peek().value === ':') next();
-                        if (peek() && peek().value === ':') next();
-                    }
-                } else if (t.value === 'UDG') {
-                    // UDG args... (9 integers: Char + 8 Bytes)
-                    for (var u = 0; u < 9; u++) {
-                        parseExpression();
-                        if (u < 8) {
-                            if (peek() && peek().value === ',') next();
-                        }
-                    }
-                    emitCommand(0xD5);
-                } else if (t.value === 'RETURN') {
-                    if (peek() && (peek().type === 'EOL' || peek().value === ':')) {
-                        // Bare RETURN -> Default based on Proc Type?
-                        // User spec says default to 7B (Float) generally, 
-                        // But if Proc is Int?
-                        // Existing logic was 7B.
-                        // Let's keep 7B for bare return unless logic dictates otherwise.
-                        emit(0x7B);
-                    } else {
-                        // Special case for literals to match reference optimizations
-                        var pType = parseType(procName);
-
-                        if (peek().type === 'INTEGER' && peek().value === 0) {
-                            // IF Proc is Float, User explicitly requests QCode 86 (FLT) cast for RETURN 0.
-                            // So we DO NOT optimize to 0x7B.
-                            if (pType === 1) {
-                                // Fall through to standard expression parsing?
-                                // Parse 0 -> Stack. Cast -> 0x86. Return -> 0x79.
-                                var exprType = parseExpression(); // Consumes 0
-                                if (exprType === 0) emit(0x86); // FLT
-                                emit(0x79);
-                            } else {
-                                next(); // Consume 0
-                                emit(0x7A); // Return Int 0
-                            }
-                        } else if (peek().type === 'FLOAT' && peek().value === 0) {
-                            next();
-                            if (pType === 0) {
-                                emit(0x7A); // Int Proc: Return 0.0 -> Return Int 0 (7A)
-                            } else {
-                                // Float Proc: Explicit Return 0.0 per user request
-                                emit(0x23); // Push Float Literal
-                                emitFloat(0.0);
-                                emit(0x79); // RET
-                            }
-                        } else if (peek().type === 'STRING' && peek().value === "") {
-                            next(); emit(0x7C);
-                        } else {
-                            var exprType = parseExpression();
-                            // Auto-cast return value?
-                            if (pType === 1 && exprType === 0) emit(0x86); // FLT
-                            else if (pType === 0 && exprType === 1) emit(0x87); // INT
-
-                            emit(0x79);
+                    // FIX: Enforce Separator after Statement (Strict OPL)
+                    // If we performed an Assignment, Call, or Field Access, the statement is done.
+                    // The NEXT token MUST be a Separator (:) or EOL.
+                    if ((isAssign || isCall) && !isLabel) {
+                        if (peek() && peek().type !== 'EOL' && peek().value !== ':') {
+                            // One exception: Comments? Tokenizer handles REM.
+                            throw new Error("Error on line " + t.line + ": Missing separator between statements (found '" + peek().value + "')");
                         }
                     }
                 } else {
-                    // Bare RETURN -> Return 0.0 (0x7B) per request check? 
-                    // "default return type for a procedure should be changed to 7B"
-                    // User also: "The default return type for a procedure should be changed to 7B (float)."
-                    // This implies bare RETURN is 0.0.
-                    emit(0x7B);
-                }
-            } else if (t.type === 'IDENTIFIER') {
-                var isCall = false;
-                var isLabel = false;
-                var isAssign = false;
-                var hasIndices = false;
-
-                // Lookahead for Assignment
-                if (peek() && peek().value === '=') {
-                    isAssign = true;
-                } else if (peek() && peek().value === '(') {
-                    // Check if it is Array Assignment: A(1)=...
-                    // Scan forward respecting parenthesis depth
-                    var p = ptr; // ptr points to next token (the '(' )
-                    var depth = 0;
-                    // We need to scan starting from the '('.
-                    // ptr is index of next token. tokens[ptr] is '('.
-                    while (p < tokens.length) {
-                        if (tokens[p].value === '(') depth++;
-                        else if (tokens[p].value === ')') depth--;
-
-                        p++;
-                        if (depth === 0) break;
+                    if (t.type !== 'EOL' && t.value !== undefined) {
+                        throw new Error("Error on line " + t.line + ": Unexpected token '" + t.value + "'");
                     }
-
-                    if (p < tokens.length && tokens[p].value === '=') {
-                        isAssign = true;
-                        hasIndices = true;
-                    }
-                }
-
-                if (!isAssign) {
-                    // Check for Field Access (Logical.Field) in Statement Context
-                    if (peek() && peek().value === '.') {
-                        var logChar = t.value.toUpperCase();
-                        if (logChar.length === 1 && ['A', 'B', 'C', 'D'].includes(logChar)) {
-                            next(); // Consume .
-                            var fTok = next(); // Consume Field Name
-                            if (fTok && fTok.type === 'IDENTIFIER') {
-                                var fName = fTok.value.toUpperCase();
-                                var logVal = logChar.charCodeAt(0) - 65;
-                                var type = 1; // Flt
-                                if (fName.endsWith('%')) type = 0;
-                                else if (fName.endsWith('$')) type = 2;
-
-                                // 1. Push Field Name String
-                                emit(0x24);
-                                emit(fName.length);
-                                for (var k = 0; k < fName.length; k++) emit(fName.charCodeAt(k));
-
-                                // Check for Assignment: A.f = ...
-                                if (peek() && peek().value === '=') {
-                                    next(); // Consume =
-
-                                    // Emit Field Ref (1D/1E/1F)
-                                    emit(0x1D + type);
-                                    emit(logVal);
-
-                                    // Parse RHS
-                                    var rhsType = parseExpression();
-
-                                    // Auto-Cast
-                                    if (type === 0 && rhsType === 1) emit(0x87); // INT
-                                    else if (type === 1 && rhsType === 0) emit(0x86); // FLT
-
-                                    // Assign Opcode (7F/80/81)
-                                    emit(0x7F + type);
-                                } else {
-                                    // Statement: A.f (Emit Value + Drop)
-                                    // Emit Field Value (1A/1B/1C)
-                                    emit(0x1A + type);
-                                    emit(logVal);
-
-                                    // Drop
-                                    if (type === 0) emit(0x83);
-                                    else if (type === 2) emit(0x85);
-                                    else emit(0x84);
-                                }
-                                continue;
-                            }
-                        }
-                    }
-
-                    // Check Colon logic
-                    if (peek() && peek().value === ':') {
-                        next(); // Consume first colon
-                        if (peek() && peek().value === ':') {
-                            next();
-                            isLabel = true;
-                            labels[t.value] = qcode.length; // Record Label Address
-                        }
-                        else {
-                            if (t.value.toUpperCase() === procName.toUpperCase()) {
-                                // Ambiguity: ProcName: could be Label or Recursive Call.
-                                // If followed by '(', it is definitely a call.
-                                if (peek() && peek().value === '(') {
-                                    isCall = true;
-                                } else {
-                                    // If no params, could be Label or 0-arg Call.
-                                    // Treat as Label for compatibility? Or Call?
-                                    // "Procedure call ... must be followed by ':'" -> imply Call.
-                                    // But Labels are also Identifiers followed by Colon.
-                                    // Since ProcName label is redundant (loops to start), we prefer Call (Recursion).
-                                    isCall = true;
-                                }
-                            }
-                            else isCall = true;
-                        }
-
-                    } else {
-                        // Strict Syntax: Procedure calls must have arguments OR be followed by a colon
-                        if (peek() && peek().value === '(') {
-                            isCall = true;
-                        } else {
-                            // Check if it is a 0-arg Built-in (e.g. GET, GET$)
-                            var upper = t.value.toUpperCase();
-                            var op = activeOpcodes[upper];
-                            if (op && QCODE_DEFS[op] && QCODE_DEFS[op].pops === '') {
-                                isCall = true;
-                            } else {
-                                error("Procedure call '" + t.value + "' must be followed by ':' or have arguments");
-                            }
-                        }
-                    }
-
-                }
-
-                if (isLabel) continue;
-
-                if (isAssign) {
-                    var targetName = t.value.toUpperCase(); // Keep suffix!
-                    var sym = symbols[targetName];
-
-                    if (!sym) {
-                        // Implicit References are treated as EXTERNAL in this QCode dialect
-                        var suffix = targetName.slice(-1);
-                        var type = 1; // Default Float
-                        if (suffix === '%') type = 0;
-                        else if (suffix === '$') type = 2; // Str
-
-                        // Check for Array usage to upgrade type
-                        if (hasIndices) {
-                            if (type === 0) type = 3; // Int Array
-                            else if (type === 1) type = 4; // Float Array
-                            else if (type === 2) type = 5; // Str Array
-                        }
-
-                        // Determine Size for Offset
-                        var varSize = 8; // Float default
-                        if (type === 0) varSize = 2; // Int
-                        else if (type === 1) varSize = 8; // Float
-                        // Implicit Strings/Arrays treated as Pointers (Size 2)?
-                        // Logic derived from Reference A%(-4), B(-12) -> Diff 8. 
-                        // C? E$? If they are pointers, size 2.
-                        else varSize = 2; // String/Array Pointer?
-
-                        implOffset -= varSize;
-                        var finalOffset = implOffset;
-
-                        // Create External Symbol
-                        sym = {
-                            name: targetName,
-                            type: type,
-                            index: externals.length,
-                            offset: finalOffset, // Save Offset
-                            isExtern: true,
-                            dims: []
-                        };
-
-                        symbols[targetName] = sym;
-                        externals.push(sym);
-                    }
-
-                    if (sym) {
-                        // Parse Indices
-                        if (hasIndices) {
-                            next(); // Eat (
-                            while (true) {
-                                parseExpression(); // Push Index
-                                if (peek() && peek().value === ',') { next(); continue; }
-                                if (peek() && peek().value === ')') { next(); break; }
-                                break;
-                            }
-                        }
-
-                        // Push Ref (LHS)
-                        if (sym.isGlobal || sym.isLocal) {
-                            //                             console.log("Emit LHS Local/Global Ref:", sym.name, "Type:", sym.type, "Offset:", sym.offset);
-                            emit(0x0D + sym.type);
-                            emitWord(sym.offset);
-                        } else if (sym.isExtern) {
-                            //                             console.log("Emit LHS Extern Ref:", sym.name, "Type:", sym.type, "Index:", sym.index);
-                            // External Ref Base is 0x14 for assignment
-                            emit(0x14 + sym.type);
-                            if (sym.offset !== undefined) emitWord(sym.offset);
-                            else emitWord(sym.index);
-                        }
-
-                        next(); // Eat =
-                        var rhsType = parseExpression(); // Value
-                        //                         console.log("RHS Parsed. Type:", rhsType);
-
-                        // Auto-Cast if types differ
-                        var baseType = sym.type;
-                        if (baseType >= 3) baseType -= 3; // Normalize Array types to underlying type
-
-                        if (baseType === 0 && rhsType === 1) {
-                            // Target is Int, Value is Float -> Emit INT
-                            emit(0x87);
-                        } else if (baseType === 1 && rhsType === 0) {
-                            // Target is Float, Value is Int -> Emit FLT
-                            emit(0x86);
-                        }
-
-                        // Assign Opcode
-                        //                         console.log("Emit ASSIGN Opcode:", 0x7F + baseType);
-                        emit(0x7F + baseType);
-                    }
-                } else if (isCall) {
-                    // Built-in or Procedure Call
-                    var procCallName = t.value;
-                    var upperName = procCallName.toUpperCase();
-                    var returnType = 1; // Default Float
-                    if (procCallName.endsWith('%')) returnType = 0; // Int
-                    else if (procCallName.endsWith('$')) returnType = 2; // String
-
-                    // Check for Built-in mapping
-                    var builtinOp = activeOpcodes[upperName];
-                    if (builtinOp) {
-
-                        var intBuiltins = [
-                            'GET', 'KEY', 'POS', 'COUNT', 'EOF', 'ERR', 'DAY', 'HOUR', 'MINUTE', 'MONTH', 'SECOND', 'YEAR',
-                            'FREE', 'RECSIZE', 'FIND', 'LEN', 'LOC', 'ASC', 'ADDR', 'VIEW', 'PEEKB', 'PEEKW', 'USR', 'DOW', 'WEEK', 'FDAYS', 'EXIST',
-                            'CLOCK', 'FINDW', 'MENUN'
-                        ];
-                        if (intBuiltins.includes(upperName)) returnType = 0;
-                        if (upperName.endsWith('$')) returnType = 2;
-                    }
-
-                    // Parse Arguments
-                    var argTypes = [];
-                    if (peek() && peek().value === '(') {
-                        next(); // Eat (
-                        while (true) {
-                            var tArg = parseExpression(); // Emits code for Arg
-                            if (!builtinOp) {
-                                // Interleave Type Byte (0=Int, 1=Float, 2=String)
-                                emit(0x20); emit(tArg);
-                            }
-                            argTypes.push(tArg);
-                            if (peek() && peek().value === ',') { next(); continue; }
-                            if (peek() && peek().value === ')') { next(); break; }
-                            break;
-                        }
-                    }
-                    var argCount = argTypes.length;
-
-                    if (builtinOp) {
-                        emit(builtinOp);
-                    } else {
-                        // 1. Push Arg Count LAST
-                        emit(0x20); emit(argCount);
-
-                        // 2. Emit PROC Opcode
-                        emit(0x7D);
-
-                        // 3. Emit Name
-                        // Name is stored inline: [Len] [Chars]
-                        emit(procCallName.length);
-                        for (var k = 0; k < procCallName.length; k++) {
-                            emit(procCallName.charCodeAt(k));
-                        }
-                    }
-
-                    // 4. Emit DROP (Discard return value if used as statement)
-                    // 0x82=DROP Byte?, 0x83=DROP Int, 0x84=DROP Float, 0x85=DROP String
-                    if (returnType === 0) emit(0x83);
-                    else if (returnType === 2) emit(0x85);
-                    else emit(0x84);
-                }
-            } else {
-                if (t.type !== 'EOL' && t.value !== undefined) {
-                    throw new Error("Error on line " + t.line + ": Unexpected token '" + t.value + "'");
                 }
             }
-        }
 
-        // Only emit implicit RETURN if the last instruction wasn't a RETURN
-        if (qcode[qcode.length - 1] !== 0x7A &&
-            qcode[qcode.length - 1] !== 0x7B &&
-            qcode[qcode.length - 1] !== 0x7C &&
-            qcode[qcode.length - 1] !== 0x79) { // Check 79 too
-            emit(0x7B); // Implicit Return 0.0
-        }
-
-        // Check for Unclosed Blocks
-        if (loops.length > 0) error("Unclosed loop (DO/WHILE) at end of file");
-
-        var unclosedIfs = fixups.filter(function (f) { return f.type === 'IF' || f.type === 'ELSE' || f.type === 'ELSEIF'; });
-        if (unclosedIfs.length > 0) error("Unclosed IF block at end of file");
-
-        // Backpatch Label Fixups (GOTO/ONERR)
-        for (var i = 0; i < labelFixups.length; i++) {
-            var f = labelFixups[i];
-            if (labels[f.name] !== undefined) {
-                patchFixup(f.addr, labels[f.name]);
-            } else {
-                // 
-                //                 console.warn("Compiler: Undefined Label " + f.name);
+            // Only emit implicit RETURN if the last instruction wasn't a RETURN
+            if (qcode[qcode.length - 1] !== 0x7A &&
+                qcode[qcode.length - 1] !== 0x7B &&
+                qcode[qcode.length - 1] !== 0x7C &&
+                qcode[qcode.length - 1] !== 0x79) { // Check 79 too
+                emit(0x7B); // Implicit Return 0.0
             }
+
+            // Check for Unclosed Blocks
+            if (loops.length > 0) error("Unclosed loop (DO/WHILE) at end of file");
+
+            var unclosedIfs = fixups.filter(function (f) { return f.type === 'IF' || f.type === 'ELSE' || f.type === 'ELSEIF'; });
+            if (unclosedIfs.length > 0) error("Unclosed IF block at end of file");
+
+            // Backpatch Label Fixups (GOTO/ONERR)
+            for (var i = 0; i < labelFixups.length; i++) {
+                var f = labelFixups[i];
+                if (labels[f.name.toUpperCase()] !== undefined) {
+                    patchFixup(f.addr, labels[f.name.toUpperCase()]);
+                } else {
+                    // Strict: Error on missing label (Report line of first usage)
+                    throw new Error("Error on line " + f.line + ": Label reference error: Label '" + f.name + "' not found");
+                }
+            }
+
+            // Build Tables with BE Endianness
+            var globalTable = [];
+            for (var i = 0; i < globals.length; i++) {
+                var g = globals[i];
+                globalTable.push(g.name.length);
+                for (var k = 0; k < g.name.length; k++) globalTable.push(g.name.charCodeAt(k));
+                globalTable.push(g.type);
+                // Globals have Word Offset (BE)
+                globalTable.push((g.offset >> 8) & 0xFF, g.offset & 0xFF);
+            }
+            // Align Table to Word boundary
+            // Removed per user feedback: GT should be tight packed (47 bytes, not 48)
+            // if (globalTable.length % 2 !== 0) globalTable.push(0x00);
+
+            var externalTable = [];
+            for (var i = 0; i < externals.length; i++) {
+                var e = externals[i];
+                externalTable.push(e.name.length);
+                for (var k = 0; k < e.name.length; k++) externalTable.push(e.name.charCodeAt(k));
+                externalTable.push(e.type);
+            }
+
+            // Final Assembly Offsets (Relative to OPL Header start)
+            // Order: Header(4) + Params(N+1) + Globals + Externals + Fixups + QCode + Source
+            var paramBlockSize = 1 + params.length;
+            var headerBlockSize = 4; // VarSpace(2) + QCodeSize(2). ParamCount is part of paramBlock.
+
+            // Build Fixup Tables
+            // (Format: [StrSize BE] [StrData...] [ArrSize BE] [ArrData...])
+            var strFixupTable = [];
+            var strFixupData = [];
+            for (var i = 0; i < strFixups.length; i++) {
+                var f = strFixups[i];
+                strFixupData.push((f.addr >> 8) & 0xFF, f.addr & 0xFF, f.len & 0xFF);
+            }
+            strFixupTable.push((strFixupData.length >> 8) & 0xFF, strFixupData.length & 0xFF);
+            strFixupTable = strFixupTable.concat(strFixupData);
+
+            var arrFixupTable = [];
+            var arrFixupData = [];
+            for (var i = 0; i < arrFixups.length; i++) {
+                var f = arrFixups[i];
+                arrFixupData.push((f.addr >> 8) & 0xFF, f.addr & 0xFF, (f.len >> 8) & 0xFF, f.len & 0xFF);
+            }
+            arrFixupTable.push((arrFixupData.length >> 8) & 0xFF, arrFixupData.length & 0xFF);
+            arrFixupTable = arrFixupTable.concat(arrFixupData);
+
+            var fixupTable = strFixupTable.concat(arrFixupTable);
+
+            var globalOff = headerBlockSize + paramBlockSize;
+            var externOff = globalOff + 2 + globalTable.length;
+            var fixupOff = externOff + 2 + externalTable.length;
+            var qcodeOff = fixupOff + fixupTable.length;
+            var sourceOff = qcodeOff + qcode.length;
+
+
+            // Minimum variable space is 2 bytes
+            if (varSpaceSize < 2) varSpaceSize = 2;
+
+            var output = [];
+            // 1. OPL Header (Pattern 1: Procedural)
+            // Offset 0: VarSpace BE
+            // Offset 2: QCodeSize BE
+            // Offset 4: NumParams
+            output.push((varSpaceSize >> 8) & 0xFF, varSpaceSize & 0xFF); // VarSpace
+            output.push((qcode.length >> 8) & 0xFF, qcode.length & 0xFF); // QCodeSize
+
+            // 2. Params (Offset 4)
+            output.push(params.length & 0xFF);
+            for (var i = params.length - 1; i >= 0; i--) output.push(params[i]);
+
+            // 3. Global Table (Size is BE)
+            output.push((globalTable.length >> 8) & 0xFF, globalTable.length & 0xFF);
+            output = output.concat(globalTable);
+
+            // 4. External Table (Size is BE)
+            output.push((externalTable.length >> 8) & 0xFF, externalTable.length & 0xFF);
+            output = output.concat(externalTable);
+
+            // 5. Fixup Table
+            output = output.concat(fixupTable);
+
+            // 6. QCode
+            output = output.concat(qcode);
+
+            // 7. Source (Optional, empty for now)
+
+            return new Uint8Array(output);
+
+        } catch (e) {
+            // Contextualize Error
+            if (e.message && e.message.indexOf("Error on line") === -1) {
+                // Try to find current line from token pointer
+                var currentLine = "?";
+                if (tokens && tokens[ptr] && tokens[ptr].line) {
+                    currentLine = tokens[ptr].line;
+                } else if (tokens && tokens.length > 0) {
+                    // Fallback to last token?
+                    currentLine = tokens[tokens.length - 1].line;
+                }
+
+                throw new Error("Error on line " + currentLine + ": " + e.message);
+            }
+            throw e;
         }
-
-        // Build Tables with BE Endianness
-        var globalTable = [];
-        for (var i = 0; i < globals.length; i++) {
-            var g = globals[i];
-            globalTable.push(g.name.length);
-            for (var k = 0; k < g.name.length; k++) globalTable.push(g.name.charCodeAt(k));
-            globalTable.push(g.type);
-            // Globals have Word Offset (BE)
-            globalTable.push((g.offset >> 8) & 0xFF, g.offset & 0xFF);
-        }
-        // Align Table to Word boundary
-        // Removed per user feedback: GT should be tight packed (47 bytes, not 48)
-        // if (globalTable.length % 2 !== 0) globalTable.push(0x00);
-
-        var externalTable = [];
-        for (var i = 0; i < externals.length; i++) {
-            var e = externals[i];
-            externalTable.push(e.name.length);
-            for (var k = 0; k < e.name.length; k++) externalTable.push(e.name.charCodeAt(k));
-            externalTable.push(e.type);
-        }
-
-        // Final Assembly Offsets (Relative to OPL Header start)
-        // Order: Header(4) + Params(N+1) + Globals + Externals + Fixups + QCode + Source
-        var paramBlockSize = 1 + params.length;
-        var headerBlockSize = 4; // VarSpace(2) + QCodeSize(2). ParamCount is part of paramBlock.
-
-        // Build Fixup Tables
-        // (Format: [StrSize BE] [StrData...] [ArrSize BE] [ArrData...])
-        var strFixupTable = [];
-        var strFixupData = [];
-        for (var i = 0; i < strFixups.length; i++) {
-            var f = strFixups[i];
-            strFixupData.push((f.addr >> 8) & 0xFF, f.addr & 0xFF, f.len & 0xFF);
-        }
-        strFixupTable.push((strFixupData.length >> 8) & 0xFF, strFixupData.length & 0xFF);
-        strFixupTable = strFixupTable.concat(strFixupData);
-
-        var arrFixupTable = [];
-        var arrFixupData = [];
-        for (var i = 0; i < arrFixups.length; i++) {
-            var f = arrFixups[i];
-            arrFixupData.push((f.addr >> 8) & 0xFF, f.addr & 0xFF, (f.len >> 8) & 0xFF, f.len & 0xFF);
-        }
-        arrFixupTable.push((arrFixupData.length >> 8) & 0xFF, arrFixupData.length & 0xFF);
-        arrFixupTable = arrFixupTable.concat(arrFixupData);
-
-        var fixupTable = strFixupTable.concat(arrFixupTable);
-
-        var globalOff = headerBlockSize + paramBlockSize;
-        var externOff = globalOff + 2 + globalTable.length;
-        var fixupOff = externOff + 2 + externalTable.length;
-        var qcodeOff = fixupOff + fixupTable.length;
-        var sourceOff = qcodeOff + qcode.length;
-
-
-        // Minimum variable space is 2 bytes
-        if (varSpaceSize < 2) varSpaceSize = 2;
-
-        var output = [];
-        // 1. OPL Header (Pattern 1: Procedural)
-        // Offset 0: VarSpace BE
-        // Offset 2: QCodeSize BE
-        // Offset 4: NumParams
-        output.push((varSpaceSize >> 8) & 0xFF, varSpaceSize & 0xFF); // VarSpace
-        output.push((qcode.length >> 8) & 0xFF, qcode.length & 0xFF); // QCodeSize
-
-        // 2. Params (Offset 4)
-        output.push(params.length & 0xFF);
-        for (var i = params.length - 1; i >= 0; i--) output.push(params[i]);
-
-        // 3. Global Table (Size is BE)
-        output.push((globalTable.length >> 8) & 0xFF, globalTable.length & 0xFF);
-        output = output.concat(globalTable);
-
-        // 4. External Table (Size is BE)
-        output.push((externalTable.length >> 8) & 0xFF, externalTable.length & 0xFF);
-        output = output.concat(externalTable);
-
-        // 5. Fixup Table
-        output = output.concat(fixupTable);
-
-        // 6. QCode
-        output = output.concat(qcode);
-
-        // 7. Source (Optional, empty for now)
-
-        return new Uint8Array(output);
     }
 
     // Wrapper for Tokenizer to be safe

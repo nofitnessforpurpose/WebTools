@@ -68,6 +68,7 @@ var lastFocusedItemIndex = -1;
 
 Object.defineProperty(window, 'syntaxHighlightingEnabled', { get: function () { return AppStore.state.syntaxHighlightingEnabled; }, set: function (v) { AppStore.state.syntaxHighlightingEnabled = v; } });
 var decompilerLogWindow;
+var packReportWindow;
 var variableStorageWindow;
 var saveTimer = null;
 
@@ -185,6 +186,7 @@ window.addEventListener('click', function (e) {
 // Register Menus
 // Register Menus
 registerMenu('btn-file-menu', 'file-dropdown', populateFileMenu);
+registerMenu('btn-view-menu', 'view-dropdown', populateViewMenu);
 registerMenu('btn-help', 'help-dropdown');
 
 
@@ -258,11 +260,63 @@ if (document.getElementById('menu-save-pack')) {
       exportHex();
       closeAllMenus();
    });
-
    document.getElementById('menu-export-item').addEventListener('click', function (e) {
       e.preventDefault();
       if (this.classList.contains('disabled')) return;
       exportCurrentItem();
+      closeAllMenus();
+   });
+}
+
+// View Menu Handlers
+if (document.getElementById('menu-pack-header')) {
+   document.getElementById('menu-pack-header').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      if (currentPackIndex >= 0 && packs[currentPackIndex]) {
+         var pack = packs[currentPackIndex];
+         var headerIdx = -1;
+         // Find Header Item (Type -1)
+         for (var i = 0; i < pack.items.length; i++) {
+            if (pack.items[i].type === -1) {
+               headerIdx = i;
+               break;
+            }
+         }
+
+         if (headerIdx >= 0) {
+            itemSelected(currentPackIndex, headerIdx); // Use itemSelected to open editor
+         } else {
+            selectPack(currentPackIndex);
+         }
+      }
+      closeAllMenus();
+   });
+
+   document.getElementById('menu-pack-report').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      var pack = currentPack;
+      if (!pack && typeof packs !== 'undefined' && currentPackIndex >= 0) {
+         pack = packs[currentPackIndex];
+      }
+      if (packReportWindow && pack) {
+         packReportWindow.open(pack);
+      }
+      closeAllMenus();
+   });
+
+   document.getElementById('menu-memory-map').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      if (currentPackIndex >= 0) selectPack(currentPackIndex);
+      closeAllMenus();
+   });
+
+   document.getElementById('menu-visualizer').addEventListener('click', function (e) {
+      e.preventDefault();
+      if (this.classList.contains('disabled')) return;
+      if (typeof CodeVisualizer !== 'undefined') CodeVisualizer.showSystemMap(packs);
       closeAllMenus();
    });
 }
@@ -348,6 +402,18 @@ function populateFileMenu() {
          container.appendChild(a);
       }
    }
+}
+
+function populateViewMenu() {
+   var packOpen = (currentPackIndex >= 0);
+   var ids = ['menu-pack-header', 'menu-pack-report', 'menu-memory-map', 'menu-visualizer'];
+   ids.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) {
+         if (packOpen) el.classList.remove('disabled');
+         else el.classList.add('disabled');
+      }
+   });
 }
 
 // Help Menu Handlers (Now handled by RegisterMenu but need static listeners for items)
@@ -472,6 +538,7 @@ function init() {
 
    initIconToolbar();
    decompilerLogWindow = new DecompilerLogWindow();
+   packReportWindow = new PackReportWindow();
    variableStorageWindow = new VariableStorageWindow();
    updateInventory();
 
@@ -753,6 +820,7 @@ function updateItemButtons(isDirty) {
 
       var hasActivePack = hasPack && !isDirty;
       toolbarButtons.btnPackHeader.setActive(hasActivePack);
+      toolbarButtons.btnPackReport.setActive(hasActivePack);
       toolbarButtons.btnMemoryMap.setActive(hasActivePack);
       toolbarButtons.btnVisualizer.setActive(hasActivePack);
    }
@@ -850,8 +918,35 @@ function initIconToolbar() {
 
    createSeparator();
 
-   toolbarButtons.btnPackHeader = createToolbarBtn('tbtn-pack-header', 'fas fa-receipt', 'Pack Header', function () {
-      if (currentPackIndex >= 0) selectItem(currentPackIndex, 0);
+   toolbarButtons.btnPackHeader = createToolbarBtn('tbtn-pack-header', 'fas fa-receipt', 'Pack Header / Contents', function () {
+      if (currentPackIndex >= 0 && packs[currentPackIndex]) {
+         var pack = packs[currentPackIndex];
+         var headerIdx = -1;
+         // Find Header Item (Type -1)
+         for (var i = 0; i < pack.items.length; i++) {
+            if (pack.items[i].type === -1) {
+               headerIdx = i;
+               break;
+            }
+         }
+
+         if (headerIdx >= 0) {
+            itemSelected(currentPackIndex, headerIdx);
+         } else {
+            selectPack(currentPackIndex);
+         }
+      }
+   });
+
+   toolbarButtons.btnPackReport = createToolbarBtn('tbtn-pack-report', 'fas fa-clipboard-list', 'Pack Summary Report', function () {
+      var pack = currentPack;
+      if (!pack && typeof packs !== 'undefined' && currentPackIndex >= 0) {
+         pack = packs[currentPackIndex];
+      }
+
+      if (packReportWindow && pack) {
+         packReportWindow.open(pack);
+      }
    });
 
    toolbarButtons.btnMemoryMap = createToolbarBtn('tbtn-memory-map', 'fas fa-map', 'Memory Map', function () {
@@ -1384,6 +1479,21 @@ function itemSelected(packIndex, itemIndex, event) {
       // Single Selection (programmatic or Special Item)
       selectedItems = [item];
    }
+
+   // Update Status Bar for multi-select
+   if (selectedItems.length > 1) {
+      setStatus(selectedItems.length + " items selected");
+   } else if (event && !event.ctrlKey && !event.shiftKey) {
+      // If single click (no modifiers), or special item, we typically clear custom status 
+      // or it gets overwritten by the editor loading status.
+      // But let's be explicit if we want to clear the "X items selected" message.
+      if (typeof statusmessageelement !== 'undefined' && statusmessageelement) {
+         if (statusmessageelement.innerText.indexOf("selected") !== -1) {
+            statusmessageelement.innerText = "";
+         }
+      }
+   }
+
    // Ensure current item is in selection (unless explicitly toggled off via ctrl?)
    // If I Ctrl+Click to deselect, currentItem is still "focused".
    // If currentItem is not in selectedItems, eraseItem should probably NOT erase it?

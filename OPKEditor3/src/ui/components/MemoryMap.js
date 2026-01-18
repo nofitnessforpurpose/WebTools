@@ -494,26 +494,62 @@ function renderMemoryMap(pack) {
                     r.item.storeData(fullData, 0);
                     HexViewer.show(fullData, "Hex View: " + (r.item.name || getItemDescription(r.item)));
                 } else if (!isClick) {
-                    // Tooltip
-                    var cycles = getAccessCycles(r.offset, pack);
-                    var text = r.item ? (
-                        (r.item.name || getItemDescription(r.item)) + "\n" +
-                        "Type: " + r.item.type + "\n" +
-                        "Size: " + r.len + "\n" +
-                        "Offset: " + r.offset.toString(16).toUpperCase()
-                    ) : (
-                        "Free Space\nSize: " + r.len + "\nOffset: " + r.offset.toString(16).toUpperCase()
-                    );
-                    canvas.title = text;
+                    // Tooltip (Styled to match Pack Contents)
+                    var html = "";
+                    if (r.item) {
+                        var itemName = r.item.name || "Item";
+                        var typeDesc = getItemDescription(r.item);
+                        var childCount = undefined;
+
+                        // Calculate Record Count for Data Files on the fly
+                        if (r.item.type === 1 && r.item.data && r.item.data.length > 10) {
+                            var rType = r.item.data[10] & 0x7f;
+                            if (rType > 0 && rType < 16) rType += 15;
+                            childCount = 0;
+                            for (var j = 0; j < pack.items.length; j++) {
+                                if (pack.items[j].type === rType) childCount++;
+                            }
+                        }
+
+                        html = "<h4>" + itemName + "</h4>";
+                        html += "<div class='tooltip-row'><span class='tooltip-label'>Type:</span><span class='tooltip-value'>" + typeDesc + " (" + r.item.type + ")</span></div>";
+                        html += "<div class='tooltip-row'><span class='tooltip-label'>Offset:</span><span class='tooltip-value'>0x" + r.offset.toString(16).toUpperCase() + "</span></div>";
+                        html += "<div class='tooltip-row'><span class='tooltip-label'>Length:</span><span class='tooltip-value'>" + r.len + " bytes</span></div>";
+                        if (childCount !== undefined) {
+                            html += "<div class='tooltip-row'><span class='tooltip-label'>Records:</span><span class='tooltip-value'>" + childCount + "</span></div>";
+                        }
+                        html += "<div class='tooltip-row'><span class='tooltip-label'>Status:</span><span class='tooltip-value'>" + (r.item.deleted ? "Deleted" : "Active") + "</span></div>";
+
+                        if (typeof Checksums !== 'undefined' && r.item.getFullData) {
+                            var fullData = r.item.getFullData();
+                            var crc = Checksums.crc32(fullData);
+                            var crcStr = "0x" + crc.toString(16).toUpperCase();
+                            html += "<div class='tooltip-row'><span class='tooltip-label'>CRC32:</span><span class='tooltip-value'>" + crcStr + "</span></div>";
+                        }
+                    } else {
+                        html = "<h4>Free Space</h4>";
+                        html += "<div class='tooltip-row'><span class='tooltip-label'>Offset:</span><span class='tooltip-value'>0x" + r.offset.toString(16).toUpperCase() + "</span></div>";
+                        html += "<div class='tooltip-row'><span class='tooltip-label'>Length:</span><span class='tooltip-value'>" + r.len + " bytes</span></div>";
+                    }
+
+                    if (typeof TooltipManager !== 'undefined') {
+                        TooltipManager.show(e.clientX, e.clientY, html);
+                    } else {
+                        canvas.title = r.item ? (itemName + "\nOffset: " + r.offset.toString(16).toUpperCase()) : "Free Space";
+                    }
                 }
                 found = true;
                 break;
             }
         }
-        if (!isClick && !found) canvas.title = "";
+        if (!isClick && !found) {
+            canvas.title = "";
+            if (typeof TooltipManager !== 'undefined') TooltipManager.hide();
+        }
     }
 
     canvas.addEventListener('mousemove', function (e) { handleInteraction(e, false); });
+    canvas.addEventListener('mouseleave', function () { if (typeof TooltipManager !== 'undefined') TooltipManager.hide(); });
     canvas.addEventListener('click', function (e) { handleInteraction(e, true); });
 
     // Helper: Access Cycles

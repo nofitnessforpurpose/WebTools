@@ -87,8 +87,15 @@ var SyntaxHighlighter = {
         // Ensure map is initialized
         this.init();
 
-        // Escape HTML entities first
-        code = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        // Helper for escaping HTML
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
 
         // Tokenize and highlight
         // We need to be careful with order. Strings and comments first.
@@ -109,7 +116,7 @@ var SyntaxHighlighter = {
                 // Note: REM must be a separate word or at start
                 // Added support for :REM and made matching stricter (word boundary)
                 if (char === '\'' || (line.substr(j, 3).toUpperCase() === "REM" && (j === 0 || /[\s:]/.test(line[j - 1])) && (j + 3 >= line.length || /[^A-Za-z0-9%$]/.test(line[j + 3])))) {
-                    highlightedLine += '<span class="opl-comment">' + line.substr(j) + '</span>';
+                    highlightedLine += '<span class="opl-comment">' + escapeHtml(line.substr(j)) + '</span>';
                     break; // Rest of line is comment
                 }
 
@@ -128,7 +135,7 @@ var SyntaxHighlighter = {
                         }
                         end++;
                     }
-                    highlightedLine += '<span class="opl-string">' + line.substring(j, end) + '</span>';
+                    highlightedLine += '<span class="opl-string">' + escapeHtml(line.substring(j, end)) + '</span>';
                     j = end;
                     continue;
                 }
@@ -139,7 +146,7 @@ var SyntaxHighlighter = {
                     if (char === '$') {
                         var match = line.substr(j).match(/^\$[0-9A-Fa-f]+/);
                         if (match) {
-                            highlightedLine += '<span class="opl-number">' + match[0] + '</span>';
+                            highlightedLine += '<span class="opl-integer">' + escapeHtml(match[0]) + '</span>';
                             j += match[0].length;
                             continue;
                         }
@@ -149,11 +156,17 @@ var SyntaxHighlighter = {
                     if (match) {
                         // Ensure it's not part of a variable name (preceded by letter)
                         if (j > 0 && /[A-Za-z_]/.test(line[j - 1])) {
-                            highlightedLine += char;
+                            highlightedLine += escapeHtml(char);
                             j++;
                             continue;
                         }
-                        highlightedLine += '<span class="opl-number">' + match[0] + '</span>';
+
+                        // Check if float (has . or E)
+                        if (match[1] || match[2]) {
+                            highlightedLine += '<span class="opl-float">' + escapeHtml(match[0]) + '</span>';
+                        } else {
+                            highlightedLine += '<span class="opl-integer">' + escapeHtml(match[0]) + '</span>';
+                        }
                         j += match[0].length;
                         continue;
                     }
@@ -161,11 +174,41 @@ var SyntaxHighlighter = {
 
                 // Check for Keywords or Labels
                 if (/[A-Za-z]/.test(char)) {
-                    // Check for Label first (word ending in :)
-                    var labelMatch = line.substr(j).match(/^[A-Za-z][A-Za-z0-9]*[\$%&]?:/);
+                    // Check for Label first (word ending in ::) - Double Colon
+                    var labelMatch = line.substr(j).match(/^[A-Za-z][A-Za-z0-9]*[\$%&]?::/);
                     if (labelMatch) {
-                        highlightedLine += '<span class="opl-label">' + labelMatch[0] + '</span>';
+                        highlightedLine += '<span class="opl-label">' + escapeHtml(labelMatch[0]) + '</span>';
                         j += labelMatch[0].length;
+                        continue;
+                    }
+
+                    // Check for Procedure Call (word ending in :) - Single Colon
+                    var procMatch = line.substr(j).match(/^[A-Za-z][A-Za-z0-9]*[\$%&]?:/);
+                    if (procMatch) {
+                        var procName = procMatch[0];
+                        if (procName.indexOf('%:') !== -1) {
+                            highlightedLine += '<span class="opl-proc-integer">' + escapeHtml(procName) + '</span>';
+                        } else if (procName.indexOf('$:') !== -1) {
+                            highlightedLine += '<span class="opl-proc-string">' + escapeHtml(procName) + '</span>';
+                        } else {
+                            highlightedLine += '<span class="opl-proc-float">' + escapeHtml(procName) + '</span>';
+                        }
+                        j += procName.length;
+                        continue;
+                    }
+
+                    // Check for Logical Field Reference (e.g. A.Field, B.Field$)
+                    var logicalMatch = line.substr(j).match(/^[A-Za-z]\.[A-Za-z0-9]+[\$%&]?/);
+                    if (logicalMatch) {
+                        var fieldRef = logicalMatch[0];
+                        if (fieldRef.indexOf('%') !== -1) {
+                            highlightedLine += '<span class="opl-var-integer">' + escapeHtml(fieldRef) + '</span>';
+                        } else if (fieldRef.indexOf('$') !== -1) {
+                            highlightedLine += '<span class="opl-var-string">' + escapeHtml(fieldRef) + '</span>';
+                        } else {
+                            highlightedLine += '<span class="opl-var-float">' + escapeHtml(fieldRef) + '</span>';
+                        }
+                        j += fieldRef.length;
                         continue;
                     }
 
@@ -176,10 +219,16 @@ var SyntaxHighlighter = {
 
                         if (this.keywordMap.hasOwnProperty(upperWord)) {
                             var className = this.keywordMap[upperWord];
-                            highlightedLine += '<span class="' + className + '">' + word + '</span>';
+                            highlightedLine += '<span class="' + className + '">' + escapeHtml(word) + '</span>';
                         } else {
                             // Variable or unknown function
-                            highlightedLine += word;
+                            if (word.indexOf('%') !== -1) {
+                                highlightedLine += '<span class="opl-var-integer">' + escapeHtml(word) + '</span>';
+                            } else if (word.indexOf('$') !== -1) {
+                                highlightedLine += '<span class="opl-var-string">' + escapeHtml(word) + '</span>';
+                            } else {
+                                highlightedLine += '<span class="opl-var-float">' + escapeHtml(word) + '</span>';
+                            }
                         }
                         j += word.length;
                         continue;
@@ -188,27 +237,27 @@ var SyntaxHighlighter = {
 
                 // Operators and punctuation
                 if (/[+\-*/=<>:,]/.test(char)) {
-                    highlightedLine += '<span class="opl-operator">' + char + '</span>';
+                    highlightedLine += '<span class="opl-operator">' + escapeHtml(char) + '</span>';
                     j++;
                     continue;
                 }
 
                 // Brackets
                 if (char === '(') {
-                    highlightedLine += '<span class="bracket-' + (bracketLevel % 3) + '">' + char + '</span>';
+                    highlightedLine += '<span class="bracket-' + (bracketLevel % 3) + '">' + escapeHtml(char) + '</span>';
                     bracketLevel++;
                     j++;
                     continue;
                 }
                 if (char === ')') {
                     if (bracketLevel > 0) bracketLevel--;
-                    highlightedLine += '<span class="bracket-' + (bracketLevel % 3) + '">' + char + '</span>';
+                    highlightedLine += '<span class="bracket-' + (bracketLevel % 3) + '">' + escapeHtml(char) + '</span>';
                     j++;
                     continue;
                 }
 
                 // Default: just add character
-                highlightedLine += char;
+                highlightedLine += escapeHtml(char);
                 j++;
             }
             output += highlightedLine + '\n';

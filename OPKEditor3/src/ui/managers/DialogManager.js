@@ -43,11 +43,12 @@ var DialogManager = {
                     '--syntax-functions': element.querySelector('#syntax-functions'),
                     '--syntax-commands': element.querySelector('#syntax-commands'),
                     '--syntax-stringfuncs': element.querySelector('#syntax-stringfuncs'),
-                    '--syntax-string': element.querySelector('#syntax-string'),
                     '--syntax-comment': element.querySelector('#syntax-comment'),
-                    '--syntax-number': element.querySelector('#syntax-number'),
                     '--syntax-label': element.querySelector('#syntax-label'),
-                    '--syntax-operator': element.querySelector('#syntax-operator')
+                    '--syntax-operator': element.querySelector('#syntax-operator'),
+                    '--syntax-type-integer': element.querySelector('#syntax-type-integer'),
+                    '--syntax-type-float': element.querySelector('#syntax-type-float'),
+                    '--syntax-type-string': element.querySelector('#syntax-type-string')
                 };
                 var currentTheme = ThemeManager.currentTheme;
                 var defs = ThemeManager.getThemeDefinition(currentTheme);
@@ -623,9 +624,10 @@ var DialogManager = {
                         <div style="margin-bottom: 5px;"><label>Commands</label><br><input type="color" id="syntax-commands" data-var="--syntax-commands" style="width: 100%;"></div>
                         <div style="margin-bottom: 5px;"><label>Operators</label><br><input type="color" id="syntax-operator" data-var="--syntax-operator" style="width: 100%;"></div>
                         <div style="margin-bottom: 5px;"><label>Comments</label><br><input type="color" id="syntax-comment" data-var="--syntax-comment" style="width: 100%;"></div>
-                        <div style="margin-bottom: 5px;"><label>Strings</label><br><input type="color" id="syntax-string" data-var="--syntax-string" style="width: 100%;"></div>
-                        <div style="margin-bottom: 5px;"><label>Numbers</label><br><input type="color" id="syntax-number" data-var="--syntax-number" style="width: 100%;"></div>
                         <div style="margin-bottom: 5px;"><label>Labels</label><br><input type="color" id="syntax-label" data-var="--syntax-label" style="width: 100%;"></div>
+                        <div style="margin-bottom: 5px;"><label>Integers (Literals & Vars)</label><br><input type="color" id="syntax-type-integer" data-var="--syntax-type-integer" style="width: 100%;"></div>
+                        <div style="margin-bottom: 5px;"><label>Floats (Literals & Vars)</label><br><input type="color" id="syntax-type-float" data-var="--syntax-type-float" style="width: 100%;"></div>
+                        <div style="margin-bottom: 5px;"><label>Strings (Literals & Vars)</label><br><input type="color" id="syntax-type-string" data-var="--syntax-type-string" style="width: 100%;"></div>
                         <div style="margin-top: 15px;">
                             <button id="reset-syntax" class="modal-btn" style="background-color: #666;">Reset to Default</button>
                         </div>

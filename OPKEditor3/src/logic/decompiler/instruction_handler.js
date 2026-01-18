@@ -322,7 +322,7 @@
             return val;
         }
 
-        handleInstruction(op, def, args, stack, varMap, pc, size, codeBlock, labelMap, usedSystemVars) {
+        handleInstruction(op, def, args, stack, varMap, pc, size, codeBlock, labelMap, usedSystemVars, referencedProcedures) {
             // DEBUG: Trace execution
             if (def && (def.desc === 'BEEP' || def.desc === 'PRINT' || def.desc === 'AT')) {
 
@@ -508,6 +508,10 @@
                     }
                 }
 
+                if (referencedProcedures) {
+                    referencedProcedures.add(name);
+                }
+
                 const procArgs = [];
                 for (let i = 0; i < argCount; i++) {
                     // User Procedures (0x7D) interleave Type bytes (0=%, 1=none, 2=$)
@@ -629,7 +633,6 @@
                         return null;
                     }
                     if (op === 0x9F || op === 0xC8) { // USR/USR$ (Pop 2 args: Addr, AX)
-
                         const axObj = stack.pop();
                         const addrObj = stack.pop();
                         let ax = axObj ? (axObj.text || '0') : '0';
@@ -637,28 +640,8 @@
                         addr = this.formatAddress(addr, usedSystemVars);
                         const expr = `${def.desc}(${addr},${ax})`;
 
-                        // Lookahead: If next instruction consumes stack (e.g. DROP, Assign, Operator), push and return null.
-                        // If next instruction ignores stack (e.g. Statement start), treat this as a statement (Implicit Drop).
-                        let nextOpConsumes = false;
-                        if (codeBlock && pc + size < codeBlock.length) {
-                            const nextOp = codeBlock[pc + size];
-                            const nextDef = this.opcodes[nextOp];
-
-                            if (nextDef && nextDef.pops && nextDef.pops.trim().length > 0) {
-                                nextOpConsumes = true;
-                            }
-
-                            // Helper: Some generic ops might consume?
-                            // If USR is followed by POKE_M (pops=''), nextOpConsumes = false.
-                            // If USR is followed by DROP (pops='I'), nextOpConsumes = true.
-                        }
-
-                        if (nextOpConsumes) {
-                            stack.push({ text: expr, prec: PRECEDENCE.FUNC });
-                            return null;
-                        } else {
-                            return (trap ? "TRAP " : "") + expr;
-                        }
+                        stack.push({ text: (trap ? "TRAP " : "") + expr, prec: PRECEDENCE.FUNC });
+                        return null;
                     }
                 }
 
@@ -666,7 +649,15 @@
                 // Only run this if the instruction pushes a result (is an expression).
                 // Commands that don't push result should fall through to specific handlers or generic command fallback.
                 if (def.pushes) {
-                    const pops = (def.pops && def.pops.trim().length > 0) ? def.pops.split(' ').length : 0;
+                    let pops = 0;
+                    if (def.pops === 'Flist') {
+                        const countObj = stack.pop();
+                        const countText = countObj ? (countObj.text || '0') : '0';
+                        pops = parseInt(countText, 10);
+                        if (isNaN(pops)) pops = 0;
+                    } else {
+                        pops = (def.pops && def.pops.trim().length > 0) ? def.pops.split(' ').length : 0;
+                    }
                     const operands = [];
                     for (let i = 0; i < pops; i++) {
                         let opObj = stack.pop();
@@ -721,13 +712,22 @@
                             if (op >= 0x3C && op <= 0x40) {
                                 const isSafeFloat = (txt) => {
                                     if (/^M\d+$/.test(txt)) return true;
-                                    if (/^[a-zA-Z][a-zA-Z0-9_]*$/.test(txt)) return true;
+                                    if (/^[a-zA-Z][a-zA-Z0-9_.]*$/.test(txt)) return true;
                                     if (/\d+\.\d+/.test(txt)) return true;
                                     if (/^(SIN|COS|TAN|ATAN|SQR|LN|LOG|EXP|RND|ABS)\(/.test(txt)) return true;
                                     return false;
                                 };
 
-                                const isFltWrapper = (txt) => txt && txt.startsWith('FLT(') && txt.endsWith(')');
+                                const isFltWrapper = (txt) => {
+                                    if (!txt || !txt.startsWith('FLT(') || !txt.endsWith(')')) return false;
+                                    let depth = 0;
+                                    for (let i = 3; i < txt.length; i++) {
+                                        if (txt[i] === '(') depth++;
+                                        else if (txt[i] === ')') depth--;
+                                        if (depth === 0 && i < txt.length - 1) return false;
+                                    }
+                                    return depth === 0;
+                                };
 
                                 if (isSafeFloat(left) && isFltWrapper(right)) {
                                     right = right.slice(4, -1);
@@ -900,7 +900,7 @@
                     // trap already captured at top of function
 
                     // Whitelist for TRAP support (User Requested)
-                    const allowedTrap = ['APPEND', 'BACK', 'CLOSE', 'COPY', 'CREATE', 'DELETE', 'ERASE', 'EDIT', 'FIRST', 'INPUT', 'LAST', 'NEXT', 'OPEN', 'POSITION', 'RENAME', 'UPDATE', 'USE'];
+                    const allowedTrap = ['APPEND', 'BACK', 'CLOSE', 'COPY', 'COPYW', 'CREATE', 'DELETE', 'DELETEW', 'ERASE', 'EDIT', 'FIRST', 'INPUT', 'LAST', 'NEXT', 'OPEN', 'POSITION', 'RENAME', 'UPDATE', 'USE'];
 
                     // Check if current opcode is one of them?
                     // def.desc might have suffixes or args? No, generic commands are cleaner.

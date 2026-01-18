@@ -22,18 +22,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Psion OPK Editor v03.00.17</title>
+    <title>Psion OPK Editor v03.00.18</title>
 
     <!-- Stylesheets with cache busting -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
         id="font-awesome-css">
-    <link rel="stylesheet" href="styles/base.css?v=03.00.17">
-    <link rel="stylesheet" href="styles/layout.css?v=03.00.17">
-    <link rel="stylesheet" href="styles/components.css?v=03.00.17">
-    <link rel="stylesheet" href="styles/editor.css?v=03.00.17">
+    <link rel="stylesheet" href="styles/base.css?v=03.00.18">
+    <link rel="stylesheet" href="styles/layout.css?v=03.00.18">
+    <link rel="stylesheet" href="styles/components.css?v=03.00.18">
+    <link rel="stylesheet" href="styles/editor.css?v=03.00.18">
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="styles/psion.css?v=03.00.17">
-    <link rel="stylesheet" href="styles/syntax.css?v=03.00.17">
+    <link rel="stylesheet" href="styles/psion.css?v=03.00.18">
+    <link rel="stylesheet" href="styles/syntax.css?v=03.00.18">
 </head>
 
 <body>
@@ -79,6 +79,22 @@
                             style="width: 20px;"></i> Save Pack (.hex)</a>
                     <a href="#" id="menu-export-item" class="disabled"><i class="fas fa-file-export"
                             style="width: 20px;"></i> Save Item (Export)</a>
+                </div>
+            </div>
+
+            <div class="dropdown">
+                <button class="tool-btn dropbtn" id="btn-view-menu" title="View">
+                    <i class="fas fa-eye"></i> View <i class="fas fa-angle-down"
+                        style="font-size: 0.8em; margin-left: 3px;"></i>
+                </button>
+                <div class="dropdown-content" id="view-dropdown">
+                    <a href="#" id="menu-pack-header"><i class="fas fa-receipt" style="width: 20px;"></i> Pack Header /
+                        Contents</a>
+                    <a href="#" id="menu-pack-report"><i class="fas fa-clipboard-list" style="width: 20px;"></i> Pack
+                        Summary Report</a>
+                    <a href="#" id="menu-memory-map"><i class="fas fa-map" style="width: 20px;"></i> Memory Map</a>
+                    <a href="#" id="menu-visualizer"><i class="fas fa-diagram-project" style="width: 20px;"></i> Code
+                        Visualizer</a>
                 </div>
             </div>
 
@@ -172,23 +188,23 @@
 
     <!-- Scripts -->
     <!-- Logic Scripts -->
-    <script src="src/core/Constants.js?v=03.00.17"></script>
+    <script src="src/core/Constants.js?v=03.00.18"></script>
     <script src="src/core/AppStore.js"></script>
     <script src="src/logic/binaryfile.js"></script>
     <script src="src/logic/checksums.js"></script>
     <script src="src/logic/intelhex.js"></script>
-    <script src="src/logic/packimage.js?v=03.00.17"></script>
-    <script src="src/logic/decompiler/constants.js?v=03.00.17"></script>
+    <script src="src/logic/packimage.js?v=03.00.18"></script>
+    <script src="src/logic/decompiler/constants.js?v=03.00.18"></script>
     <script src="src/logic/decompiler/system_constants.js"></script>
     <script src="src/logic/decompiler/stack.js"></script>
     <script src="src/logic/decompiler/disassembler.js"></script>
-    <script src="src/logic/decompiler/instruction_handler.js?v=03.00.17"></script>
-    <script src="src/logic/decompiler/source_generator.js?v=03.00.17"></script>
-    <script src="src/logic/LanguageDetector.js?v=03.00.17"></script>
-    <script src="src/logic/OPLFormatter.js?v=03.00.17"></script>
-    <script src="src/logic/compiler/Compiler.js?v=03.00.17"></script>
+    <script src="src/logic/decompiler/instruction_handler.js?v=03.00.18"></script>
+    <script src="src/logic/decompiler/source_generator.js?v=03.00.18"></script>
+    <script src="src/logic/LanguageDetector.js?v=03.00.18"></script>
+    <script src="src/logic/OPLFormatter.js?v=03.00.18"></script>
+    <script src="src/logic/compiler/Compiler.js?v=03.00.18"></script>
 
-    <script src="src/logic/decompiler/main.js?v=03.00.17"></script>
+    <script src="src/logic/decompiler/main.js?v=03.00.18"></script>
     <script src="src/ui/editors/BaseEditor.js?v=cb1"></script>
     <script src="src/ui/editors/HexEditor.js?v=cb1"></script>
     <script src="src/ui/editors/BlockFileEditor.js?v=cb1"></script>
@@ -206,10 +222,10 @@
 
     <script src="src/ui/editors/RecordEditor.js?v=cb1"></script>
     <script src="src/ui/editors/MemoryMapEditor.js?v=cb1"></script>
-    <script src="src/ui/components/UDGEditor.js?v=03.00.17"></script>
+    <script src="src/ui/components/UDGEditor.js?v=03.00.18"></script>
     <script src="src/ui/components/CharacterMap.js?v=font_fix_13"></script>
     <script src="src/ui/components/OPLErrorCodes.js"></script>
-    <script src="src/ui/managers/optionsmanager.js?v=03.00.17"></script>
+    <script src="src/ui/managers/optionsmanager.js?v=03.00.18"></script>
     <script src="src/ui/managers/thememanager.js"></script>
     <script src="src/ui/managers/DialogManager.js?v=force_1"></script>
     <script src="src/ui/managers/tooltipmanager.js"></script>
@@ -222,17 +238,18 @@
     <script src="src/ui/components/dragdroplist.js"></script>
     <script src="src/ui/components/MemoryMap.js?v=fix_canvas_crash"></script>
     <script src="src/ui/components/HexViewer.js"></script>
-    <script src="src/ui/components/CodeVisualizer.js?v=03.00.17"></script>
-    <script src="src/ui/components/PackContents.js?v=03.00.17"></script>
+    <script src="src/ui/components/CodeVisualizer.js?v=03.00.18"></script>
+    <script src="src/ui/components/PackContents.js?v=03.00.18"></script>
     <script src="src/ui/components/OPLCommandData.js"></script>
-    <script src="src/ui/components/DecompilerLogWindow.js?v=03.00.17"></script>
-    <script src="src/ui/components/VariableStorageWindow.js?v=03.00.17"></script>
+    <script src="src/ui/components/DecompilerLogWindow.js?v=03.00.18"></script>
+    <script src="src/ui/components/PackReportWindow.js"></script>
+    <script src="src/ui/components/VariableStorageWindow.js?v=03.00.18"></script>
     <script src="src/ui/components/SpreadsheetDebugWindow.js"></script>
-    <script src="src/ui/components/OPLCommandReference.js?v=03.00.17"></script>
+    <script src="src/ui/components/OPLCommandReference.js?v=03.00.18"></script>
     <script src="src/ui/components/OPLContentViewer.js"></script>
     <script src="src/ui/components/OPLCodeContent.js"></script>
 
-    <script src="src/ui/controllers/opkedit.js?v=03.00.17"></script>
+    <script src="src/ui/controllers/opkedit.js?v=03.00.18"></script>
     <script>
         // Controller will handle initialization
     </script>

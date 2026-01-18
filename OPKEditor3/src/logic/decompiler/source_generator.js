@@ -39,6 +39,8 @@
                 params.push(`P${i + 1}${suffix}`);
             }
 
+            const referencedProcedures = new Set();
+
             let source = "";
 
             source += `${procName}:`;
@@ -128,7 +130,7 @@
             source += "\n";
 
             let indentLevel = 1;
-            let pendingElse = null;
+            let pendingElseStack = [];
             let pendingPrint = null;
 
             // Pre-calculate label names
@@ -139,6 +141,10 @@
             if (flow.forceLabels) {
                 for (const target of flow.forceLabels) usedLabels.add(target);
             }
+
+            // Track processed ELSE starts to prevent duplicate handling globally
+            const processedElseStarts = new Set();
+
 
             const sortedLabels = Array.from(usedLabels).sort((a, b) => a - b);
             const labelMap = {};
@@ -169,31 +175,21 @@
             }
 
             while (pc < endPC) {
-                if (pc >= 0x3C0 && pc <= 0x3D0) {
-                    console.log(`[SourceGen] PC:${pc.toString(16)} Targets:${flow.targets[pc] ? JSON.stringify(flow.targets[pc]) : 'None'}`);
-                }
                 let op = codeBlock[pc];
 
                 if (op === undefined) break; // Robustness
                 // Handle Flow Structures (DO, WHILE, IF)
-                if (flow.starts[pc]) {
-                    for (const struct of flow.starts[pc]) {
-                        if (struct.type === 'DO') {
-                            source += this.indent(indentLevel) + "DO\n";
-                            indentLevel++;
-                            loopStack.push({ type: 'DO', top: pc, cond: struct.cond, end: struct.end });
-                        } else if (struct.type === 'WHILE') {
-                            loopStack.push({ type: 'WHILE', top: pc, end: struct.end });
-                        }
-                    }
-                }
+
                 if (flow.targets[pc]) {
                     if (pendingPrint !== null) {
                         source += this.indent(indentLevel) + pendingPrint + ";\n";
                         pendingPrint = null;
                     }
-                    const structs = flow.targets[pc].sort((a, b) => b.start - a.start);
+                    let structs = flow.targets[pc].sort((a, b) => b.start - a.start);
+
                     for (const struct of structs) {
+
+
                         if (struct.type === 'DO') {
                             // Struct for DO target (UNTIL) handled at instruction level
                         } else if (struct.type === 'UNTIL') {
@@ -207,27 +203,64 @@
                             const startStructs = flow.starts[struct.start];
                             const originIF = startStructs && startStructs.find(s => s.type === 'IF');
 
+                            // Check for Stale ENDIF (e.g. if the IF scope was extended due to merging)
+                            if (originIF && originIF.end !== pc) continue;
+
                             // Check for Empty ELSE case (pendingElse for this IF)
-                            if (pendingElse && originIF && (originIF.end === pendingElse.outerEnd)) {
+                            const topPE = pendingElseStack.length > 0 ? pendingElseStack[pendingElseStack.length - 1] : null;
+                            if (topPE && originIF && (originIF.end === topPE.outerEnd) && (topPE.originStruct === originIF)) {
                                 // We reached the ENDIF of the block that has a pending ELSE.
                                 // This means the ELSE block was empty.
                                 // Indentation was already decremented at the ELSE target, so we don't decrement again.
-                                pendingElse = null;
+                                pendingElseStack.pop();
                             } else if (originIF && originIF.isElseIf) {
-                                // Suppress ENDIF for IFs that were promoted to ELSEIF
+                                // Suppress ENDIF and Indent Decrement for IFs that were promoted to ELSEIF (Merged)
                             } else {
                                 indentLevel--;
                                 source += this.indent(indentLevel) + "ENDIF\n";
                             }
                         } else if (struct.type === 'ELSE') {
+                            // Deduplicate ELSEs globally: If we already processed an ELSE for this IF start, skip.
+                            if (processedElseStarts.has(struct.start)) continue;
+
+                            // Ignore Self-Targeting ELSE (Empty IF anomaly or flow error)
+                            if (struct.start === pc) continue;
+
+                            processedElseStarts.add(struct.start);
+
                             indentLevel--;
                             const outerIF = flow.starts[struct.start] && flow.starts[struct.start].find(s => s.type === 'IF');
                             if (outerIF) {
-                                pendingElse = { outerEnd: outerIF.end, indent: indentLevel };
+                                pendingElseStack.push({ outerEnd: outerIF.end, indent: indentLevel, originStruct: outerIF });
                             } else {
                                 source += this.indent(indentLevel) + "ELSE\n";
                                 indentLevel++;
                             }
+                        }
+                    }
+                }
+
+                // Handle Flow Structures (DO, WHILE, IF) - Moved AFTER targets to handle context switching (ELSE) first
+                if (flow.starts[pc]) {
+                    let pendingElseHandled = false;
+                    for (const struct of flow.starts[pc]) {
+                        // Only emit ELSE for structures handled within this block (DO, WHILE).
+                        // IF structures are handled by the 0x7E opcode handler (for ELSEIF logic).
+                        if ((struct.type === 'DO' || struct.type === 'WHILE') && !pendingElseHandled) {
+                            if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                const p = pendingElseStack.pop();
+                                source += this.indent(p.indent) + "ELSE\n";
+                                indentLevel = p.indent + 1;
+                                pendingElseHandled = true;
+                            }
+                        }
+
+                        if (struct.type === 'DO') {
+                            source += this.indent(indentLevel) + "DO\n";
+                            indentLevel++;
+                            loopStack.push({ type: 'DO', top: pc, cond: struct.cond, end: struct.end });
+                        } else if (struct.type === 'WHILE') {
+                            loopStack.push({ type: 'WHILE', top: pc, end: struct.end });
                         }
                     }
                 }
@@ -239,10 +272,10 @@
                         pendingPrint = null;
                     }
 
-                    if (pendingElse) {
-                        source += this.indent(pendingElse.indent) + "ELSE\n";
-                        indentLevel++;
-                        pendingElse = null;
+                    if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                        const p = pendingElseStack.pop();
+                        source += this.indent(p.indent) + "ELSE\n";
+                        indentLevel = p.indent + 1;
                     }
                     const labelName = labelMap[pc] || `Lab${pc}`;
                     source += `${labelName}:: \n`;
@@ -251,10 +284,10 @@
                 const def = this.instHandler.getInstructionDef(codeBlock, pc);
 
                 if (!def) {
-                    if (pendingElse) {
-                        source += this.indent(pendingElse.indent) + "ELSE\n";
-                        indentLevel++;
-                        pendingElse = null;
+                    if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                        const p = pendingElseStack.pop();
+                        source += this.indent(p.indent) + "ELSE\n";
+                        indentLevel = p.indent + 1;
                     }
                     if (pc < codeBlock.length) {
                         const hex = codeBlock[pc].toString(16).toUpperCase().padStart(2, '0');
@@ -276,22 +309,20 @@
                             source += this.indent(indentLevel) + pendingPrint + ";\n";
                             pendingPrint = null;
                         }
+                        const condObj = stack.pop() || { text: '?' };
+                        const cond = condObj.text || '0';
                         const struct = flow.jumps[pc];
                         if (struct) {
                             if (struct.type === 'WHILE') {
-                                if (pendingElse) {
-                                    source += this.indent(pendingElse.indent) + "ELSE\n";
-                                    indentLevel++;
-                                    pendingElse = null;
+                                if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                    const p = pendingElseStack.pop();
+                                    source += this.indent(p.indent) + "ELSE\n";
+                                    indentLevel = p.indent + 1;
                                 }
-                                const condObj = stack.pop();
-                                const cond = condObj.text || '0';
                                 expr = `WHILE (${cond})`;
                                 source += this.indent(indentLevel) + expr + "\n";
                                 indentLevel++;
                             } else if (struct.type === 'IF') {
-                                const condObj = stack.pop();
-                                const cond = condObj.text || '0';
                                 // More lenient ELSEIF: If this IF's end points to same place as outer ELSE 
                                 // or within a small instruction gap.
                                 let innerIF = null;
@@ -299,44 +330,80 @@
                                     innerIF = flow.starts[pc].find(s => s.type === 'IF');
                                 }
 
-                                if (pendingElse && innerIF && (innerIF.end === pendingElse.outerEnd || (innerIF.end > pendingElse.outerEnd && innerIF.end <= pendingElse.outerEnd + 3))) {
+                                const topPE = pendingElseStack.length > 0 ? pendingElseStack[pendingElseStack.length - 1] : null;
+
+                                // DEBUG LOGGING
+                                // if (options.logCallback && topPE && innerIF) {
+                                //     console.log(`[DEBUG] PC:${pc.toString(16).toUpperCase()} Indent:${indentLevel} TopPE:{Indent:${topPE.indent}, End:${topPE.outerEnd.toString(16)}} InnerIF:{End:${innerIF.end.toString(16)}} Match:${(topPE.indent === indentLevel && (innerIF.end === topPE.outerEnd || (innerIF.end > topPE.outerEnd && innerIF.end <= topPE.outerEnd + 3)))}`);
+                                // }
+
+                                if (topPE && topPE.indent === indentLevel && innerIF && topPE.originStruct.start !== innerIF.start && (innerIF.end === topPE.outerEnd || (innerIF.end > topPE.outerEnd && innerIF.end <= topPE.outerEnd + 3))) {
                                     innerIF.isElseIf = true; // Mark this IF as merged
+                                    // Extend the scope if the new Inner IF goes further than the Outer IF
+                                    if (innerIF.end > topPE.outerEnd) {
+                                        const oldEnd = topPE.outerEnd;
+                                        topPE.outerEnd = innerIF.end;
+
+                                        // Move ALL ENDIF targets from the old end to the new end
+                                        if (flow.targets[oldEnd]) {
+                                            const endIfs = flow.targets[oldEnd].filter(s => s.type === 'ENDIF');
+                                            const others = flow.targets[oldEnd].filter(s => s.type !== 'ENDIF');
+
+                                            if (endIfs.length > 0) {
+                                                if (!flow.targets[innerIF.end]) flow.targets[innerIF.end] = [];
+                                                endIfs.forEach(s => {
+                                                    const structs = flow.starts[s.start];
+                                                    const ifStruct = structs && structs.find(st => st.type === 'IF');
+                                                    if (ifStruct) ifStruct.end = innerIF.end;
+                                                });
+
+                                                flow.targets[innerIF.end].push(...endIfs);
+                                                flow.targets[oldEnd] = others;
+                                            }
+                                        }
+                                    }
                                     expr = `ELSEIF (${cond})`;
                                     // Use the same indent level as the pendingElse (which is outer indent)
-                                    source += this.indent(pendingElse.indent) + expr + "\n";
-                                    // IMPORTANT: ELSEIF body is nested, so we MUST increment indentLevel
-                                    // But since we are consuming the pendingElse's indent, we effectively start at outer indent.
-                                    // We need to set indentLevel to be formatted correctly for the body.
-                                    indentLevel = pendingElse.indent + 1;
-                                    pendingElse = null;
+                                    source += this.indent(topPE.indent) + expr + "\n";
+                                    indentLevel = topPE.indent + 1;
+                                    pendingElseStack.pop();
                                 } else {
-                                    if (pendingElse) {
-                                        source += this.indent(pendingElse.indent) + "ELSE\n";
-                                        indentLevel++;
-                                        pendingElse = null;
+                                    if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                        const p = pendingElseStack.pop();
+                                        source += this.indent(p.indent) + "ELSE\n";
+                                        indentLevel = p.indent + 1;
                                     }
                                     expr = `IF (${cond})`;
                                     source += this.indent(indentLevel) + expr + "\n";
                                     indentLevel++;
                                 }
                             } else if (struct.type === 'DO') {
-                                if (pendingElse) {
-                                    source += this.indent(pendingElse.indent) + "ELSE\n";
-                                    indentLevel++;
-                                    pendingElse = null;
+                                if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                    const p = pendingElseStack.pop();
+                                    source += this.indent(p.indent) + "ELSE\n";
+                                    indentLevel = p.indent + 1;
                                 }
-                                const condObj = stack.pop();
-                                const cond = condObj.text || '0';
                                 expr = `UNTIL (${cond})`;
                                 source += this.indent(indentLevel) + expr + "\n";
                             }
                         } else {
-                            const condObj = stack.pop();
                             const rel = args.D;
                             const target = (pc + 1) + rel;
                             const labelName = labelMap[target] || `Lab${target}`;
-                            expr = `IF NOT (${condObj.text || '?'}) GOTO ${labelName}`;
-                            source += this.indent(indentLevel) + expr + "\n";
+                            if (args.D === 5) {
+                                // HEURISTIC: Simple conditional skip pattern (IF cond GOTO label)
+                                // This corresponds to: BranchIfFalse next; GOTO label; next:
+                                source += this.indent(indentLevel) + `IF ${condObj.text || '?'}\n`;
+                                indentLevel++;
+                                source += this.indent(indentLevel) + `GOTO ${labelName}::\n`;
+                                indentLevel--;
+                                source += this.indent(indentLevel) + "ENDIF\n";
+                            } else {
+                                // Structural IF Fallback (should not usually happen with improved flow analysis)
+                                expr = `IF (${condObj.text || '?'})`;
+                                source += this.indent(indentLevel) + expr + "\n";
+                                indentLevel++;
+                            }
                         }
                     } else if (op === 0x51) { // GOTO
                         if (pendingPrint !== null) {
@@ -358,18 +425,18 @@
                                 const loopTop = (currentLoop.type === 'DO' && currentLoop.cond) ? currentLoop.cond : currentLoop.top;
 
                                 if (target === loopTop) {
-                                    if (pendingElse) {
-                                        source += this.indent(pendingElse.indent) + "ELSE\n";
-                                        indentLevel++;
-                                        pendingElse = null;
+                                    if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                        const p = pendingElseStack.pop();
+                                        source += this.indent(p.indent) + "ELSE\n";
+                                        indentLevel = p.indent + 1;
                                     }
                                     source += this.indent(indentLevel) + "CONTINUE\n";
                                     foundBreakContinue = true;
                                 } else if (target === currentLoop.end) {
-                                    if (pendingElse) {
-                                        source += this.indent(pendingElse.indent) + "ELSE\n";
-                                        indentLevel++;
-                                        pendingElse = null;
+                                    if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                        const p = pendingElseStack.pop();
+                                        source += this.indent(p.indent) + "ELSE\n";
+                                        indentLevel = p.indent + 1;
                                     }
                                     source += this.indent(indentLevel) + "BREAK\n";
                                     foundBreakContinue = true;
@@ -377,10 +444,10 @@
                             }
 
                             if (!foundBreakContinue) {
-                                if (pendingElse) {
-                                    source += this.indent(pendingElse.indent) + "ELSE\n";
-                                    indentLevel++;
-                                    pendingElse = null;
+                                if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                    const p = pendingElseStack.pop();
+                                    source += this.indent(p.indent) + "ELSE\n";
+                                    indentLevel = p.indent + 1;
                                 }
                                 expr = this.instHandler.handleInstruction(op, def, args, stack, varMap, pc, size, codeBlock, labelMap, usedSystemVars);
                                 if (expr) {
@@ -399,10 +466,10 @@
                         let isLPrintNL = (op === 0x78);
 
                         if (isPrintVal || isLPrintVal) {
-                            if (pendingElse) {
-                                source += this.indent(pendingElse.indent) + "ELSE\n";
-                                indentLevel++;
-                                pendingElse = null;
+                            if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                const p = pendingElseStack.pop();
+                                source += this.indent(p.indent) + "ELSE\n";
+                                indentLevel = p.indent + 1;
                             }
                             const keyword = (isLPrintVal) ? 'LPRINT' : 'PRINT';
                             if (pendingPrint !== null && !pendingPrint.startsWith(keyword)) {
@@ -433,29 +500,29 @@
                                 source += this.indent(indentLevel) + pendingPrint + ";\n";
                                 pendingPrint = null;
                             }
-                            if (pendingElse) {
-                                source += this.indent(pendingElse.indent) + "ELSE\n";
-                                indentLevel++;
-                                pendingElse = null;
+                            if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                const p = pendingElseStack.pop();
+                                source += this.indent(p.indent) + "ELSE\n";
+                                indentLevel = p.indent + 1;
                             }
                             source += this.indent(indentLevel) + (pendingPrint === null ? `${keyword}\n` : `${pendingPrint}\n`);
                             pendingPrint = null;
                         } else {
-                            expr = this.instHandler.handleInstruction(op, def, args, stack, varMap, pc, size, codeBlock, labelMap, usedSystemVars);
+                            expr = this.instHandler.handleInstruction(op, def, args, stack, varMap, pc, size, codeBlock, labelMap, usedSystemVars, referencedProcedures);
                             if (expr) {
                                 if (pendingPrint !== null) {
-                                    if (pendingElse) {
-                                        source += this.indent(pendingElse.indent) + "ELSE\n";
-                                        indentLevel++;
-                                        pendingElse = null;
+                                    if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                        const p = pendingElseStack.pop();
+                                        source += this.indent(p.indent) + "ELSE\n";
+                                        indentLevel = p.indent + 1;
                                     }
                                     source += this.indent(indentLevel) + pendingPrint + ";\n";
                                     pendingPrint = null;
                                 }
-                                if (pendingElse) {
-                                    source += this.indent(pendingElse.indent) + "ELSE\n";
-                                    indentLevel++;
-                                    pendingElse = null;
+                                if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                                    const p = pendingElseStack.pop();
+                                    source += this.indent(p.indent) + "ELSE\n";
+                                    indentLevel = p.indent + 1;
                                 }
                                 if (expr.trim() === 'TRAP') source += this.indent(indentLevel) + "TRAP ";
                                 else source += this.indent(indentLevel) + expr + "\n";
@@ -476,6 +543,13 @@
                                     parts.push(`${k}:${val}`);
                                 }
                                 argsStr = parts.join(' ');
+
+                                // Enhancement: Add target address for Branch instructions
+                                if (args.D !== undefined) {
+                                    const targetAbs = (pc + 1) + args.D;
+                                    const targetRel = targetAbs - (options.oplBase || 0);
+                                    argsStr += ` (addr:${targetRel.toString(16).toUpperCase().padStart(4, '0')})`;
+                                }
                             }
                         } catch (err) { argsStr = "err"; }
 
@@ -498,17 +572,63 @@
                         });
                     }
                 } catch (e) {
-                    if (pendingElse) {
-                        source += this.indent(pendingElse.indent) + "ELSE\n";
-                        indentLevel++;
-                        pendingElse = null;
+                    if (pendingElseStack.length > 0 && pendingElseStack[pendingElseStack.length - 1].indent === indentLevel) {
+                        const p = pendingElseStack.pop();
+                        source += this.indent(p.indent) + "ELSE\n";
+                        indentLevel = p.indent + 1;
                     }
                     const opStr = (op !== undefined) ? op.toString(16).toUpperCase().padStart(2, '0') : '??';
                     source += `  REM Error decompiling QCode ${opStr}: ${e.message} \n`;
                 }
 
 
-                pc += size;
+                let nextPC = pc + size;
+
+                // --- Skipped Target Detection ---
+                // If this instruction (e.g. truncated GOTO) steps over a structural target (e.g. ELSE/ENDIF start),
+                // we must manually invoke the target logic for that hidden address.
+                for (let k = pc + 1; k < nextPC; k++) {
+                    if (flow.targets[k]) {
+
+                        // Reuse the target logic block.
+                        // We can't just invoke it because it relies on local vars.
+                        // We replicate critical ENDIF/ELSE logic here.
+
+                        let skippedStructs = flow.targets[k].sort((a, b) => b.start - a.start);
+                        for (const struct of skippedStructs) {
+                            if (struct.type === 'ENDIF') {
+                                const startStructs = flow.starts[struct.start];
+                                const originIF = startStructs && startStructs.find(s => s.type === 'IF');
+                                if (originIF && originIF.end !== k) continue;
+
+                                const topPE = pendingElseStack.length > 0 ? pendingElseStack[pendingElseStack.length - 1] : null;
+                                if (topPE && originIF && (originIF.end === topPE.outerEnd) && (topPE.originStruct === originIF)) {
+                                    pendingElseStack.pop();
+                                } else {
+                                    indentLevel--;
+                                    source += this.indent(indentLevel) + "ENDIF\n";
+                                }
+                            } else if (struct.type === 'ELSE') {
+                                if (processedElseStarts.has(struct.start)) continue;
+                                if (struct.start === k) continue; // Self-targeting
+                                processedElseStarts.add(struct.start);
+
+                                indentLevel--;
+                                // Check if 'outerIF' exists
+                                const outerIF = flow.starts[struct.start] && flow.starts[struct.start].find(s => s.type === 'IF');
+                                if (outerIF) {
+                                    // Push pending
+                                    pendingElseStack.push({ outerEnd: outerIF.end, indent: indentLevel, originStruct: outerIF });
+                                } else {
+                                    source += this.indent(indentLevel) + "ELSE\n";
+                                    indentLevel++;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                pc = nextPC;
             }
 
             // Append System Locations Summary
@@ -535,7 +655,7 @@
                 source += `  ${pendingPrint};\n`;
             }
 
-            return source;
+            return { source, references: Array.from(referencedProcedures) };
         }
     }
 

@@ -42,13 +42,16 @@ var ThemeManager = {
             '--editor-bg': '#151515', // Slightly darker than bg
             // Syntax
             '--syntax-functions': '#dcdcaa',
-            '--syntax-commands': '#c586c0',
+            '--syntax-commands': '#569CD6', // Blue (VS Code Dark+ style) to contrast with Magenta strings
             '--syntax-stringfuncs': '#4ec9b0',
-            '--syntax-string': '#ce9178',
-            '--syntax-comment': '#6a9955',
-            '--syntax-number': '#b5cea8',
+            '--syntax-string': '#ce9178', // Fallback
+            '--syntax-comment': '#808080', // Mid-Gray (Changed from Green #6a9955)
+            '--syntax-number': '#b5cea8', // Fallback
             '--syntax-label': '#d7ba7d',
             '--syntax-operator': '#d4d4d4',
+            '--syntax-type-integer': '#98C379', // Green
+            '--syntax-type-float': '#D19A66',   // Orange
+            '--syntax-type-string': '#C678DD',  // Magenta
             '--syntax-bracket-0': '#FFD700',
             '--syntax-bracket-1': '#DA70D6',
             '--syntax-bracket-2': '#1E90FF',
@@ -89,13 +92,16 @@ var ThemeManager = {
             '--editor-bg': '#ffffff',
             // Syntax
             '--syntax-functions': '#795e26',
-            '--syntax-commands': '#af00db',
+            '--syntax-commands': '#0000FF', // Blue to separate from Magenta strings
             '--syntax-stringfuncs': '#267f99',
-            '--syntax-string': '#a31515',
-            '--syntax-comment': '#008000',
-            '--syntax-number': '#098658',
+            '--syntax-string': '#a31515', // Fallback
+            '--syntax-comment': '#808080', // Mid-Gray (Changed from Green #008000)
+            '--syntax-number': '#098658', // Fallback
             '--syntax-label': '#795e26',
             '--syntax-operator': '#000000',
+            '--syntax-type-integer': '#098658', // Green (Existing number color)
+            '--syntax-type-float': '#B06000',   // Dark Orange
+            '--syntax-type-string': '#A020F0',  // Dark Magenta
             '--syntax-bracket-0': '#0000FF',
             '--syntax-bracket-1': '#800080',
             '--syntax-bracket-2': '#008000',
@@ -143,6 +149,9 @@ var ThemeManager = {
             '--syntax-number': '#ffaa00',
             '--syntax-label': '#ffffff',
             '--syntax-operator': '#ff0000',
+            '--syntax-type-integer': '#00FF00', // Green
+            '--syntax-type-float': '#FFAA00',   // Orange
+            '--syntax-type-string': '#FF00FF',  // Magenta
             '--syntax-bracket-0': '#ff00ff',
             '--syntax-bracket-1': '#00ffff',
             '--syntax-bracket-2': '#ffff00',
@@ -182,14 +191,17 @@ var ThemeManager = {
             '--icon-hover-bg': '#3e3d32',
             '--editor-bg': '#272822',
             // Syntax
-            '--syntax-functions': '#66d9ef',
-            '--syntax-commands': '#f92672',
+            '--syntax-functions': '#A6E22E', // Green (Changed from Blue to distinguish from Commands)
+            '--syntax-commands': '#66d9ef', // Blue (Changed from Pink to avoid String clash)
             '--syntax-stringfuncs': '#a6e22e',
             '--syntax-string': '#e6db74',
             '--syntax-comment': '#75715e',
             '--syntax-number': '#ae81ff',
             '--syntax-label': '#fd971f',
             '--syntax-operator': '#f8f8f2',
+            '--syntax-type-integer': '#A6E22E', // Green
+            '--syntax-type-float': '#FD971F',   // Orange
+            '--syntax-type-string': '#F92672',  // Pink/Magenta
             '--syntax-bracket-0': '#f8f8f2',
             '--syntax-bracket-1': '#66d9ef',
             '--syntax-bracket-2': '#a6e22e',
@@ -230,13 +242,16 @@ var ThemeManager = {
             '--editor-bg': '#002b36',
             // Syntax
             '--syntax-functions': '#268bd2',
-            '--syntax-commands': '#859900',
+            '--syntax-commands': '#268bd2', // Blue (Changed from Green to avoid Integer clash)
             '--syntax-stringfuncs': '#2aa198',
             '--syntax-string': '#2aa198',
             '--syntax-comment': '#586e75',
             '--syntax-number': '#d33682',
             '--syntax-label': '#cb4b16',
             '--syntax-operator': '#93a1a1',
+            '--syntax-type-integer': '#859900', // Green
+            '--syntax-type-float': '#cb4b16',   // Orange
+            '--syntax-type-string': '#d33682',  // Magenta
             '--syntax-bracket-0': '#93a1a1',
             '--syntax-bracket-1': '#268bd2',
             '--syntax-bracket-2': '#2aa198',
@@ -277,13 +292,16 @@ var ThemeManager = {
             '--editor-bg': '#fdf6e3',
             // Syntax
             '--syntax-functions': '#268bd2',
-            '--syntax-commands': '#859900',
+            '--syntax-commands': '#268bd2', // Blue
             '--syntax-stringfuncs': '#2aa198',
             '--syntax-string': '#2aa198',
             '--syntax-comment': '#93a1a1',
             '--syntax-number': '#d33682',
             '--syntax-label': '#cb4b16',
             '--syntax-operator': '#586e75',
+            '--syntax-type-integer': '#859900', // Green
+            '--syntax-type-float': '#cb4b16',   // Orange
+            '--syntax-type-string': '#d33682',  // Magenta
             '--syntax-bracket-0': '#586e75',
             '--syntax-bracket-1': '#268bd2',
             '--syntax-bracket-2': '#2aa198',
@@ -324,13 +342,16 @@ var ThemeManager = {
             '--editor-bg': '#282a36',
             // Syntax
             '--syntax-functions': '#50fa7b',
-            '--syntax-commands': '#ff79c6',
+            '--syntax-commands': '#8be9fd', // Cyan (Changed from Pink to avoid String clash)
             '--syntax-stringfuncs': '#8be9fd',
             '--syntax-string': '#f1fa8c',
             '--syntax-comment': '#6272a4',
             '--syntax-number': '#bd93f9',
             '--syntax-label': '#ffb86c',
             '--syntax-operator': '#f8f8f2',
+            '--syntax-type-integer': '#50fa7b', // Green
+            '--syntax-type-float': '#ffb86c',   // Orange
+            '--syntax-type-string': '#ff79c6',  // Pink
             '--syntax-bracket-0': '#f8f8f2',
             '--syntax-bracket-1': '#8be9fd',
             '--syntax-bracket-2': '#50fa7b',
@@ -378,6 +399,9 @@ var ThemeManager = {
             '--syntax-number': '#b48ead',
             '--syntax-label': '#ebcb8b',
             '--syntax-operator': '#d8dee9',
+            '--syntax-type-integer': '#a3be8c', // Green
+            '--syntax-type-float': '#d08770',   // Orange
+            '--syntax-type-string': '#b48ead',  // Purple
             '--syntax-bracket-0': '#d8dee9',
             '--syntax-bracket-1': '#88c0d0',
             '--syntax-bracket-2': '#8fbcbb',
@@ -417,13 +441,16 @@ var ThemeManager = {
             '--icon-hover-bg': '#333333',
             // Syntax
             '--syntax-functions': '#ffff00',
-            '--syntax-commands': '#ffffff',
+            '--syntax-commands': '#00ffff', // Cyan
             '--syntax-stringfuncs': '#00ff00',
             '--syntax-string': '#ff0000',
             '--syntax-comment': '#00ff00',
             '--syntax-number': '#ffffff',
             '--syntax-label': '#ffffff',
             '--syntax-operator': '#ffffff',
+            '--syntax-type-integer': '#00ff00', // Green
+            '--syntax-type-float': '#ffaa00',   // Orange
+            '--syntax-type-string': '#ff00ff',  // Magenta
             '--syntax-bracket-0': '#ffffff',
             '--syntax-bracket-1': '#ffff00',
             '--syntax-bracket-2': '#00ff00',
@@ -463,13 +490,16 @@ var ThemeManager = {
             '--icon-hover-bg': '#3a2e4d',
             // Syntax
             '--syntax-functions': '#36f9f6',
-            '--syntax-commands': '#f92aad',
+            '--syntax-commands': '#36f9f6', // Cyan (Changed from Pink)
             '--syntax-stringfuncs': '#fdfdfd',
             '--syntax-string': '#ff7edb',
             '--syntax-comment': '#6d75a1',
             '--syntax-number': '#f97e72',
             '--syntax-label': '#fe4450',
             '--syntax-operator': '#f92aad',
+            '--syntax-type-integer': '#2de2a6', // Neon Green (Changed from Cyan to prevent clash)
+            '--syntax-type-float': '#f97e72',   // Orange/Red
+            '--syntax-type-string': '#f92aad',  // Pink
             '--syntax-bracket-0': '#f92aad',
             '--syntax-bracket-1': '#36f9f6',
             '--syntax-bracket-2': '#f97e72',
@@ -509,13 +539,16 @@ var ThemeManager = {
             '--icon-hover-bg': '#504945',
             // Syntax
             '--syntax-functions': '#8ec07c',
-            '--syntax-commands': '#fb4934',
+            '--syntax-commands': '#458588', // Blue (Changed from Red to avoid float clash?) No red is fine, but string is green/yellow.
             '--syntax-stringfuncs': '#fabd2f',
             '--syntax-string': '#b8bb26',
             '--syntax-comment': '#928374',
             '--syntax-number': '#d3869b',
             '--syntax-label': '#fe8019',
             '--syntax-operator': '#d5c4a1',
+            '--syntax-type-integer': '#b8bb26', // Green
+            '--syntax-type-float': '#fe8019',   // Orange
+            '--syntax-type-string': '#d3869b',  // Purple
             '--syntax-bracket-0': '#fb4934',
             '--syntax-bracket-1': '#8ec07c',
             '--syntax-bracket-2': '#fabd2f',
@@ -555,13 +588,16 @@ var ThemeManager = {
             '--icon-hover-bg': '#2c313a',
             // Syntax
             '--syntax-functions': '#61afef',
-            '--syntax-commands': '#c678dd',
+            '--syntax-commands': '#56b6c2', // Cyan (Changed from Purple to avoid String clash)
             '--syntax-stringfuncs': '#e5c07b',
             '--syntax-string': '#98c379',
             '--syntax-comment': '#5c6370',
             '--syntax-number': '#d19a66',
             '--syntax-label': '#e06c75',
             '--syntax-operator': '#56b6c2',
+            '--syntax-type-integer': '#98c379', // Green
+            '--syntax-type-float': '#d19a66',   // Orange
+            '--syntax-type-string': '#c678dd',  // Purple
             '--syntax-bracket-0': '#e06c75',
             '--syntax-bracket-1': '#61afef',
             '--syntax-bracket-2': '#e5c07b',

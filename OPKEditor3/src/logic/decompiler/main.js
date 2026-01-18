@@ -203,6 +203,13 @@
             // SourceGenerator needs to re-run the loop to track stack properly for indentation/expressions?
             // Yes, SourceGenerator does its own pass.
             // So we can just pass header/varMap/flow as before.
+            const result = this.sourceGen.generateSource(analysis.header, analysis.varMap, analysis.flow, codeBlock, analysis.finalProcName, { ...options, oplBase: this.oplBase });
+            return result.source;
+        }
+
+        getDecompiledData(codeBlock, procName = "main", options = {}) {
+            const analysis = this.getRawAnalysis(codeBlock, procName, options);
+            if (analysis.instructions.length === 0 && analysis.header && !analysis.header.qcodeStart) return { source: "REM Error: Analysis Failed", references: [] };
             return this.sourceGen.generateSource(analysis.header, analysis.varMap, analysis.flow, codeBlock, analysis.finalProcName, { ...options, oplBase: this.oplBase });
         }
 
@@ -1117,19 +1124,88 @@
 
             let pc = start;
             log(`Analyzing control flow (Start:${toEvenHex(start, 2)} Size:${size})`);
+
+            // PRE-PASS: Identify all jump targets to handle dead-code overlaps (e.g. RETURN followed by Misaligned Code)
+            let prePc = start;
+            while (prePc < start + size && prePc < codeBlock.length) {
+                const op = codeBlock[prePc];
+                if (op === undefined) break;
+                const def = this.opcodes[op];
+                if (!def) { prePc++; continue; }
+                const instSize = this.instHandler.getInstructionSize(codeBlock, prePc, def);
+
+                if (op === 0x7E || op === 0x51 || op === 0x53 || op === 0xFB) { // BranchIfFalse(7E), GOTO(51), ONERR(53), ELSEIF(FB)
+                    const args = this.instHandler.getArgs(codeBlock, prePc, def);
+                    if ((op !== 0x53 && op !== 0xFB) || args.D !== 0) {
+                        const target = (prePc + 1) + args.D;
+                        flow.labels.add(target);
+                    }
+                }
+                prePc += instSize;
+            }
+
             const instructions = [];
             while (pc < start + size && pc < codeBlock.length) {
+                // Resync if we hit a label (handled naturally by loop, but we need to check overlap)
                 const op = codeBlock[pc];
                 if (op === undefined) break; // Robustness: end of buffer
                 const def = this.opcodes[op];
-                if (!def) { pc++; continue; }
-                const instSize = this.instHandler.getInstructionSize(codeBlock, pc, def);
+                if (!def) {
+                    instructions.push({ pc, text: `UNK_${op.toString(16)}`, size: 1, op: op });
+                    pc++;
+                    continue;
+                }
+
+                let instSize = this.instHandler.getInstructionSize(codeBlock, pc, def);
+
+                // Check for overlap with known labels
+                // If this instruction crosses a label, and we are in potential dead code (heuristically or strictly),
+                // we should truncate and resync.
+                for (let offset = 1; offset < instSize; offset++) {
+                    if (flow.labels.has(pc + offset)) {
+                        // Overlap detected!
+                        // Truncate this instruction to end before the label
+                        // and effectively skip/ignore the bytes as padding/dead code.
+                        log(`Overlap detected at ${pc.toString(16)} with label at ${(pc + offset).toString(16)}. Truncating.`);
+                        instSize = offset;
+                        // Force UNK/PAD to prevent misinterpretation
+                        // OR just push as is but with reduced size?
+                        // If we reduce size, the opcode might be valid but args truncated.
+                        // Best to mark as UNK or Padding.
+                        // But wait, the loop below extracts args. 
+                        // If we change size, extraction might fail.
+                        break;
+                    }
+                }
+
                 if (pc + instSize > start + size) break; // Ignore partial Instructions at end
+
+                // If we truncated, we might need to skip `getArgs` or handle it gracefully
+                if (flow.labels.has(pc + instSize)) {
+                    // Ends perfectly at label, normal case.
+                }
+
+                // If we truncated `instSize` (e.g. it was 3, found label at +1, now size is 1)
+                // The opcode is still `op`. 
+                // We should probably just "Emit and Continue" or treat as UNK.
+                // Let's rely on standard logic but with the reduced size?
+                // No, `getArgs` relies on properties of the opcode which expects full size.
+
+                // Check if we actually truncated
+                const standardSize = this.instHandler.getInstructionSize(codeBlock, pc, def);
+                if (instSize < standardSize) {
+                    instructions.push({ pc, op: 0x00, args: {}, size: instSize, isPadding: true, originalOp: op }); // Treat as filler, keep originalOp for logic
+                    pc += instSize;
+                    continue;
+                }
+
                 const args = this.instHandler.getArgs(codeBlock, pc, def);
                 instructions.push({ pc, op, args, size: instSize });
-                if (op === 0x7E || op === 0x51 || op === 0x53) { // BranchIfFalse(7E), GOTO(51), ONERR(53)
-                    const target = (pc + 1) + args.D;
-                    flow.labels.add(target);
+                if (op === 0x7E || op === 0x51 || op === 0x53 || op === 0xFB) { // BranchIfFalse(7E), GOTO(51), ONERR(53), ELSEIF(FB)
+                    if ((op !== 0x53 && op !== 0xFB) || args.D !== 0) {
+                        const target = (pc + 1) + args.D;
+                        flow.labels.add(target);
+                    }
                 }
                 pc += instSize;
             }
@@ -1189,7 +1265,13 @@
             // as ELSE targets or EndIf targets by the IF/WHILE logic.
             for (let i = 0; i < instructions.length; i++) {
                 const inst = instructions[i];
-                if (inst.op === 0x51) { // GOTO
+                if (inst.op === 0x51 || (inst.isPadding && inst.originalOp === 0x51)) { // GOTO
+                    // Note: If truncated, args might be invalid/missing. We can't rely on args.D if padding.
+                    // But if it was truncated, it's unlikely to be a valid backward loop GOTO?
+                    // Unless loop top is also misaligned?
+                    // Safe to skip logic for padding GOTO in Backward detection for now.
+                    if (inst.isPadding) continue;
+
                     const target = (inst.pc + 1) + inst.args.D;
                     if (target <= inst.pc) {
                         // Backward Jump = Loop
@@ -1204,13 +1286,14 @@
             for (let i = 0; i < instructions.length; i++) {
                 const inst = instructions[i];
                 if (inst.op === 0x7E) { // BranchIfFalse
+                    if (inst.args.D === 5) continue; // Heuristic: Skip structural detection for Simple IF skip pattern
                     const target = (inst.pc + 1) + inst.args.D;
                     if (target > inst.pc) {
                         // Check if target is preceded by GOTO back to here (WHILE)
                         const targetInstIndex = instructions.findIndex(in_ => in_.pc === target);
                         if (targetInstIndex > 0) {
                             const prev = instructions[targetInstIndex - 1];
-                            if (prev.op === 0x51) { // GOTO
+                            if (prev.op === 0x51 || (prev.isPadding && prev.originalOp === 0x51)) { // GOTO
                                 const gotoTarget = (prev.pc + 1) + prev.args.D;
                                 // CM/XP back-jump often points to the start of the condition expression
                                 // rather than the BranchIfFalse itself.
@@ -1239,8 +1322,22 @@
                         let isElse = false;
                         if (elseJumpIndex > 0) {
                             const prev = instructions[elseJumpIndex - 1];
-                            if (prev.op === 0x51) { // GOTO
-                                const endifTarget = (prev.pc + 1) + prev.args.D;
+                            if (prev.op === 0x51 || (prev.isPadding && prev.originalOp === 0x51)) { // GOTO
+                                // Retrieve Args for Truncated GOTO
+                                // If truncated, 'prev.args' is {}. We must re-parse from codeBlock using prev.pc.
+                                let prevArgs = prev.args;
+                                if (prev.isPadding) {
+                                    // Re-parse args blindly assuming it was a GOTO
+                                    // This is safe because 'originalOp' confirms it was a GOTO
+                                    // GOTO has 1 arg: 'D' (Offset 2 bytes).
+                                    // PC+1, PC+2 -> High, Low (BE).
+                                    // Wait. getArgs returns D.
+                                    // Def: 0X51: { args: 'D', ... }
+                                    // We can call getArgs manually.
+                                    prevArgs = this.instHandler.getArgs(codeBlock, prev.pc, this.opcodes[0x51]);
+                                }
+
+                                const endifTarget = (prev.pc + 1) + prevArgs.D;
 
                                 // Robustness Fix: Check for Dead Code pattern (GOTO Target; GOTO Endif)
                                 // If the instruction BEFORE the GOTO Endif is ALSO a GOTO, and it jumps to the 'target' (Else Start),
@@ -1251,10 +1348,11 @@
                                     if (prior) {
                                         // Check for Unconditional Control Flow
                                         const isUnconditional =
-                                            prior.op === 0x51 || // GOTO
+                                            prior.op === 0x51 || (prior.isPadding && prior.originalOp === 0x51) || // GOTO
                                             (prior.op >= 0x79 && prior.op <= 0x7C) || // RETURN
                                             prior.op === 0x59 || // STOP
                                             prior.op === 0x57;   // RAISE
+
 
                                         // Ensure the 'GOTO Endif' (prev) is strictly unreachable (not a label target)
                                         // We need to check if 'prev.pc' is in flow.labels
@@ -1266,6 +1364,7 @@
                                     }
                                 }
 
+
                                 if (isDeadCode) {
                                     isElse = false;
                                 }
@@ -1274,12 +1373,23 @@
                                     // It is NOT an ELSE.
                                     isElse = false;
                                 }
-                                else if (endifTarget > target && endifTarget <= codeBlock.length) {
+                                else if (flow.targets[target] && flow.targets[target].some(t => (t.type === 'ENDIF' || t.type === 'ENDWH' || t.type === 'UNTIL') && t.start < inst.pc)) {
+                                    // Fix Case 7: If 'Else' target is ALREADY the 'End' of an enclosing block (start < pc),
+                                    // then this inner IF cannot have an ELSE block starting there, as it would extend beyond the parent.
+                                    // It must be a Simple IF jumping out to the parent's End.
+                                    isElse = false;
+                                }
+                                else if (endifTarget > target && endifTarget <= codeBlock.length && inst.args.D !== 5) {
+                                    // Heuristic: Check for 'Simple Skip' pattern (offset 5 implies 3-byte instruction + overhead).
+                                    // If the 'THEN' block is just a GOTO (3 bytes), it is functionally a simple conditional skip.
+                                    // Treating it as ELSE causes visual hanging issues if the GOTO target is a label within the flow.
+                                    // We force these to be 'Simple IF' (skipping the GOTO) rather than 'IF...ELSE'.
+
                                     // It's an IF ... ELSE ... ENDIF
                                     addStart(inst.pc, { type: 'IF', else: target, end: endifTarget });
                                     addTarget(prev.pc, { type: 'ELSE', start: inst.pc });
                                     addTarget(endifTarget, { type: 'ENDIF', start: inst.pc });
-                                    flow.jumps[inst.pc] = { type: 'IF' };
+                                    flow.jumps[inst.pc] = { type: 'IF', else: target, end: endifTarget };
                                     flow.jumps[prev.pc] = { type: 'ELSE' };
                                     flow.structureLabels.add(target);
                                     if (endifTarget < start + size) flow.structureLabels.add(endifTarget);
@@ -1291,10 +1401,6 @@
                         }
 
 
-                        if (inst.op === 0x7E && inst.args.D === 5) {
-                            // Heuristic for the JOTFIL bug: Force Simple IF if offset is small and looks like the pattern
-                            isElse = false;
-                        }
 
                         if (!isElse) {
                             // Simple IF ... ENDIF
