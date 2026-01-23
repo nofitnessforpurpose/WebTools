@@ -895,21 +895,52 @@
                                                         }
                                                     }
                                                 }
-                                                // Improved Loop: MaxLen descending
-                                                // Constraint: Count >= minArrayCounts[mappedAddr]
-                                                const minIdx = minArrayCounts[mappedAddr] || 0;
+                                                // Improved Loop: Find Best Candidate (Count, MaxLen)
+                                                // Score based on:
+                                                // 1. Count >= minIdx (Hard Constraint)
+                                                // 2. MaxLen is 255 (Highest Bonus)
+                                                // 3. MaxLen is Power of 2 (High Bonus)
+                                                // 4. Count > 1 (Bonus if IsArray)
+
+                                                const minIdx = minArrayCounts[off] || 0;
+                                                let bestCand = null;
+                                                let bestScore = -1;
+
                                                 for (let len = 255; len >= 1; len--) {
                                                     const eSize = len + 1;
                                                     if (payload % eSize === 0) {
                                                         const pCount = payload / eSize;
+
                                                         if (pCount >= minIdx) {
-                                                            g.maxLen = len;
-                                                            varMap[mappedAddr].maxLen = len;
-                                                            varMap[mappedAddr].arrayLen = (payload / eSize);
-                                                            g.arrayLen = varMap[mappedAddr].arrayLen;
-                                                            break; // Found largest valid MaxLen
+                                                            let score = 0;
+                                                            if (len === 255) score += 100;
+                                                            else if ((len & (len - 1)) === 0) score += 50; // Power of 2 (16, 32, 64, 128)
+
+                                                            if (pCount > 1) score += 20;
+
+                                                            // Tie-breaker: Prefer larger MaxLen (smaller Count) to match typical declaration style?
+                                                            // Or prefer larger Count?
+                                                            // If we iterate len descending, we find Larger MaxLen first.
+                                                            // So if we use strictly >, we keep the first valid high score (Large MaxLen).
+                                                            // If we use >=, we take the last valid high score (Small MaxLen/Large Count).
+                                                            // Let's stick with > to prefer Larger MaxLen (e.g. 255).
+
+                                                            // if (score > bestScore) {
+                                                            //    console.log(`[DEBUG_SCORE] Len:${len} Count:${pCount} Score:${score} (New Best)`);
+                                                            if (score > bestScore) {
+                                                                bestScore = score;
+                                                                bestCand = { len: len, count: pCount };
+                                                            }
                                                         }
                                                     }
+                                                }
+
+                                                if (bestCand) {
+                                                    varMap[off].maxLen = bestCand.len;
+                                                    varMap[off].arrayLen = bestCand.count;
+                                                } else {
+                                                    // Fallback: Treat as 1 element array of max size
+                                                    // (Existing fallback logic handles this if arrayLen not set)
                                                 }
                                             }
                                         }
@@ -1038,18 +1069,27 @@
                             varMap[off].isArray = true;
                         }
 
+
+
                         // Size inference
                         let nextOff = 0;
-                        // Note: 'availableVars' is sorted but contains Params/Globals/Locals.
-                        // To infer distinct size for Locals, ideally we look at 'availableVars' 
-                        // (which is ALL vars sorted). 
-                        // So we can still use availableVars for neighbor finding.
+                        // Note: 'availableVars' needs to be sorted for neighbor finding.
+                        availableVars.sort((a, b) => b - a);
+
                         const idx = availableVars.indexOf(off);
                         if (idx > 0) nextOff = availableVars[idx - 1];
                         const size = Math.abs(nextOff - off);
 
+                        if (varMap[off].name === 'L5$' || varMap[off].name === 'L3$') {
+                            console.log(`[DEBUG_SIZE] ${varMap[off].name} Offset:${off} Size:${size} IsArray:${varMap[off].isArray} FixupLen:${varMap[off].maxLen}`);
+                        }
+
 
                         // START REFINE: Strict Local Logic
+                        if (varMap[off].name === 'L5$' || varMap[off].name === 'L3$') {
+                            console.log(`[DEBUG_SIZE] ${varMap[off].name} Offset:${off} Size:${size} IsArray:${varMap[off].isArray} FixupLen:${varMap[off].maxLen}`);
+                        }
+
                         if (type === 2) {
                             if (varMap[off].isArray || varMap[off].arrayLen || (varMap[off].maxLen && size > varMap[off].maxLen + 2)) {
                                 // String Array: A$(Count, MaxLen)
@@ -1062,17 +1102,34 @@
                                         varMap[off].arrayLen = Math.floor(payload / (knownMaxLen + 1));
                                     } else {
                                         // Constraint: usage index
+                                        // Improved Loop: Find Best Candidate (Count, MaxLen)
                                         const minIdx = minArrayCounts[off] || 0;
+                                        let bestCand = null;
+                                        let bestScore = -1;
+
                                         for (let len = 255; len >= 1; len--) {
                                             const eSize = len + 1;
                                             if (payload % eSize === 0) {
                                                 const pCount = payload / eSize;
+
                                                 if (pCount >= minIdx) {
-                                                    varMap[off].maxLen = len;
-                                                    varMap[off].arrayLen = pCount;
-                                                    break;
+                                                    let score = 0;
+                                                    if (len === 255) score += 100;
+                                                    else if ((len & (len - 1)) === 0) score += 50;
+
+                                                    if (pCount > 1) score += 20;
+
+                                                    if (score > bestScore) {
+                                                        bestScore = score;
+                                                        bestCand = { len: len, count: pCount };
+                                                    }
                                                 }
                                             }
+                                        }
+
+                                        if (bestCand) {
+                                            varMap[off].maxLen = bestCand.len;
+                                            varMap[off].arrayLen = bestCand.count;
                                         }
                                         // Fallback if no clean factor: Assume MaxLen = size - 1 (Count=1?)
                                         if (!varMap[off].arrayLen) {
@@ -1151,7 +1208,7 @@
                 if (op === undefined) break; // Robustness: end of buffer
                 const def = this.opcodes[op];
                 if (!def) {
-                    instructions.push({ pc, text: `UNK_${op.toString(16)}`, size: 1, op: op });
+                    // instructions.push({ pc, text: `UNK_${op.toString(16)}`, size: 1, op: op }); // Silent UNK?
                     pc++;
                     continue;
                 }
@@ -1214,6 +1271,7 @@
             // Helper to add structure
             const addStart = (pc, struct) => {
                 if (!flow.starts[pc]) flow.starts[pc] = [];
+                struct.start = pc; // Ensure start PC is always present
                 flow.starts[pc].push(struct);
             };
             const addTarget = (pc, struct) => {
@@ -1224,6 +1282,7 @@
             // Structure detection
             for (let i = 0; i < instructions.length; i++) {
                 const inst = instructions[i];
+                var isElse = false;
 
                 // DO ... UNTIL condition
                 if (inst.op === 0x7E) {
@@ -1238,7 +1297,8 @@
                             if (instructions[j].pc <= target) break;
                             if (flow.labels.has(instructions[j].pc)) {
                                 condStart = instructions[j].pc;
-                                // Keep looking back for the EARLIEST label after loop body
+                                // Found the label closest to the UNTIL (likely the condition start logic)
+                                break;
                             }
                         }
 
@@ -1275,13 +1335,24 @@
                     const target = (inst.pc + 1) + inst.args.D;
                     if (target <= inst.pc) {
                         // Backward Jump = Loop
+                        // Checks for Unconditional GOTO -> Infinite Loop (DO ... UNTIL 0)
+                        // Note: If conditional (branch), it's handled by DO...UNTIL logic elsewhere.
+
                         // We protect the target (Loop Top)
                         protectedLabels.add(target);
-                        log(`Detected Backward GOTO (Loop) (Start:${inst.pc.toString(16)} Target:${target.toString(16)})`);
+
+                        addStart(target, { type: 'DO', end: inst.pc + (inst.size || 3), cond: inst.pc });
+                        addTarget(inst.pc, { type: 'UNTIL', start: target });
+                        flow.jumps[inst.pc] = { type: 'INF_LOOP' };
+                        flow.structureLabels.add(target);
+                        flow.structureLabels.add(inst.pc);
+
+                        log(`Detected Infinite DO Loop (Start:${target.toString(16)} End:${inst.pc.toString(16)})`);
                     }
                 }
             }
 
+            // Forward scans for IF/WHILE
             // Forward scans for IF/WHILE
             for (let i = 0; i < instructions.length; i++) {
                 const inst = instructions[i];
@@ -1315,87 +1386,115 @@
                                     continue;
                                 }
                             }
-                        }
-
-                        // It's an IF
-                        const elseJumpIndex = instructions.findIndex(in_ => in_.pc === target);
-                        let isElse = false;
-                        if (elseJumpIndex > 0) {
-                            const prev = instructions[elseJumpIndex - 1];
-                            if (prev.op === 0x51 || (prev.isPadding && prev.originalOp === 0x51)) { // GOTO
-                                // Retrieve Args for Truncated GOTO
-                                // If truncated, 'prev.args' is {}. We must re-parse from codeBlock using prev.pc.
-                                let prevArgs = prev.args;
-                                if (prev.isPadding) {
-                                    // Re-parse args blindly assuming it was a GOTO
-                                    // This is safe because 'originalOp' confirms it was a GOTO
-                                    // GOTO has 1 arg: 'D' (Offset 2 bytes).
-                                    // PC+1, PC+2 -> High, Low (BE).
-                                    // Wait. getArgs returns D.
-                                    // Def: 0X51: { args: 'D', ... }
-                                    // We can call getArgs manually.
-                                    prevArgs = this.instHandler.getArgs(codeBlock, prev.pc, this.opcodes[0x51]);
-                                }
-
-                                const endifTarget = (prev.pc + 1) + prevArgs.D;
-
-                                // Robustness Fix: Check for Dead Code pattern (GOTO Target; GOTO Endif)
-                                // If the instruction BEFORE the GOTO Endif is ALSO a GOTO, and it jumps to the 'target' (Else Start),
-                                // then the 'GOTO Endif' is unreachable dead code. This implies an IF...ENDIF structure with a merge.
-                                let isDeadCode = false;
-                                if (elseJumpIndex > 1) {
-                                    const prior = instructions[elseJumpIndex - 2];
-                                    if (prior) {
-                                        // Check for Unconditional Control Flow
-                                        const isUnconditional =
-                                            prior.op === 0x51 || (prior.isPadding && prior.originalOp === 0x51) || // GOTO
-                                            (prior.op >= 0x79 && prior.op <= 0x7C) || // RETURN
-                                            prior.op === 0x59 || // STOP
-                                            prior.op === 0x57;   // RAISE
 
 
-                                        // Ensure the 'GOTO Endif' (prev) is strictly unreachable (not a label target)
-                                        // We need to check if 'prev.pc' is in flow.labels
-                                        const isTargeted = flow.labels.has(prev.pc) || flow.forceLabels.has(prev.pc);
+                            // It's an IF
+                            let isElse = false;
+                            const elseJumpIndex = instructions.findIndex(in_ => in_.pc === target);
 
-                                        if (isUnconditional && !isTargeted) {
-                                            isDeadCode = true;
+                            if (elseJumpIndex > 0) {
+
+                                const prev = instructions[elseJumpIndex - 1];
+                                if (prev.op === 0x51 || (prev.isPadding && prev.originalOp === 0x51)) { // GOTO
+                                    // Retrieve Args for Truncated GOTO
+                                    // If truncated, 'prev.args' is {}. We must re-parse from codeBlock using prev.pc.
+                                    let prevArgs = prev.args;
+                                    if (prev.isPadding) {
+                                        // Re-parse args blindly assuming it was a GOTO
+                                        // This is safe because 'originalOp' confirms it was a GOTO
+                                        // GOTO has 1 arg: 'D' (Offset 2 bytes).
+                                        // PC+1, PC+2 -> High, Low (BE).
+                                        // Wait. getArgs returns D.
+                                        // Def: 0X51: { args: 'D', ... }
+                                        // We can call getArgs manually.
+                                        prevArgs = this.instHandler.getArgs(codeBlock, prev.pc, this.opcodes[0x51]);
+                                    }
+
+                                    const endifTarget = (prev.pc + 1) + prevArgs.D;
+
+                                    // Robustness Fix: Check for Dead Code pattern (GOTO Target; GOTO Endif)
+                                    // LOGGING FOR DEBUG
+
+                                    // If the instruction BEFORE the GOTO Endif is ALSO a GOTO, and it jumps to the 'target' (Else Start),
+                                    // then the 'GOTO Endif' is unreachable dead code. This implies an IF...ENDIF structure with a merge.
+                                    let isDeadCode = false;
+                                    if (elseJumpIndex > 1) {
+                                        const prior = instructions[elseJumpIndex - 2];
+                                        if (prior) {
+                                            // Check for Unconditional Control Flow
+                                            const isUnconditional =
+                                                prior.op === 0x51 || (prior.isPadding && prior.originalOp === 0x51) || // GOTO
+                                                (prior.op >= 0x79 && prior.op <= 0x7C) || // RETURN
+                                                prior.op === 0x59 || // STOP
+                                                prior.op === 0x57;   // RAISE
+
+
+                                            // Ensure the 'GOTO Endif' (prev) is strictly unreachable (not a label target)
+                                            // We need to check if 'prev.pc' is in flow.labels
+                                            const isTargeted = flow.labels.has(prev.pc) || flow.forceLabels.has(prev.pc);
+
+                                            if (isUnconditional && !isTargeted) {
+                                                // isDeadCode = true; // DISABLED: Allow ELSE even if the bridge GOTO is dead code (e.g. after RETURN)
+                                            }
                                         }
                                     }
-                                }
 
 
-                                if (isDeadCode) {
-                                    isElse = false;
-                                }
-                                else if (protectedLabels.has(endifTarget)) {
-                                    // Fix: If the GOTO jumps to a Loop End or Loop Condition, it is a BREAK/CONTINUE.
-                                    // It is NOT an ELSE.
-                                    isElse = false;
-                                }
-                                else if (flow.targets[target] && flow.targets[target].some(t => (t.type === 'ENDIF' || t.type === 'ENDWH' || t.type === 'UNTIL') && t.start < inst.pc)) {
-                                    // Fix Case 7: If 'Else' target is ALREADY the 'End' of an enclosing block (start < pc),
-                                    // then this inner IF cannot have an ELSE block starting there, as it would extend beyond the parent.
-                                    // It must be a Simple IF jumping out to the parent's End.
-                                    isElse = false;
-                                }
-                                else if (endifTarget > target && endifTarget <= codeBlock.length && inst.args.D !== 5) {
-                                    // Heuristic: Check for 'Simple Skip' pattern (offset 5 implies 3-byte instruction + overhead).
-                                    // If the 'THEN' block is just a GOTO (3 bytes), it is functionally a simple conditional skip.
-                                    // Treating it as ELSE causes visual hanging issues if the GOTO target is a label within the flow.
-                                    // We force these to be 'Simple IF' (skipping the GOTO) rather than 'IF...ELSE'.
 
-                                    // It's an IF ... ELSE ... ENDIF
-                                    addStart(inst.pc, { type: 'IF', else: target, end: endifTarget });
-                                    addTarget(prev.pc, { type: 'ELSE', start: inst.pc });
-                                    addTarget(endifTarget, { type: 'ENDIF', start: inst.pc });
-                                    flow.jumps[inst.pc] = { type: 'IF', else: target, end: endifTarget };
-                                    flow.jumps[prev.pc] = { type: 'ELSE' };
-                                    flow.structureLabels.add(target);
-                                    if (endifTarget < start + size) flow.structureLabels.add(endifTarget);
-                                    log(`Detected IF...ELSE...ENDIF (Start:${inst.pc.toString(16)} Else:${target.toString(16)} End:${endifTarget.toString(16)})`);
-                                    // log(`Detected IF...ELSE...ENDIF (Start:${inst.pc.toString(16)} Else:${target.toString(16)} End:${endifTarget.toString(16)})`);
-                                    isElse = true;
+
+                                    /*
+                                    else if (protectedLabels.has(endifTarget)) {
+                                        // Fix: If the GOTO jumps to a Loop End or Loop Condition, it is a BREAK/CONTINUE.
+                                        // It is NOT an ELSE.
+                                        isElse = false;
+                                    }
+                                    */
+                                    if (flow.targets[target] && flow.targets[target].some(t => (t.type === 'ENDIF' || t.type === 'ENDWH' || t.type === 'UNTIL') && t.start < inst.pc)) {
+                                        // Fix Case 7: If 'Else' target is ALREADY the 'End' of an enclosing block (start < pc),
+                                        // then this inner IF cannot have an ELSE block starting there, as it would extend beyond the parent.
+                                        // It must be a Simple IF jumping out to the parent's End.
+                                        isElse = false;
+                                    }
+                                    else if (endifTarget > target && endifTarget <= codeBlock.length && inst.args.D !== 5) {
+                                        // Heuristic: Check for 'Simple Skip' pattern (offset 5 implies 3-byte instruction + overhead).
+                                        // If the 'THEN' block is just a GOTO (3 bytes), it is functionally a simple conditional skip.
+                                        // Treating it as ELSE causes visual hanging issues if the GOTO target is a label within the flow.
+                                        // We force these to be 'Simple IF' (skipping the GOTO) rather than 'IF...ELSE'.
+
+                                        // It's an IF ... ELSE ... ENDIF
+                                        isElse = true;
+
+                                        // Support for ELSEIF / Case Patterns:
+                                        // If the 'Else' block (starting at 'target') immediately starts with another IF (BranchIfFalse),,
+                                        // and that inner IF jumps to the SAME 'endifTarget' (or close to it),
+                                        // then it's a valid chain.
+                                        // Even if 'endifTarget' > 'target', we usually treat it as ELSE.
+                                        // The Only case we exclude is "Simple Skip" (handled by D=5 check above).
+
+                                        // Note: If endifTarget === target, it would be caught by matching loop logic (Empty Then?).
+                                        // Wait, if endifTarget === target, then Then Block jumps to Else Block? Fallthrough.
+                                        // GOTO Target === Else Target.
+                                        // IF A GOTO B; ELSE B ...
+                                        // This basically means IF A ... ; B ...
+                                        // It's NOT an ELSE block. It's a Converge.
+                                        // So endifTarget MUST be > target for valid ELSE structure (Else block has size > 0).
+                                    }
+                                    // Special Handling for SWITCH/CASE Logic (GOTO Common Exit)
+                                    else if (endifTarget > target && codeBlock[target] === 0x7E) {
+                                        // If Else Block starts with BranchIfFalse (0x7E), it's potentially an ELSEIF.
+                                        // We allow it as ELSE.
+                                        isElse = true;
+                                    }
+                                    if (isElse) {
+                                        addStart(inst.pc, { type: 'IF', else: target, end: endifTarget });
+                                        addTarget(target, { type: 'ELSE', start: inst.pc });
+                                        addTarget(endifTarget, { type: 'ENDIF', start: inst.pc });
+                                        flow.jumps[inst.pc] = { type: 'IF', else: target, end: endifTarget };
+                                        flow.jumps[prev.pc] = { type: 'ELSE' };
+                                        flow.structureLabels.add(target);
+                                        if (endifTarget < start + size) flow.structureLabels.add(endifTarget);
+                                        log(`Detected IF...ELSE...ENDIF (Start:${inst.pc.toString(16)} Else:${target.toString(16)} End:${endifTarget.toString(16)})`);
+                                    }
                                 }
                             }
                         }
@@ -1413,6 +1512,9 @@
                     }
                 }
             }
+
+
+
 
             // FINAL PASS: Identify Explicit GOTOs (Not Structural, Not Loop Control)
             // We need to track the Loop Stack to identify BREAK/CONTINUE targets effectively.
@@ -1475,6 +1577,8 @@
 
 
     }
+
+
 
     if (typeof window !== 'undefined') {
         window.OPLDecompiler = OPLDecompiler;

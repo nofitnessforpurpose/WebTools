@@ -284,7 +284,28 @@ var OPLFormatter = {
                 // If we stripped a trailing comment, there might be trailing whitespace.
                 // Requirement says "removes all comments".
                 // Usually we trimRight? Let's trimRight safely.
-                cleanLines.push(newLine.trimEnd());
+                var cleaned = newLine.trimEnd();
+
+                // Remove trailing lonely colons (separators made obsolete by REM removal)
+                // e.g. "PRINT A :" -> "PRINT A"
+                // But preserve "LABEL::"
+                // Loop to handle ":: :" -> "::"
+                // EXCEPTION: Do not remove colon if it looks like a Procedure/Label definition (e.g. "MYPROC:")
+                // i.e. The line (ignoring spaces) is just Identifier + Colon.
+                // Regex: ^\s*[A-Z0-9%$]+\s*:\s*$
+
+                while (cleaned.length > 0 && cleaned.slice(-1) === ':' && cleaned.slice(-2) !== '::') {
+                    // Check if this is a procedure/label definition
+                    // We check if the cleaned line matches "Ident :"
+                    // If so, we break and preserve the colon.
+                    if (/^\s*[a-zA-Z0-9%$]+\s*:\s*$/.test(cleaned)) {
+                        break;
+                    }
+
+                    cleaned = cleaned.substring(0, cleaned.length - 1).trimEnd();
+                }
+
+                cleanLines.push(cleaned);
             }
         }
 
@@ -527,12 +548,20 @@ var OPLFormatter = {
 
             // Colon Handling (Refined):
             // Rule: "if the preceding character is not numeric or alphabetic the space before a colon may be removed."
-            // 1. If preceding char IS Alphanumeric, KEEP space (e.g. "PRINT A$ :")
-            s = s.replace(/([a-zA-Z0-9])\s+:/g, '$1 :');
 
-            // 2. If preceding char is NOT Alphanumeric, REMOVE space (e.g. ") :" -> "):")
+            // 1. If preceding char IS Alphanumeric (inc % $), KEEP space (e.g. "PRINT A$ :")
+            // Lookahead (?!:) prevents adding space if next char is colon (::) or already spaced? 
+            // Original logic was just $1 :. We want to avoid "Label::" becoming "Label : :"
+            // But we also want "ab% :" -> "ab% :"
+            s = s.replace(/([a-zA-Z0-9%$])\s+:(?!:)/g, '$1 :');
+
+            // 1b. Robust Label Collapse: "Label ::" -> "Label::"
+            s = s.replace(/([a-zA-Z0-9])\s+::/g, '$1::');
+
+            // 2. If preceding char is NOT Alphanumeric (and not % $), REMOVE space (e.g. ") :" -> "):")
             // Exclusion of ':' prevents "A: :FIRST" becoming "A::FIRST" (Label)
-            s = s.replace(/([^a-zA-Z0-9:])\s+:/g, '$1:');
+            // Exclusion of % $ protects variables if Rule 1 missed something?
+            s = s.replace(/([^a-zA-Z0-9:%$])\s+:/g, '$1:');
 
             // 3. Remove space at start of line (rare but possible)
             s = s.replace(/^\s+:/g, ':');

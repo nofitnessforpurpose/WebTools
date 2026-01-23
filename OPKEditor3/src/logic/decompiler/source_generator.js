@@ -332,11 +332,6 @@
 
                                 const topPE = pendingElseStack.length > 0 ? pendingElseStack[pendingElseStack.length - 1] : null;
 
-                                // DEBUG LOGGING
-                                // if (options.logCallback && topPE && innerIF) {
-                                //     console.log(`[DEBUG] PC:${pc.toString(16).toUpperCase()} Indent:${indentLevel} TopPE:{Indent:${topPE.indent}, End:${topPE.outerEnd.toString(16)}} InnerIF:{End:${innerIF.end.toString(16)}} Match:${(topPE.indent === indentLevel && (innerIF.end === topPE.outerEnd || (innerIF.end > topPE.outerEnd && innerIF.end <= topPE.outerEnd + 3)))}`);
-                                // }
-
                                 if (topPE && topPE.indent === indentLevel && innerIF && topPE.originStruct.start !== innerIF.start && (innerIF.end === topPE.outerEnd || (innerIF.end > topPE.outerEnd && innerIF.end <= topPE.outerEnd + 3))) {
                                     innerIF.isElseIf = true; // Mark this IF as merged
                                     // Extend the scope if the new Inner IF goes further than the Outer IF
@@ -411,7 +406,10 @@
                             pendingPrint = null;
                         }
                         const struct = flow.jumps[pc];
-                        if (struct && (struct.type === 'WHILE' || struct.type === 'ELSE' || struct.type === 'WHILE_TOP')) {
+                        if (struct && (struct.type === 'WHILE' || struct.type === 'ELSE' || struct.type === 'WHILE_TOP' || struct.type === 'INF_LOOP')) {
+                            if (struct.type === 'INF_LOOP') {
+                                source += this.indent(indentLevel) + "UNTIL 0\n";
+                            }
                             expr = null; // These are structural jumps handled elsewhere
                         } else {
                             // Check for BREAK/CONTINUE patterns

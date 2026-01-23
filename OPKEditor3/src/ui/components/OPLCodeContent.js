@@ -136,14 +136,14 @@ window.OPL_TEMPLATES = [
   
   REM Emulating: FOR i% = 1 TO 5
   
-  i% = 1            REM Initialise (FOR)
+  i% = 1            : REM Initialise (FOR)
   DO
     PRINT "Loop:", i%
     
     REM ... Body of loop ...
     
-    i% = i% + 1     REM Increment (NEXT)
-  UNTIL i% > 5      REM Condition (TO 5)
+    i% = i% + 1     : REM Increment (NEXT)
+  UNTIL i% > 5      : REM Condition (TO 5)
   GET`
       },
       {
@@ -184,27 +184,7 @@ window.OPL_TEMPLATES = [
   ENDWH
   CLOSE`
       },
-      {
-        name: "Graphics Loop",
-        description: "Specific loop for handling graphics and user input.",
-        code:
-          `DOGRAPH:
-  LOCAL k%
-  CURSOR OFF
-  CLS
-  AT 1,1
-  PRINT "Press 'Q' to quit"
-  
-  DO
-    k% = GET
-    
-    IF k% = %Q OR k% = %q
-      BREAK
-    ENDIF
-    
-    REM Draw something based on key
-  UNTIL 0`
-      },
+
       {
         name: "Database Suite",
         description: "Complete suite for managing an address book database (Create, Insert, Search, Alter, Erase).",
@@ -217,21 +197,21 @@ window.OPL_TEMPLATES = [
     OPEN "A:ADDR",A,n$,ad1$,ad2$,ad3$,pc$,tel$
   ENDIF
   DO
-    m%=MENU("INSERT,SEARCH,ALTER,ERASE,QUIT")
+    m%=MENU("ADDREC,FINDREC,EDITREC,DELREC,QUIT")
     IF m%=0 OR m%=5
       STOP
     ELSEIF m%=1
-      INSERT:
+      ADDREC:
     ELSEIF m%=2
-      SEARCH:
+      FINDREC:
     ELSEIF m%=3
-      ALTER:
+      EDITREC:
     ELSEIF m%=4
-      ERASE:
+      DELREC:
     ENDIF
   UNTIL 0
 
-INSERT:
+ADDREC:
   PRINT "ENTER NAME"
   INPUT A.n$
   CLS
@@ -251,7 +231,7 @@ INSERT:
   INPUT A.tel$
   APPEND
 
-SEARCH:
+FINDREC:
   LOCAL recnum%,search$(30)
   top::
   FIRST
@@ -280,7 +260,7 @@ SEARCH:
     ENDIF
   UNTIL 0
 
-ALTER:
+EDITREC:
   LOCAL recnum%,search$(30),k%
   DO
     FIRST
@@ -326,7 +306,7 @@ ALTER:
     UNTIL 0
   UNTIL 0
 
-ERASE:
+DELREC:
   LOCAL recnum%,search$(30),k%
   FIRST
   CLS

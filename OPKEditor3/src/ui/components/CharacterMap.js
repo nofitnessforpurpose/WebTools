@@ -66,28 +66,46 @@ var CharacterMap = (function () {
         16, 8, 24, 10, 22, 15, 2, 0, 0, 10, 27, 31, 14, 14, 4, 0, 0, 4, 14, 31, 14, 4, 0, 0, 4, 14, 14, 27, 27, 4, 14, 0, 4, 14, 31, 31, 21, 4, 14, 0, 0, 0, 4, 0, 31, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 31, 31, 31, 31, 31, 31, 31, 31
     ]);
 
+    // Separate storage for UDG data (chars 0-7)
+    // 8 chars * 8 bytes = 64 bytes
+    var UDG_DATA_XP = new Uint8Array(64);
+    var UDG_DATA_LZ = new Uint8Array(64);
+
+    // Active Data
+    var CURRENT_FONT_DATA = new Uint8Array(2048);
+
     // Active Data
     var CURRENT_FONT_DATA = new Uint8Array(2048);
 
     // Function to load the selected font into CURRENT_FONT_DATA
-    function loadFont(sourceData) {
+    function loadFont(sourceData, udgData) {
         // Both source datasets seem to start at 0x20 in terms of content (first byte is 0, but offset 8 is '!')
         // We copy starting at offset 256 effectively. E.g. sourceData[0] -> FONT_DATA[256].
 
         // Clear current
         for (var k = 0; k < 2048; k++) CURRENT_FONT_DATA[k] = 0;
 
-        // Copy loop
+        // Copy sourceData (starting at Char 32 / offset 256)
         var offset = 32 * 8; // 256
         for (var i = 0; i < sourceData.length; i++) {
             if (offset + i < CURRENT_FONT_DATA.length) {
                 CURRENT_FONT_DATA[offset + i] = sourceData[i];
             }
         }
+
+        // Copy UDG data (chars 0-7, starting at offset 0)
+        if (udgData) {
+            for (var i = 0; i < udgData.length; i++) {
+                if (i < CURRENT_FONT_DATA.length) {
+                    CURRENT_FONT_DATA[i] = udgData[i];
+                }
+            }
+        }
     }
 
     // Default load XP
-    loadFont(FONT_DATA_XP);
+    // Default load XP
+    loadFont(FONT_DATA_XP, UDG_DATA_XP);
 
     // Check if running as child
     if (window.location.search.indexOf('feature=charmap') !== -1) {
@@ -172,7 +190,8 @@ var CharacterMap = (function () {
             }
             .char-code-input { 
                 padding: 5px; 
-                width: 220px; 
+                width: 340px; 
+                min-width: 50px;
                 font-family: monospace;
                 background: var(--input-bg);
                 color: var(--text-color);
@@ -249,9 +268,13 @@ var CharacterMap = (function () {
         modeBtn.className = 'ui-btn';
         modeBtn.innerHTML = 'Mode:<br>CHR$';
         modeBtn.onclick = function () {
-            displayMode = (displayMode === 'CHR$') ? 'ASC' : 'CHR$';
+            if (displayMode === 'CHR$') displayMode = 'ASC';
+            else if (displayMode === 'ASC') displayMode = 'UDG';
+            else displayMode = 'CHR$';
+
             modeBtn.innerHTML = 'Mode:<br>' + displayMode;
-            updateInfo(lastSelectedCode, selectedInfo, codeInput, displayMode);
+            updateInfo(lastSelectedCode, selectedInfo, codeInput, displayMode, currentFont);
+            codeInput.readOnly = (displayMode !== 'UDG');
         };
 
         var selectedInfo = doc.createElement('div');
@@ -261,7 +284,78 @@ var CharacterMap = (function () {
         var codeInput = doc.createElement('input');
         codeInput.className = 'char-code-input';
         codeInput.type = 'text';
-        codeInput.readOnly = true;
+        codeInput.readOnly = true; // Default to readOnly (CHR$/ASC), toggled in modeBtn
+
+        codeInput.onchange = function () {
+            if (displayMode === 'UDG') {
+                parseAndApplyUDG(codeInput.value);
+            }
+        };
+
+        function parseAndApplyUDG(text) {
+            text = text.trim();
+            // Regex to match syntax with either $Hex or Decimal args
+            // Part for byte: ($[0-9A-F]+|\d+)
+            var bytePart = "\\s*,\\s*(\\$[0-9A-Fa-f]+|\\d+)";
+            var bytePart8 = "";
+            for (var k = 0; k < 8; k++) bytePart8 += bytePart;
+
+            // XP Format: UDG:(code, b1, b2...)
+            var matchXPRegex = new RegExp("^UDG:\\s*\\(\\s*(\\d+)" + bytePart8 + "\\s*\\)$", "i");
+            // LZ Format: UDG code, b1, b2...
+            var matchLZRegex = new RegExp("^UDG\\s+(\\d+)" + bytePart8 + "$", "i");
+
+            var matchXP = text.match(matchXPRegex);
+            var matchLZ = text.match(matchLZRegex);
+
+            var match = matchXP || matchLZ;
+            if (match) {
+                var code = parseInt(match[1], 10);
+                if (code >= 0 && code <= 7) {
+                    var bytes = [];
+                    for (var i = 0; i < 8; i++) {
+                        var valStr = match[2 + i];
+                        var val;
+                        if (valStr.indexOf('$') !== -1) {
+                            val = parseInt(valStr.replace('$', ''), 16);
+                        } else {
+                            val = parseInt(valStr, 10);
+                        }
+                        bytes.push(val);
+                    }
+
+                    // Update CURRENT_FONT_DATA
+                    var offset = code * 8;
+                    for (var i = 0; i < 8; i++) {
+                        CURRENT_FONT_DATA[offset + i] = bytes[i];
+                    }
+
+                    // Update the source data as well so it persists if font is toggled back and forth?
+                    // The requirement implies "transfer To and From...". If we edit it here, it should probably strictly edit the CURRENT active font.
+                    // But if we toggle font, loadFont overwrites CURRENT. So if we want persistence we should update source too.
+                    // Assuming edits are meant to persist for the session.
+                    if (currentFont === 'XP') {
+                        for (var i = 0; i < 8; i++) UDG_DATA_XP[offset + i] = bytes[i];
+                    } else {
+                        for (var i = 0; i < 8; i++) UDG_DATA_LZ[offset + i] = bytes[i];
+                    }
+
+                    // Repaint Grid
+                    mapContainer.innerHTML = '';
+                    renderSVGGrid(mapContainer, function (c) {
+                        lastSelectedCode = c;
+                        updateInfo(c, selectedInfo, codeInput, displayMode, currentFont);
+                    });
+
+                    // Restore selection
+                    selectCharByCode(code); // Select the modified char? Or stay on current?
+                    // If user edited char 0 while selecting char 0, select char 0.
+                    // But if they edited char 0 while selecting char 1 (typed UDG 0...), maybe stay on char 1?
+                    // Let's re-select the currently selected code to ensure UI consistency.
+                    selectCharByCode(lastSelectedCode);
+                }
+            }
+        }
 
         var copyBtn = doc.createElement('button');
         copyBtn.className = 'ui-btn';
@@ -279,17 +373,17 @@ var CharacterMap = (function () {
         fontBtn.onclick = function () {
             if (currentFont === 'XP') {
                 currentFont = 'LZ';
-                loadFont(FONT_DATA_LZ);
+                loadFont(FONT_DATA_LZ, UDG_DATA_LZ);
             } else {
                 currentFont = 'XP';
-                loadFont(FONT_DATA_XP);
+                loadFont(FONT_DATA_XP, UDG_DATA_XP);
             }
             fontBtn.innerHTML = 'Font:<br>' + currentFont;
             // Clear and Re-render
             mapContainer.innerHTML = '';
             renderSVGGrid(mapContainer, function (code) {
                 lastSelectedCode = code;
-                updateInfo(code, selectedInfo, codeInput, displayMode);
+                updateInfo(code, selectedInfo, codeInput, displayMode, currentFont);
             });
         };
 
@@ -310,7 +404,7 @@ var CharacterMap = (function () {
         // Initial render
         renderSVGGrid(mapContainer, function (code) {
             lastSelectedCode = code;
-            updateInfo(code, selectedInfo, codeInput, displayMode);
+            updateInfo(code, selectedInfo, codeInput, displayMode, currentFont);
         });
 
         // Ensure focusable for keyboard events
@@ -489,7 +583,7 @@ var CharacterMap = (function () {
         container.appendChild(svg);
     }
 
-    function updateInfo(code, display, input, mode) {
+    function updateInfo(code, display, input, mode, fontMode) {
         var hex = code.toString(16).toUpperCase().padStart(2, '0');
         var char = (code >= 32 && code <= 126) ? String.fromCharCode(code) : '.';
 
@@ -502,6 +596,21 @@ var CharacterMap = (function () {
                 else input.value = `ASC("${c}")`;
             } else {
                 input.value = `ASC(CHR$(${code}))`;
+            }
+        } else if (mode === 'UDG') {
+            // Fetch bytes
+            var offset = code * 8;
+            var bytes = [];
+            for (var i = 0; i < 8; i++) {
+                bytes.push('$' + CURRENT_FONT_DATA[offset + i].toString(16).toUpperCase().padStart(2, '0'));
+            }
+            var bytesStr = bytes.join(',');
+
+            if (fontMode === 'XP') {
+                input.value = `UDG:(${code},${bytesStr})`;
+            } else {
+                // LZ Mode
+                input.value = `UDG ${code},${bytesStr}`;
             }
         } else {
             // CHR$ mode: Always show CHR$(code) as requested

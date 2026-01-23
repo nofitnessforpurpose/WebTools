@@ -3173,6 +3173,7 @@ function initChildMode(feature) {
       if (typeof OPLCommandReference !== 'undefined') {
          new OPLCommandReference().render(window);
       }
+   } else if (feature === 'opl_content') {
       if (typeof OPLContentViewer !== 'undefined') {
          OPLContentViewer.childWindowReady(window);
       }
