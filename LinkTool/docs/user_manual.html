@@ -1,1 +1,518 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>LinkTool User Manual</title><style>:root {--bg-color: #1e1e1e;--text-color: #e0e0e0;--accent-color: #007acc;--border-color: #333;--code-bg: #2d2d2d;--tip-bg: #1a472a;--note-bg: #1a3a52;--important-bg: #4a2a5a;--warning-bg: #5a3a1a;}body {font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;background-color: var(--bg-color);color: var(--text-color);margin: 0;padding: 20px;line-height: 1.6;}.container {max-width: 900px;margin: 0 auto;padding: 20px;}h1 {color: var(--accent-color);border-bottom: 2px solid var(--border-color);padding-bottom: 10px;margin-top: 0;}h2 {color: var(--accent-color);margin-top: 30px;border-bottom: 1px solid var(--border-color);padding-bottom: 5px;}h3 {color: #4db8ff;margin-top: 20px;}hr {border: none;border-top: 1px solid var(--border-color);margin: 30px 0;}ul,ol {padding-left: 25px;}li {margin: 8px 0;}code {background-color: var(--code-bg);padding: 2px 6px;border-radius: 3px;font-family: 'Consolas', 'Courier New', monospace;font-size: 0.9em;}strong {color: #fff;}.alert {padding: 12px 16px;margin: 15px 0;border-left: 4px solid;border-radius: 4px;}.alert-note {background-color: var(--note-bg);border-color: #3b82f6;}.alert-tip {background-color: var(--tip-bg);border-color: #10b981;}.alert-important {background-color: var(--important-bg);border-color: #8b5cf6;}.alert-warning {background-color: var(--warning-bg);border-color: #f59e0b;}.alert-title {font-weight: bold;margin-bottom: 5px;}.problem {font-weight: bold;color: #f59e0b;margin-top: 15px;}.solution {margin-left: 20px;}a {color: var(--accent-color);text-decoration: none;}a:hover {text-decoration: underline;}.back-link {display: inline-block;margin-bottom: 20px;padding: 8px 12px;background-color: var(--accent-color);color: white;border-radius: 4px;text-decoration: none;}.back-link:hover {opacity: 0.9;text-decoration: none;}</style></head><body><div class="container"><a href="../index.html" class="back-link">← Back to LinkTool</a><h1>LinkTool User Manual</h1><h2>Getting Started: Downloading Your First Pack</h2><p>This manual will guide you through downloading a data pack from your Psion Organiser II to an OPK file usingthe LinkTool web application.</p><h3>What You'll Need</h3><divstyle="display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: auto auto; gap: 20px; margin: 20px 0;"><divstyle="grid-column: 1; grid-row: 1 / 3; background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; text-align: center;"><divstyle="height: 280px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;"><img src="hardware_diagram.jpg" alt="Psion Organiser II with COMMS Link"style="max-height: 95%; max-width: 95%; width: auto; height: auto; border-radius: 4px; background-color: #f5f5f5; padding: 8px;"></div><h4 style="color: #4db8ff; margin: 10px 0 5px 0; font-size: 1em;">Psion Organiser II</h4><p style="margin: 5px 0; font-size: 0.9em; color: #ccc;">With COMMS Link and data pack installed (Pack Bor Pack C)</p></div><divstyle="grid-column: 2; grid-row: 1; background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 25px 10px 5px 10px; text-align: center; max-height: 170px;"><divstyle="height: 95px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;"><img src="data_pack_diagram.png" alt="Data Pack"style="max-height: 100%; max-width: 100%; width: auto; height: auto; border-radius: 4px; background-color: #f5f5f5; padding: 6px;"></div><h4 style="color: #4db8ff; margin: 6px 0 3px 0; font-size: 0.92em;">Data Pack</h4><p style="margin: 3px 0; font-size: 0.82em; color: #ccc;">Pack B or Pack C</p></div><divstyle="grid-column: 2; grid-row: 2; background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 25px 10px 5px 10px; text-align: center; max-height: 170px;"><divstyle="height: 95px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;"><img src="power_supply_diagram.png" alt="Power Supply"style="max-height: 100%; max-width: 100%; width: auto; height: auto; border-radius: 4px; background-color: #f5f5f5; padding: 6px;"></div><h4 style="color: #4db8ff; margin: 6px 0 3px 0; font-size: 0.92em;">Power Supply</h4><p style="margin: 3px 0; font-size: 0.82em; color: #ccc;">Recommended</p></div><divstyle="grid-column: 3; grid-row: 1 / 3; background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; text-align: center;"><divstyle="height: 280px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;"><img src="serial_adapter_diagram.png" alt="USB Serial Adapter"style="max-height: 70%; max-width: 70%; width: auto; height: auto; border-radius: 4px; background-color: #f5f5f5; padding: 8px; transform: rotate(90deg) scale(1.4);"></div><h4 style="color: #4db8ff; margin: 10px 0 5px 0; font-size: 1em;">Serial Connection</h4><p style="margin: 5px 0; font-size: 0.9em; color: #ccc;">USB-to-serial adapter and cable to connect toyour computer</p></div></div><divstyle="background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin: 20px 0;"><h4 style="color: #4db8ff; margin: 0 0 10px 0; font-size: 1em;">Software Requirements</h4><p style="margin: 5px 0; font-size: 0.9em;"><strong>Compatible web browser:</strong> Chrome 89+, Edge 89+,or Opera 75+</p></div><div class="alert alert-note"><div class="alert-title">NOTE</div>Firefox and Safari do not currently support the Web Serial API required by this tool.</div><hr><h2>Step-by-Step Guide</h2><h3>1. Prepare Your Hardware</h3><ol><li>Connect your Psion Organiser II to your computer using the serial adapter and Comms Link cable</li><li>Ensure the Psion Organiser II is powered on</li><li>Open the LinkTool web application in your browser</li></ol><h3>2. Select the Pack to Download</h3><p>Before connecting, choose which pack you want to download:</p><ul><li>Click the <strong>"Pack select"</strong> button to toggle between <strong>Pack B</strong> and<strong>Pack C</strong></li><li>The default selection is Pack B</li><li>The button will display your current selection</li></ul><div class="alert alert-tip"><div class="alert-title">TIP</div>If you're unsure which pack contains your data, start with Pack B as it's the most commonly used data pack.</div><h3>3. Prepare the Psion Organiser II</h3><p><strong>Important</strong>: To avoid timeout issues, prepare your Psion Organiser II <em>before</em>connecting in the tool.</p><ol><li>On your Psion Organiser II, navigate to the main menu</li><li>Select <strong>COMMS</strong></li><li>Select <strong>BOOT</strong></li><li>Navigate to <strong>NAME:</strong> (leave it blank - no name is required)</li><li><strong>Stop here</strong> - do not press EXE yet</li></ol><div class="alert alert-important"><div class="alert-title">IMPORTANT</div>The tool has a limited time window to establish communication after you press EXE. By navigating to theNAME: option first, you'll be ready to press EXE immediately after the tool starts searching for the device.</div><h3>4. Connect and Start the Download</h3><p>Now that your Psion Organiser II is ready at the NAME: prompt:</p><ol><li>Click the <strong>"Connect"</strong> button in the web application</li><li>Your browser will display a serial port selection dialog</li><li>Select the COM port corresponding to your serial adapter</li><li>Click <strong>"Connect"</strong> in the browser dialog</li><li><strong>Wait for the tool to display "Searching for Device..."</strong> in the status area</li><li><strong>Now press EXE</strong> on your Psion Organiser II to start the transfer</li></ol><p>The tool will immediately detect the device and begin the download process.</p><div class="alert alert-tip"><div class="alert-title">TIP</div>If you press EXE before the tool is searching, or wait too long after the tool starts searching, you may seea timeout error. Simply disconnect, return to the NAME: prompt on the Organiser, and try again.</div><h3>5. Monitor the Download Progress</h3><p>The LinkTool will automatically:</p><ol><li><strong>Inject boot code</strong> into the Psion Organiser II's RAM</li><li><strong>Transfer the pack data</strong> from the selected pack</li><li>Display real-time progress in the communication log</li><li>Show a progress indicator as data is received</li></ol><p>You'll see messages in the log window showing:</p><ul><li>Boot injection progress (Pairs 0-6)</li><li>Data transfer phases (HEADER and BODY)</li><li>CRC verification results</li><li>Completion status</li></ul><div class="alert alert-note"><div class="alert-title">NOTE</div>The download process typically takes 1-3 minutes depending on the pack size. Do not disconnect or power offthe Psion Organiser II during this process.</div><h3>6. Save Your OPK File</h3><p>Once the download completes:</p><ol><li>The <strong>"Save Pack"</strong> button will become enabled</li><li>Click <strong>"Save Pack"</strong> to download the OPK file to your computer</li><li>Your browser will prompt you to save the file (default name: <code>pack_b.opk</code> or<code>pack_c.opk</code>)</li><li>Choose a location and save the file</li></ol><div class="alert alert-tip"><div class="alert-title">TIP</div>Give your OPK file a descriptive name to help you identify its contents later (e.g.,<code>my_contacts_2026.opk</code>).</div><h3>7. Disconnect</h3><p>After saving your OPK file:</p><ol><li>Click the <strong>"Disconnect"</strong> button to release the serial port</li><li>You can now safely disconnect the serial cable from your Psion Organiser II</li></ol><hr><h2>What is an OPK File?</h2><p>An <strong>OPK file</strong> is a binary image of a Psion Organiser II data pack. It contains:</p><ul><li><strong>Magic header</strong> (<code>OPK!</code>) identifying the file format</li><li><strong>Length field</strong> indicating the size of the pack data</li><li><strong>Pack data</strong> (the actual contents of your data pack)</li><li><strong>Terminator</strong> marking the end of the file</li></ul><p>OPK files can be viewed and edited using the <strong>OPK Editor</strong> tool, which allows you to:</p><ul><li>Inspect the raw contents of the pack</li><li>View and modify individual records</li><li>Analyze the pack structure</li><li>Export data in various formats</li></ul><hr><h2>Troubleshooting</h2><h3>Connection Issues</h3><div class="problem">Problem: Browser doesn't show any serial ports</div><div class="solution"><ul><li><strong>Solution:</strong> Ensure your serial adapter is properly connected and drivers areinstalled</li><li>Check Device Manager (Windows) to verify the adapter is recognized</li></ul></div><div class="problem">Problem: "Failed to open serial port" error</div><div class="solution"><ul><li><strong>Solution:</strong> The port may be in use by another application. Close any terminalprogramsor other applications using the serial port</li></ul></div><h3>Transfer Issues</h3><div class="problem">Problem: Download stalls or times out</div><div class="solution"><ul><li><strong>Solution:</strong></li><ul><li>Check the serial cable connections</li><li>Ensure the Psion Organiser II is in the COMMS BOOT menu</li><li>Try disconnecting and reconnecting</li><li>Verify the correct pack is selected</li></ul></ul></div><div class="problem">Problem: CRC errors in the log</div><div class="solution"><ul><li><strong>Solution:</strong></li><ul><li>This may indicate communication errors</li><li>Try reducing electrical interference near the cable</li><li>Ensure the serial cable is in good condition</li><li>The tool will automatically retry failed transfers</li></ul></ul></div><h3>Psion Organiser II Issues</h3><div class="problem">Problem: Psion shows "TRAP" error</div><div class="solution"><ul><li><strong>Solution:</strong></li><ul><li>This may indicate a timing issue</li><li>Reset the Psion Organiser II and try again</li><li>Ensure you're using the correct boot sequence (COMMS → BOOT → NAME)</li></ul></ul></div><hr><h2>Advanced Features</h2><h3>Debug Mode</h3><p>For troubleshooting or protocol analysis, you can enable debug mode:</p><ol><li>Add <code>?debug=true</code> to the end of the LinkTool URL</li><li>Reload the page</li><li>The communication log will show detailed protocol information including:<ul><li>Raw packet data</li><li>Timing information</li><li>Detailed state transitions</li></ul></li></ol><h3>Serial Port Settings</h3><p>The LinkTool uses the following default serial parameters:</p><ul><li><strong>Baud rate:</strong> 9600</li><li><strong>Data bits:</strong> 8</li><li><strong>Parity:</strong> None</li><li><strong>Stop bits:</strong> 1</li><li><strong>Flow control:</strong> None</li></ul><p>These settings match the Psion Organiser II Comms Link specifications and should not need adjustment.</p><hr><h2>Next Steps</h2><p>After downloading your pack to an OPK file, you can:</p><ol><li><strong>Back up your data</strong> by storing the OPK file in a safe location</li><li><strong>View the pack contents</strong> using the OPK Editor tool</li><li><strong>Transfer the pack to another Psion Organiser II</strong> by reversing the process (if supported)</li><li><strong>Archive multiple versions</strong> of your packs over time</li><li><strong>Verify the integrity</strong> of your packs over time using the check sums</li></ol><hr><h2>Additional Resources</h2><ul><li><strong>Community Forum:</strong> Visit <a href="https://www.organiser2.com/" target="_blank">Organiser2Forum</a> for discussions and support</li><li><strong>Original Protocol Documentation:</strong><a href="https://www.jaapsch.net/psion/"target="_blank">Jaap Scherphuis's Psion Page</a></li></ul><hr><h2>Legal Notice</h2><p>All information is for indication only. No association, affiliation, recommendation, suitability, or fitnessfor purpose should be assumed or is implied. Registered trademarks are owned by their respectiveregistrants.</p><p><strong>License:</strong> Creative Commons (with non-commercial restrictions on certain elements - see <ahref="https://www.jaapsch.net/psion/" target="_blank">source documentation</a>)</p><a href="../index.html" class="back-link">← Back to LinkTool</a></div></body></html>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkTool User Manual</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-color: #e0e0e0;
+            --accent-color: #007acc;
+            --border-color: #333;
+            --code-bg: #2d2d2d;
+            --tip-bg: #1a472a;
+            --note-bg: #1a3a52;
+            --important-bg: #4a2a5a;
+            --warning-bg: #5a3a1a;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: var(--accent-color);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+            margin-top: 0;
+        }
+
+        h2 {
+            color: var(--accent-color);
+            margin-top: 30px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        h3 {
+            color: #4db8ff;
+            margin-top: 20px;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid var(--border-color);
+            margin: 30px 0;
+        }
+
+        ul,
+        ol {
+            padding-left: 25px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        code {
+            background-color: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        strong {
+            color: #fff;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            margin: 15px 0;
+            border-left: 4px solid;
+            border-radius: 4px;
+        }
+
+        .alert-note {
+            background-color: var(--note-bg);
+            border-color: #3b82f6;
+        }
+
+        .alert-tip {
+            background-color: var(--tip-bg);
+            border-color: #10b981;
+        }
+
+        .alert-important {
+            background-color: var(--important-bg);
+            border-color: #8b5cf6;
+        }
+
+        .alert-warning {
+            background-color: var(--warning-bg);
+            border-color: #f59e0b;
+        }
+
+        .alert-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .problem {
+            font-weight: bold;
+            color: #f59e0b;
+            margin-top: 15px;
+        }
+
+        .solution {
+            margin-left: 20px;
+        }
+
+        a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 8px 12px;
+            background-color: var(--accent-color);
+            color: white;
+            border-radius: 4px;
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            opacity: 0.9;
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <a href="../index.html" class="back-link">← Back to LinkTool</a>
+
+        <h1>LinkTool User Manual</h1>
+
+        <h2>Getting Started: Downloading Your First Pack</h2>
+
+        <p>This manual will guide you through downloading a data pack from your Psion Organiser II to an OPK file using
+            the LinkTool web application.</p>
+
+        <h3>What You'll Need</h3>
+
+        <div
+            style="display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: auto auto; gap: 20px; margin: 20px 0;">
+
+            <!-- Hardware Setup -->
+            <div
+                style="grid-column: 1; grid-row: 1 / 3; background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; text-align: center;">
+                <div
+                    style="height: 280px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                    <img src="hardware_diagram.jpg" alt="Psion Organiser II with COMMS Link"
+                        style="max-height: 95%; max-width: 95%; width: auto; height: auto; border-radius: 4px; background-color: #f5f5f5; padding: 8px;">
+                </div>
+                <h4 style="color: #4db8ff; margin: 10px 0 5px 0; font-size: 1em;">Psion Organiser II</h4>
+                <p style="margin: 5px 0; font-size: 0.9em; color: #ccc;">With COMMS Link and data pack installed (Pack B
+                    or Pack C)</p>
+            </div>
+
+            <!-- Data Pack -->
+            <div
+                style="grid-column: 2; grid-row: 1; background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 25px 10px 5px 10px; text-align: center; max-height: 170px;">
+                <div
+                    style="height: 95px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+                    <img src="data_pack_diagram.png" alt="Data Pack"
+                        style="max-height: 100%; max-width: 100%; width: auto; height: auto; border-radius: 4px; background-color: #f5f5f5; padding: 6px;">
+                </div>
+                <h4 style="color: #4db8ff; margin: 6px 0 3px 0; font-size: 0.92em;">Data Pack</h4>
+                <p style="margin: 3px 0; font-size: 0.82em; color: #ccc;">Pack B or Pack C</p>
+            </div>
+
+            <!-- Power Supply -->
+            <div
+                style="grid-column: 2; grid-row: 2; background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 25px 10px 5px 10px; text-align: center; max-height: 170px;">
+                <div
+                    style="height: 95px; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
+                    <img src="power_supply_diagram.png" alt="Power Supply"
+                        style="max-height: 100%; max-width: 100%; width: auto; height: auto; border-radius: 4px; background-color: #f5f5f5; padding: 6px;">
+                </div>
+                <h4 style="color: #4db8ff; margin: 6px 0 3px 0; font-size: 0.92em;">Power Supply</h4>
+                <p style="margin: 3px 0; font-size: 0.82em; color: #ccc;">Recommended</p>
+            </div>
+
+            <!-- Serial Adapter -->
+            <div
+                style="grid-column: 3; grid-row: 1 / 3; background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; text-align: center;">
+                <div
+                    style="height: 280px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px;">
+                    <img src="serial_adapter_diagram.png" alt="USB Serial Adapter"
+                        style="max-height: 70%; max-width: 70%; width: auto; height: auto; border-radius: 4px; background-color: #f5f5f5; padding: 8px; transform: rotate(90deg) scale(1.4);">
+                </div>
+                <h4 style="color: #4db8ff; margin: 10px 0 5px 0; font-size: 1em;">Serial Connection</h4>
+                <p style="margin: 5px 0; font-size: 0.9em; color: #ccc;">USB-to-serial adapter and cable to connect to
+                    your computer</p>
+            </div>
+
+
+
+        </div>
+
+        <div
+            style="background-color: #2a2a2a; border: 1px solid var(--border-color); border-radius: 8px; padding: 15px; margin: 20px 0;">
+            <h4 style="color: #4db8ff; margin: 0 0 10px 0; font-size: 1em;">Software Requirements</h4>
+            <p style="margin: 5px 0; font-size: 0.9em;"><strong>Compatible web browser:</strong> Chrome 89+, Edge 89+,
+                or Opera 75+</p>
+        </div>
+
+        <div class="alert alert-note">
+            <div class="alert-title">NOTE</div>
+            Firefox and Safari do not currently support the Web Serial API required by this tool.
+        </div>
+
+        <hr>
+
+        <h2>Step-by-Step Guide</h2>
+
+        <h3>1. Prepare Your Hardware</h3>
+
+        <ol>
+            <li>Connect your Psion Organiser II to your computer using the serial adapter and Comms Link cable</li>
+            <li>Ensure the Psion Organiser II is powered on</li>
+            <li>Open the LinkTool web application in your browser</li>
+        </ol>
+
+        <h3>2. Select the Pack to Download</h3>
+
+        <p>Before connecting, choose which pack you want to download:</p>
+
+        <ul>
+            <li>Click the <strong>"Pack select"</strong> button to toggle between <strong>Pack B</strong> and
+                <strong>Pack C</strong>
+            </li>
+            <li>The default selection is Pack B</li>
+            <li>The button will display your current selection</li>
+        </ul>
+
+        <div class="alert alert-tip">
+            <div class="alert-title">TIP</div>
+            If you're unsure which pack contains your data, start with Pack B as it's the most commonly used data pack.
+        </div>
+
+        <h3>3. Prepare the Psion Organiser II</h3>
+
+        <p><strong>Important</strong>: To avoid timeout issues, prepare your Psion Organiser II <em>before</em>
+            connecting in the tool.</p>
+
+        <ol>
+            <li>On your Psion Organiser II, navigate to the main menu</li>
+            <li>Select <strong>COMMS</strong></li>
+            <li>Select <strong>BOOT</strong></li>
+            <li>Navigate to <strong>NAME:</strong> (leave it blank - no name is required)</li>
+            <li><strong>Stop here</strong> - do not press EXE yet</li>
+        </ol>
+
+        <div class="alert alert-important">
+            <div class="alert-title">IMPORTANT</div>
+            The tool has a limited time window to establish communication after you press EXE. By navigating to the
+            NAME: option first, you'll be ready to press EXE immediately after the tool starts searching for the device.
+        </div>
+
+        <h3>4. Connect and Start the Download</h3>
+
+        <p>Now that your Psion Organiser II is ready at the NAME: prompt:</p>
+
+        <ol>
+            <li>Click the <strong>"Connect"</strong> button in the web application</li>
+            <li>Your browser will display a serial port selection dialog</li>
+            <li>Select the COM port corresponding to your serial adapter</li>
+            <li>Click <strong>"Connect"</strong> in the browser dialog</li>
+            <li><strong>Wait for the tool to display "Searching for Device..."</strong> in the status area</li>
+            <li><strong>Now press EXE</strong> on your Psion Organiser II to start the transfer</li>
+        </ol>
+
+        <p>The tool will immediately detect the device and begin the download process.</p>
+
+        <div class="alert alert-tip">
+            <div class="alert-title">TIP</div>
+            If you press EXE before the tool is searching, or wait too long after the tool starts searching, you may see
+            a timeout error. Simply disconnect, return to the NAME: prompt on the Organiser, and try again.
+        </div>
+
+        <h3>5. Monitor the Download Progress</h3>
+
+        <p>The LinkTool will automatically:</p>
+
+        <ol>
+            <li><strong>Inject boot code</strong> into the Psion Organiser II's RAM</li>
+            <li><strong>Transfer the pack data</strong> from the selected pack</li>
+            <li>Display real-time progress in the communication log</li>
+            <li>Show a progress indicator as data is received</li>
+        </ol>
+
+        <p>You'll see messages in the log window showing:</p>
+        <ul>
+            <li>Boot injection progress (Pairs 0-6)</li>
+            <li>Data transfer phases (HEADER and BODY)</li>
+            <li>CRC verification results</li>
+            <li>Completion status</li>
+        </ul>
+
+        <div class="alert alert-note">
+            <div class="alert-title">NOTE</div>
+            The download process typically takes 1-3 minutes depending on the pack size. Do not disconnect or power off
+            the Psion Organiser II during this process.
+        </div>
+
+        <h3>6. Save Your OPK File</h3>
+
+        <p>Once the download completes:</p>
+
+        <ol>
+            <li>The <strong>"Save Pack"</strong> button will become enabled</li>
+            <li>Click <strong>"Save Pack"</strong> to download the OPK file to your computer</li>
+            <li>Your browser will prompt you to save the file (default name: <code>pack_b.opk</code> or
+                <code>pack_c.opk</code>)
+            </li>
+            <li>Choose a location and save the file</li>
+        </ol>
+
+        <div class="alert alert-tip">
+            <div class="alert-title">TIP</div>
+            Give your OPK file a descriptive name to help you identify its contents later (e.g.,
+            <code>my_contacts_2026.opk</code>).
+        </div>
+
+        <h3>7. Disconnect</h3>
+
+        <p>After saving your OPK file:</p>
+
+        <ol>
+            <li>Click the <strong>"Disconnect"</strong> button to release the serial port</li>
+            <li>You can now safely disconnect the serial cable from your Psion Organiser II</li>
+        </ol>
+
+        <hr>
+
+        <h2>What is an OPK File?</h2>
+
+        <p>An <strong>OPK file</strong> is a binary image of a Psion Organiser II data pack. It contains:</p>
+
+        <ul>
+            <li><strong>Magic header</strong> (<code>OPK!</code>) identifying the file format</li>
+            <li><strong>Length field</strong> indicating the size of the pack data</li>
+            <li><strong>Pack data</strong> (the actual contents of your data pack)</li>
+            <li><strong>Terminator</strong> marking the end of the file</li>
+        </ul>
+
+        <p>OPK files can be viewed and edited using the <strong>OPK Editor</strong> tool, which allows you to:</p>
+        <ul>
+            <li>Inspect the raw contents of the pack</li>
+            <li>View and modify individual records</li>
+            <li>Analyze the pack structure</li>
+            <li>Export data in various formats</li>
+        </ul>
+
+        <hr>
+
+        <h2>Troubleshooting</h2>
+
+        <h3>Connection Issues</h3>
+
+        <div class="problem">Problem: Browser doesn't show any serial ports</div>
+        <div class="solution">
+            <ul>
+                <li><strong>Solution:</strong> Ensure your serial adapter is properly connected and drivers are
+                    installed
+                </li>
+                <li>Check Device Manager (Windows) to verify the adapter is recognized</li>
+            </ul>
+        </div>
+
+        <div class="problem">Problem: "Failed to open serial port" error</div>
+        <div class="solution">
+            <ul>
+                <li><strong>Solution:</strong> The port may be in use by another application. Close any terminal
+                    programs
+                    or other applications using the serial port</li>
+            </ul>
+        </div>
+
+        <h3>Transfer Issues</h3>
+
+        <div class="problem">Problem: Download stalls or times out</div>
+        <div class="solution">
+            <ul>
+                <li><strong>Solution:</strong></li>
+                <ul>
+                    <li>Check the serial cable connections</li>
+                    <li>Ensure the Psion Organiser II is in the COMMS BOOT menu</li>
+                    <li>Try disconnecting and reconnecting</li>
+                    <li>Verify the correct pack is selected</li>
+                </ul>
+            </ul>
+        </div>
+
+        <div class="problem">Problem: CRC errors in the log</div>
+        <div class="solution">
+            <ul>
+                <li><strong>Solution:</strong></li>
+                <ul>
+                    <li>This may indicate communication errors</li>
+                    <li>Try reducing electrical interference near the cable</li>
+                    <li>Ensure the serial cable is in good condition</li>
+                    <li>The tool will automatically retry failed transfers</li>
+                </ul>
+            </ul>
+        </div>
+
+        <h3>Psion Organiser II Issues</h3>
+
+        <div class="problem">Problem: Psion shows "TRAP" error</div>
+        <div class="solution">
+            <ul>
+                <li><strong>Solution:</strong></li>
+                <ul>
+                    <li>This may indicate a timing issue</li>
+                    <li>Reset the Psion Organiser II and try again</li>
+                    <li>Ensure you're using the correct boot sequence (COMMS → BOOT → NAME)</li>
+                </ul>
+            </ul>
+        </div>
+
+        <hr>
+
+        <h2>Advanced Features</h2>
+
+        <h3>Debug Mode</h3>
+
+        <p>For troubleshooting or protocol analysis, you can enable debug mode:</p>
+
+        <ol>
+            <li>Add <code>?debug=true</code> to the end of the LinkTool URL</li>
+            <li>Reload the page</li>
+            <li>The communication log will show detailed protocol information including:
+                <ul>
+                    <li>Raw packet data</li>
+                    <li>Timing information</li>
+                    <li>Detailed state transitions</li>
+                </ul>
+            </li>
+        </ol>
+
+        <h3>Serial Port Settings</h3>
+
+        <p>The LinkTool uses the following default serial parameters:</p>
+        <ul>
+            <li><strong>Baud rate:</strong> 9600</li>
+            <li><strong>Data bits:</strong> 8</li>
+            <li><strong>Parity:</strong> None</li>
+            <li><strong>Stop bits:</strong> 1</li>
+            <li><strong>Flow control:</strong> None</li>
+        </ul>
+
+        <p>These settings match the Psion Organiser II Comms Link specifications and should not need adjustment.</p>
+
+        <hr>
+
+        <h2>Next Steps</h2>
+
+        <p>After downloading your pack to an OPK file, you can:</p>
+
+        <ol>
+            <li><strong>Back up your data</strong> by storing the OPK file in a safe location</li>
+            <li><strong>View the pack contents</strong> using the OPK Editor tool</li>
+            <li><strong>Transfer the pack to another Psion Organiser II</strong> by reversing the process (if supported)
+            </li>
+            <li><strong>Archive multiple versions</strong> of your packs over time</li>
+            <li><strong>Verify the integrity</strong> of your packs over time using the check sums</li>
+        </ol>
+
+        <hr>
+
+        <h2>Additional Resources</h2>
+
+        <ul>
+            <li><strong>Community Forum:</strong> Visit <a href="https://www.organiser2.com/" target="_blank">Organiser
+                    2
+                    Forum</a> for discussions and support</li>
+            <li><strong>Original Protocol Documentation:</strong> <a href="https://www.jaapsch.net/psion/"
+                    target="_blank">Jaap Scherphuis's Psion Page</a></li>
+        </ul>
+
+        <hr>
+
+        <h2>Legal Notice</h2>
+
+        <p>All information is for indication only. No association, affiliation, recommendation, suitability, or fitness
+            for purpose should be assumed or is implied. Registered trademarks are owned by their respective
+            registrants.
+        </p>
+
+        <p><strong>License:</strong> Creative Commons (with non-commercial restrictions on certain elements - see <a
+                href="https://www.jaapsch.net/psion/" target="_blank">source documentation</a>)</p>
+
+        <a href="../index.html" class="back-link">← Back to LinkTool</a>
+    </div>
+</body>
+
+</html>
