@@ -1,63 +1,56 @@
-/**
- * OPLCommandReference.js
- * ----------------------
- * Manages the floating window for OPL Command Reference.
- * Renders a themed table of commands with syntax and compatibility.
- */
+class OPLCommandReference{
+constructor(){
+this.data=window.OPL_COMMANDS||[];
+}
 
-class OPLCommandReference {
-    constructor() {
-        this.data = window.OPL_COMMANDS || [];
-    }
+open(){
+const width=583;
+const height=700;
+const left=(screen.width-width)/2;
+const top=(screen.height-height)/2;
 
-    open() {
-        const width = 583;
-        const height = 700;
-        const left = (screen.width - width) / 2;
-        const top = (screen.height - height) / 2;
 
-        // Open using index.html in child mode + command_ref feature
-        const win = window.open("index.html?mode=child&feature=command_ref", "OPLCommandRef", `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`);
+const win=window.open("index.html?mode=child&feature=command_ref","OPLCommandRef",`width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`);
 
-        if (win) {
-            win.focus();
-        }
+if(win){
+win.focus();
+}
 
-    }
+}
 
-    static childWindowReady(win) {
-        new OPLCommandReference().render(win);
-    }
+static childWindowReady(win){
+new OPLCommandReference().render(win);
+}
 
-    render(win) {
-        const doc = win.document;
-        doc.title = "OPL Command Reference";
+render(win){
+const doc=win.document;
+doc.title="OPL Command Reference";
 
-        // Theme Injection
-        let cssVars = "";
-        let bodyClass = "";
 
-        if (typeof ThemeManager !== 'undefined') {
-            const currentTheme = ThemeManager.currentTheme;
-            const defs = ThemeManager.getThemeDefinition(currentTheme);
-            for (const key in defs) {
-                cssVars += `${key}: ${defs[key]};\n`;
-            }
-            if (document.body) bodyClass = document.body.className;
-        }
+let cssVars="";
+let bodyClass="";
 
-        // Apply Theme Context
-        doc.documentElement.style.cssText = cssVars;
+if(typeof ThemeManager!=='undefined'){
+const currentTheme=ThemeManager.currentTheme;
+const defs=ThemeManager.getThemeDefinition(currentTheme);
+for(const key in defs){
+cssVars+=`${key}: ${defs[key]};\n`;
+}
+if(document.body)bodyClass=document.body.className;
+}
 
-        // Styles
-        let style = doc.getElementById('opl-ref-style');
-        if (!style) {
-            style = doc.createElement('style');
-            style.id = 'opl-ref-style';
-            doc.head.appendChild(style);
-        }
 
-        style.textContent = `
+doc.documentElement.style.cssText=cssVars;
+
+
+let style=doc.getElementById('opl-ref-style');
+if(!style){
+style=doc.createElement('style');
+style.id='opl-ref-style';
+doc.head.appendChild(style);
+}
+
+style.textContent=`
             body {
                 overflow: hidden; 
                 background-color: var(--bg-color);
@@ -133,9 +126,9 @@ class OPLCommandReference {
             }
         `;
 
-        // Body Content
-        doc.body.className = bodyClass;
-        doc.body.innerHTML = `
+
+doc.body.className=bodyClass;
+doc.body.innerHTML=`
             <div class="scroll-container">
                 <h1>OPL Command Reference</h1>
                 <table>
@@ -176,52 +169,52 @@ class OPLCommandReference {
             </div>
         `;
 
-        // Populate
-        const tbody = doc.getElementById('table-body');
 
-        function formatSyntax(syntax) {
-            let escaped = syntax.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-            // <...$> -> String
-            escaped = escaped.replace(/&lt;[^&]*?\$&gt;/g, '<span class="syntax-string">$&</span>');
-            // <...%> or <exp> -> Number/Int
-            escaped = escaped.replace(/&lt;[^&]*?%&gt;/g, '<span class="syntax-number">$&</span>');
-            // <...> -> Param
-            escaped = escaped.replace(/&lt;[^&]+&gt;/g, (match) => {
-                if (match.includes('class=')) return match;
-                return '<span class="syntax-param">' + match + '</span>';
-            });
-            return escaped;
-        }
+const tbody=doc.getElementById('table-body');
 
-        this.data.forEach(cmd => {
-            const tr = doc.createElement('tr');
+function formatSyntax(syntax){
+let escaped=syntax.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 
-            // Command
-            const tdName = doc.createElement('td');
-            tdName.className = 'cmd-name';
-            tdName.textContent = cmd.name;
-            if (cmd.description) tdName.title = cmd.description;
-            tr.appendChild(tdName);
+escaped=escaped.replace(/&lt;[^&]*?\$&gt;/g,'<span class="syntax-string">$&</span>');
 
-            // Syntax
-            const tdSyntax = doc.createElement('td');
-            tdSyntax.className = 'cmd-syntax';
-            tdSyntax.innerHTML = formatSyntax(cmd.syntax);
-            tr.appendChild(tdSyntax);
+escaped=escaped.replace(/&lt;[^&]*?%&gt;/g,'<span class="syntax-number">$&</span>');
 
-            // Flags
-            ['cm', 'xp', 'la', 'lz'].forEach(flag => {
-                const td = doc.createElement('td');
-                td.className = 'compat-cell';
-                if (cmd[flag]) td.innerHTML = '<span class="tick">&#10003;</span>';
-                tr.appendChild(td);
-            });
-
-            tbody.appendChild(tr);
-        });
-    }
+escaped=escaped.replace(/&lt;[^&]+&gt;/g,(match)=>{
+if(match.includes('class='))return match;
+return '<span class="syntax-param">'+match+'</span>';
+});
+return escaped;
 }
 
-if (typeof window !== 'undefined') {
-    window.OPLCommandReference = OPLCommandReference;
+this.data.forEach(cmd=>{
+const tr=doc.createElement('tr');
+
+
+const tdName=doc.createElement('td');
+tdName.className='cmd-name';
+tdName.textContent=cmd.name;
+if(cmd.description)tdName.title=cmd.description;
+tr.appendChild(tdName);
+
+
+const tdSyntax=doc.createElement('td');
+tdSyntax.className='cmd-syntax';
+tdSyntax.innerHTML=formatSyntax(cmd.syntax);
+tr.appendChild(tdSyntax);
+
+
+['cm','xp','la','lz'].forEach(flag=>{
+const td=doc.createElement('td');
+td.className='compat-cell';
+if(cmd[flag])td.innerHTML='<span class="tick">&#10003;</span>';
+tr.appendChild(td);
+});
+
+tbody.appendChild(tr);
+});
+}
+}
+
+if(typeof window!=='undefined'){
+window.OPLCommandReference=OPLCommandReference;
 }

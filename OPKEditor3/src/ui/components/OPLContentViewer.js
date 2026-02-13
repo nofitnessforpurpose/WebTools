@@ -1,74 +1,66 @@
-/**
- * OPLContentViewer.js
- * -------------------
- * Generic viewer for OPL code snippets (Templates, Library).
- * Opens in a child window similar to OPLCommandReference.
- * Supports Categorized Data and Table of Contents.
- */
+class OPLContentViewer{
+constructor(title,data){
+this.title=title||"OPL Content";
+this.data=data||[];
+this.featureId="content_viewer_"+Date.now();
+}
 
-class OPLContentViewer {
-    constructor(title, data) {
-        this.title = title || "OPL Content";
-        this.data = data || [];
-        this.featureId = "content_viewer_" + Date.now();
-    }
+open(){
+const viewerId="OPLViewer_"+Date.now();
+window[viewerId]=this;
 
-    open() {
-        const viewerId = "OPLViewer_" + Date.now();
-        window[viewerId] = this;
+const width=600;
+const height=700;
+const left=(screen.width-width)/2;
+const top=(screen.height-height)/2;
 
-        const width = 600;
-        const height = 700;
-        const left = (screen.width - width) / 2;
-        const top = (screen.height - height) / 2;
+const win=window.open(`index.html?mode=child&feature=opl_content&viewerId=${viewerId}`,"_blank",`width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`);
 
-        const win = window.open(`index.html?mode=child&feature=opl_content&viewerId=${viewerId}`, "_blank", `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes`);
+if(win){
+win.focus();
+}
+}
 
-        if (win) {
-            win.focus();
-        }
-    }
+static childWindowReady(win){
+const params=new URLSearchParams(win.location.search);
+const viewerId=params.get ('viewerId');
 
-    static childWindowReady(win) {
-        const params = new URLSearchParams(win.location.search);
-        const viewerId = params.get('viewerId');
+if(window.opener&&window.opener[viewerId]){
+const viewer=window.opener[viewerId];
+viewer.render(win);
+}else {
 
-        if (window.opener && window.opener[viewerId]) {
-            const viewer = window.opener[viewerId];
-            viewer.render(win);
-        } else {
-            // console.error("OPLContentViewer: source viewer not found in opener");
-        }
-    }
+}
+}
 
-    render(win) {
-        const doc = win.document;
-        doc.title = this.title;
+render(win){
+const doc=win.document;
+doc.title=this.title;
 
-        // Theme Injection
-        let cssVars = "";
-        let bodyClass = "";
 
-        if (typeof ThemeManager !== 'undefined') {
-            const currentTheme = ThemeManager.currentTheme;
-            const defs = ThemeManager.getThemeDefinition(currentTheme);
-            for (const key in defs) {
-                cssVars += `${key}: ${defs[key]};\n`;
-            }
-            if (document.body) bodyClass = document.body.className;
-        }
+let cssVars="";
+let bodyClass="";
 
-        doc.documentElement.style.cssText = cssVars;
+if(typeof ThemeManager!=='undefined'){
+const currentTheme=ThemeManager.currentTheme;
+const defs=ThemeManager.getThemeDefinition(currentTheme);
+for(const key in defs){
+cssVars+=`${key}: ${defs[key]};\n`;
+}
+if(document.body)bodyClass=document.body.className;
+}
 
-        // Styles
-        let style = doc.getElementById('opl-viewer-style');
-        if (!style) {
-            style = doc.createElement('style');
-            style.id = 'opl-viewer-style';
-            doc.head.appendChild(style);
-        }
+doc.documentElement.style.cssText=cssVars;
 
-        style.textContent = `
+
+let style=doc.getElementById('opl-viewer-style');
+if(!style){
+style=doc.createElement('style');
+style.id='opl-viewer-style';
+doc.head.appendChild(style);
+}
+
+style.textContent=`
             body {
                 background-color: var(--bg-color);
                 color: var(--text-color);
@@ -179,9 +171,9 @@ class OPLContentViewer {
             }
         `;
 
-        // Body Content
-        doc.body.className = bodyClass;
-        doc.body.innerHTML = `
+
+doc.body.className=bodyClass;
+doc.body.innerHTML=`
             <div class="scroll-container">
                 <h1 id="top">${this.title}</h1>
                 <div id="toc-container" class="toc">
@@ -192,50 +184,50 @@ class OPLContentViewer {
             </div>
         `;
 
-        const tocList = doc.getElementById('toc-list');
-        const contentList = doc.getElementById('content-list');
+const tocList=doc.getElementById('toc-list');
+const contentList=doc.getElementById('content-list');
 
-        let globalIndex = 0;
+let globalIndex=0;
 
-        this.data.forEach((categoryObj) => {
-            // Render Category Header
-            const catId = `cat-${globalIndex}`;
+this.data.forEach((categoryObj)=>{
 
-            // ToC Entry for Category
-            const tocCat = doc.createElement('li');
-            tocCat.innerHTML = `<strong><a href="#${catId}">${categoryObj.category}</a></strong>`;
+const catId=`cat-${globalIndex}`;
 
-            const nestedUl = doc.createElement('ul');
-            nestedUl.style.paddingLeft = "20px";
-            nestedUl.style.marginTop = "5px";
-            tocCat.appendChild(nestedUl);
-            tocList.appendChild(tocCat);
 
-            // Content Header
-            const header = doc.createElement('h2');
-            header.className = 'category-header';
-            header.id = catId;
-            header.textContent = categoryObj.category;
-            contentList.appendChild(header);
+const tocCat=doc.createElement('li');
+tocCat.innerHTML=`<strong><a href="#${catId}">${categoryObj.category}</a></strong>`;
 
-            // Render Items
-            categoryObj.items.forEach((item) => {
-                const itemId = `item-${globalIndex}`;
+const nestedUl=doc.createElement('ul');
+nestedUl.style.paddingLeft="20px";
+nestedUl.style.marginTop="5px";
+tocCat.appendChild(nestedUl);
+tocList.appendChild(tocCat);
 
-                // ToC Entry for Item
-                const tocItem = doc.createElement('li');
-                tocItem.innerHTML = `<a href="#${itemId}">${item.name}</a>`;
-                nestedUl.appendChild(tocItem);
 
-                // Content Card
-                const div = doc.createElement('div');
-                div.className = 'item-card';
-                div.id = itemId;
+const header=doc.createElement('h2');
+header.className='category-header';
+header.id=catId;
+header.textContent=categoryObj.category;
+contentList.appendChild(header);
 
-                const btnId = `btn-copy-${globalIndex}`;
-                const codeId = `code-block-${globalIndex}`;
 
-                div.innerHTML = `
+categoryObj.items.forEach((item)=>{
+const itemId=`item-${globalIndex}`;
+
+
+const tocItem=doc.createElement('li');
+tocItem.innerHTML=`<a href="#${itemId}">${item.name}</a>`;
+nestedUl.appendChild(tocItem);
+
+
+const div=doc.createElement('div');
+div.className='item-card';
+div.id=itemId;
+
+const btnId=`btn-copy-${globalIndex}`;
+const codeId=`code-block-${globalIndex}`;
+
+div.innerHTML=`
                     <div style="overflow: hidden; margin-bottom: 5px;">
                         <a href="#top" class="top-link">↑ Top</a>
                         <button class="copy-btn" id="${btnId}">Copy</button>
@@ -245,30 +237,30 @@ class OPLContentViewer {
                     <pre id="${codeId}">${this.escapeHtml(item.code)}</pre>
                 `;
 
-                contentList.appendChild(div);
+contentList.appendChild(div);
 
-                const btn = doc.getElementById(btnId);
-                btn.addEventListener('click', () => {
-                    const codeText = item.code;
-                    win.navigator.clipboard.writeText(codeText).then(() => {
-                        const originalText = btn.textContent;
-                        btn.textContent = "Copied!";
-                        setTimeout(() => { btn.textContent = originalText; }, 1500);
-                    });
-                });
+const btn=doc.getElementById(btnId);
+btn.addEventListener('click',()=>{
+const codeText=item.code;
+win.navigator.clipboard.writeText(codeText).then(()=>{
+const originalText=btn.textContent;
+btn.textContent="Copied!";
+setTimeout(()=>{btn.textContent=originalText;},1500);
+});
+});
 
-                globalIndex++;
-            });
-        });
-    }
+globalIndex++;
+});
+});
+}
 
-    escapeHtml(text) {
-        if (!text) return "";
-        return text
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
+escapeHtml(text){
+if(!text)return "";
+return text
+.replace(/&/g,"&amp;")
+.replace(/</g,"&lt;")
+.replace(/>/g,"&gt;")
+.replace(/"/g,"&quot;")
+.replace(/'/g,"&#039;");
+}
 }

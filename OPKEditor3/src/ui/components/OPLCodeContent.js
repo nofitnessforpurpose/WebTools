@@ -1,19 +1,12 @@
-/**
- * OPLCodeContent.js
- * -----------------
- * Data source for OPL Templates and Library Routines.
- * Organized by Compatibility Category.
- */
-
-window.OPL_TEMPLATES = [
-  {
-    category: "CM/XP/LA Compatible",
-    items: [
-      {
-        name: "Standard Menu",
-        description: "A standard menu loop, processing user selection.",
-        code:
-          `MYMENU:
+window.OPL_TEMPLATES=[
+{
+category:"CM/XP/LA Compatible",
+items:[
+{
+name:"Standard Menu",
+description:"A standard menu loop, processing user selection.",
+code:
+`MYMENU:
   LOCAL k%
   DO
     k% = MENU("Option 1","Option 2","Option 3")
@@ -25,12 +18,12 @@ window.OPL_TEMPLATES = [
       MYCODE3:
     ENDIF
   UNTIL k% = 0`
-      },
-      {
-        name: "Dynamic Menu Builder",
-        description: "Demonstrates how to programmatically add items to a menu string. Note: To add a procedure to the System Main Menu, you must use the 'Mode' key -> 'Insert' on the device.",
-        code:
-          `DYNAMENU:
+},
+{
+name:"Dynamic Menu Builder",
+description:"Demonstrates how to programmatically add items to a menu string. Note: To add a procedure to the System Main Menu, you must use the 'Mode' key -> 'Insert' on the device.",
+code:
+`DYNAMENU:
   LOCAL m$(255), k%
   REM Start with base items
   m$ = "View,Edit"
@@ -60,12 +53,12 @@ window.OPL_TEMPLATES = [
       BREAK
     ENDIF
   UNTIL 0`
-      },
-      {
-        name: "Variable Types",
-        description: "Examples of defining and inputting Integers, Floats, Strings, and Arrays.",
-        code:
-          `VARTYPES:
+},
+{
+name:"Variable Types",
+description:"Examples of defining and inputting Integers, Floats, Strings, and Arrays.",
+code:
+`VARTYPES:
   LOCAL i%, f, s$(10)
   LOCAL ia%(4), fa(4), sa$(4,10)
   
@@ -98,12 +91,12 @@ window.OPL_TEMPLATES = [
   PRINT "Values:", i%, f, s$
   PRINT "Arrays:", ia%(1), fa(1), sa$(1)
   GET`
-      },
-      {
-        name: "Input Process Output",
-        description: "A procedure demonstrating the 'Input -> Process -> Output' principle. Checks if a number is prime.",
-        code:
-          `ISPRIME%:(n%)
+},
+{
+name:"Input Process Output",
+description:"A procedure demonstrating the 'Input -> Process -> Output' principle. Checks if a number is prime.",
+code:
+`ISPRIME%:(n%)
   LOCAL i%
   
   REM -- INPUT --
@@ -126,12 +119,12 @@ window.OPL_TEMPLATES = [
   REM -- OUTPUT --
   REM Returns -1 (True) if prime
   RETURN -1`
-      },
-      {
-        name: "For Loop (Do Until)",
-        description: "Simulating a FOR NEXT loop using DO UNTIL. OPL does not have a native FOR command.",
-        code:
-          `FORLOOP:
+},
+{
+name:"For Loop (Do Until)",
+description:"Simulating a FOR NEXT loop using DO UNTIL. OPL does not have a native FOR command.",
+code:
+`FORLOOP:
   LOCAL i%
   
   REM Emulating: FOR i% = 1 TO 5
@@ -145,12 +138,12 @@ window.OPL_TEMPLATES = [
     i% = i% + 1     : REM Increment (NEXT)
   UNTIL i% > 5      : REM Condition (TO 5)
   GET`
-      },
-      {
-        name: "Recursion (Factorial)",
-        description: "A recursive procedure calling itself. Shows the termination condition.",
-        code:
-          `FACT:(n)
+},
+{
+name:"Recursion (Factorial)",
+description:"A recursive procedure calling itself. Shows the termination condition.",
+code:
+`FACT:(n)
   REM Calculates n! (Factorial n)
   REM e.g. FACT:(5) = 120
   
@@ -163,12 +156,12 @@ window.OPL_TEMPLATES = [
   REM -- RECURSIVE STEP --
   REM Calls itself with (n-1)
   RETURN n * FACT:(n-1)`
-      },
-      {
-        name: "File Processing Loop",
-        description: "Opens a file and processes records one by one.",
-        code:
-          `MYRECS:
+},
+{
+name:"File Processing Loop",
+description:"Opens a file and processes records one by one.",
+code:
+`MYRECS:
   LOCAL a$(255)
   TRAP OPEN "A:DATA", A, a$
   IF ERR
@@ -183,13 +176,13 @@ window.OPL_TEMPLATES = [
     NEXT
   ENDWH
   CLOSE`
-      },
+},
 
-      {
-        name: "Database Suite",
-        description: "Complete suite for managing an address book database (Create, Insert, Search, Alter, Erase).",
-        code:
-          `FILES:
+{
+name:"Database Suite",
+description:"Complete suite for managing an address book database (Create, Insert, Search, Alter, Erase).",
+code:
+`FILES:
   LOCAL m%
   IF NOT EXIST("A:ADDR")
     CREATE "A:ADDR",A,n$,ad1$,ad2$,ad3$,pc$,tel$
@@ -337,17 +330,17 @@ DELREC:
       recnum%=FIND(search$)
     ENDIF
   UNTIL EOF`
-      }
-    ]
-  },
-  {
-    category: "LZ Compatible",
-    items: [
-      {
-        name: "Multi-Line Menu (LZ)",
-        description: "Uses the LZ specific MENU command capabilities.",
-        code:
-          `MAINLZ:
+}
+]
+},
+{
+category:"LZ Compatible",
+items:[
+{
+name:"Multi-Line Menu (LZ)",
+description:"Uses the LZ specific MENU command capabilities.",
+code:
+`MAINLZ:
   LOCAL k%
   REM LZ screens can show more menu items
   do
@@ -358,20 +351,20 @@ DELREC:
       REM Action 2
     ENDIF
   UNTIL k% = 0`
-      }
-    ]
-  }
+}
+]
+}
 ];
 
-window.OPL_LIBRARY_ROUTINES = [
-  {
-    category: "CM/XP/LA Compatible",
-    items: [
-      {
-        name: "Input Routine",
-        description: "General purpose input prompt (from XP Manual).",
-        code:
-          `Q:(a$)
+window.OPL_LIBRARY_ROUTINES=[
+{
+category:"CM/XP/LA Compatible",
+items:[
+{
+name:"Input Routine",
+description:"General purpose input prompt (from XP Manual).",
+code:
+`Q:(a$)
   LOCAL z
   ONERR l1::
   l1::
@@ -380,12 +373,12 @@ window.OPL_LIBRARY_ROUTINES = [
   INPUT z
   CLS
   RETURN z`
-      },
-      {
-        name: "Password Check",
-        description: "Startup password protection (from XP Manual).",
-        code:
-          `PASSWORD:
+},
+{
+name:"Password Check",
+description:"Startup password protection (from XP Manual).",
+code:
+`PASSWORD:
   LOCAL a$(20)
   ONERR start::
   start::
@@ -396,12 +389,12 @@ window.OPL_LIBRARY_ROUTINES = [
   IF a$<>"MyPass"
     GOTO start::
   ENDIF`
-      },
-      {
-        name: "Mute Toggle",
-        description: "Toggles system sound on/off (from XP Manual).",
-        code:
-          `MUTE:
+},
+{
+name:"Mute Toggle",
+description:"Toggles system sound on/off (from XP Manual).",
+code:
+`MUTE:
   PRINT "Sound now <";
   IF PEEKB($A4)=0
     POKEB $A4,1
@@ -412,12 +405,12 @@ window.OPL_LIBRARY_ROUTINES = [
   ENDIF
   PRINT "Press any key"
   GET`
-      },
-      {
-        name: "Days Difference",
-        description: "Calculates the number of days between two dates.",
-        code:
-          `DAYSDIFF:
+},
+{
+name:"Days Difference",
+description:"Calculates the number of days between two dates.",
+code:
+`DAYSDIFF:
   LOCAL d1%,m1%,y1%,d2%,m2%,y2%
   PRINT "ENTER FIRST DAY"
   INPUT d1%
@@ -433,12 +426,12 @@ window.OPL_LIBRARY_ROUTINES = [
   INPUT y2%
   PRINT DAYS(d2%,m2%,y2%)-DAYS(d1%,m1%,y1%)
   GET`
-      },
-      {
-        name: "UDG Loader",
-        description: "Classic routine to load User Defined Graphics (Characters 0-7).",
-        code:
-          `UDG:(c%,a1%,a2%,a3%,a4%,a5%,a6%,a7%,a8%)
+},
+{
+name:"UDG Loader",
+description:"Classic routine to load User Defined Graphics (Characters 0-7).",
+code:
+`UDG:(c%,a1%,a2%,a3%,a4%,a5%,a6%,a7%,a8%)
   LOCAL a%
   REM Base address for UDG 0 is $2187
   a% = $2187 + c% * 8
@@ -450,35 +443,35 @@ window.OPL_LIBRARY_ROUTINES = [
   POKEB a% + 5, a6%
   POKEB a% + 6, a7%
   POKEB a% + 7, a8%`
-      },
-      {
-        name: "Center Text",
-        description: "Centers a string on the specific line width.",
-        code:
-          `CENTER:(s$, w%)
+},
+{
+name:"Center Text",
+description:"Centers a string on the specific line width.",
+code:
+`CENTER:(s$, w%)
   LOCAL p%
   p% = (w% - LEN(s$)) / 2
   IF p% > 0
     PRINT REPT$(" ", p%);
   ENDIF
   PRINT s$`
-      },
-      {
-        name: "Wait for Key",
-        description: "Waits specifically for a key press and clears the buffer.",
-        code:
-          `WAITKEY:
+},
+{
+name:"Wait for Key",
+description:"Waits specifically for a key press and clears the buffer.",
+code:
+`WAITKEY:
   LOCAL k%
   DO
     k% = KEY
   UNTIL k% = 0
   GET`
-      },
-      {
-        name: "File Exists Check",
-        description: "Checks if a file exists without raising an error.",
-        code:
-          `FEXIST%:(f$)
+},
+{
+name:"File Exists Check",
+description:"Checks if a file exists without raising an error.",
+code:
+`FEXIST%:(f$)
   LOCAL ret%
   TRAP OPEN f$, A, a$
   IF ERR
@@ -488,12 +481,12 @@ window.OPL_LIBRARY_ROUTINES = [
     ret% = -1
   ENDIF
   RETURN ret%`
-      },
-      {
-        name: "Top Level Menu Item",
-        description: "Adds an item to the top level menu (System/Main Menu) at the specified position.",
-        code:
-          `ADDTOP:(item$, pos%)
+},
+{
+name:"Top Level Menu Item",
+description:"Adds an item to the top level menu (System/Main Menu) at the specified position.",
+code:
+`ADDTOP:(item$, pos%)
   REM Adds item$ item to the top level menu pos location
 
   LOCAL I%, A%(2)
@@ -514,17 +507,17 @@ window.OPL_LIBRARY_ROUTINES = [
   A%(2)=$3900
   REM Call the machine code
   USR(ADDR(A%()), pos%)`
-      }
-    ]
-  },
-  {
-    category: "LZ Compatible",
-    items: [
-      {
-        name: "Dice",
-        description: "Simulates rolling a dice (from LZ Manual).",
-        code:
-          `DICE:
+}
+]
+},
+{
+category:"LZ Compatible",
+items:[
+{
+name:"Dice",
+description:"Simulates rolling a dice (from LZ Manual).",
+code:
+`DICE:
   LOCAL dice%,key%
   KSTAT 1
   top::
@@ -548,7 +541,7 @@ window.OPL_LIBRARY_ROUTINES = [
   ELSE
     GOTO label::
   ENDIF`
-      }
-    ]
-  }
+}
+]
+}
 ];

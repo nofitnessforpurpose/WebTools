@@ -1,272 +1,360 @@
 'use strict';
 
-var SyntaxHighlighter = {
-    keywordCategories: {
-        functions: [
-            "ABS", "ACOS", "ADDR", "ASC", "ASIN", "ATAN",
-            "COS", "COUNT",
-            "DAY", "DAYS", "DEG", "DISP", "DOW",
-            "EOF", "ERR", "EXIST", "EXP",
-            "FIND", "FINDW", "FLT", "FREE",
-            "GET",
-            "HOUR",
-            "IABS", "INT", "INTF",
-            "KEY", "KMOD",
-            "LEN", "LN", "LOC", "LOG",
-            "MAX", "MEAN", "MENU", "MENUN", "MIN", "MINUTE", "MONTH",
-            "PEEKB", "PEEKW", "PI", "POS",
-            "RAD", "REC", "RECSIZE", "RECSZ", "RND",
-            "SECOND", "SIN", "SPACE", "SQR", "STD", "SUM",
-            "TAN",
-            "USR",
-            "VAL", "VAR", "VIEW",
-            "WEEK",
-            "YEAR"
-        ],
-        commands: [
-            "AND", "APP", "APPEND", "AT", "BACK",
-            "BEEP", "BREAK",
-            "CLOCK", "CLOSE", "CLS", "CONST", "CONTINUE", "COPY", "COPYW", "CREATE", "CURSOR",
-            "DELETE", "DELETEW", "DO",
-            "EDIT", "ELSE", "ELSEIF", "ENDA", "ENDIF", "ENDP", "ENDWH", "ERASE", "ESCAPE", "EXT",
-            "FIRST",
-            "GLOBAL", "GOTO",
-            "IF", "INCLUDE", "INPUT",
-            "KSTAT",
-            "LAST", "LOADM", "LOCAL", "LOPEN", "LPRINT",
-            "NEXT", "NOT",
-            "OFF", "ON", "ONERR", "OPEN", "OR",
-            "PAUSE", "POKEB", "POKEW", "POSITION", "PRINT", "PROC",
-            "RAISE", "RANDOMIZE", "REM", "RENAME", "RETURN",
-            "SCREEN", "STOP",
-            "TRAP",
-            "UDG", "UNLOADM", "UNTIL", "UPDATE", "USE",
-            "VECTOR",
-            "WHILE"
-        ],
-        stringFuncs: [
-            "CHR$",
-            "DATIM$", "DAYNAME$", "DIR$", "DIRW$",
-            "ERR$",
-            "FIX$",
-            "GEN$", "GET$",
-            "HEX$",
-            "KEY$", "KEYS",
-            "LEFT$", "LOWER$",
-            "MID$", "MONTH$",
-            "NUM$",
-            "REPT$", "RIGHT$",
-            "SCI$",
-            "UPPER$", "USR$"
-        ]
-    },
+var SyntaxHighlighter={
 
-    // Cache for quick lookup
-    keywordMap: null,
+keywordCategories:{
+functions:[
+"ABS","ADDR","ASC","ATAN",
+"COS","COUNT",
+"DAY","DEG","DISP",
+"EOF","ERR","EXIST","EXP",
+"FIND","FLT","FREE",
+"GET",
+"HOUR",
+"IABS","INT","INTF",
+"KEY","KMOD",
+"LEN","LN","LOC","LOG",
+"MENU","MINUTE","MONTH",
+"PEEKB","PEEKW","PI","POS",
+"RAD","REC","RECSIZE","RECSZ","RND",
+"SECOND","SIN","SPACE","SQR",
+"TAN",
+"USR",
+"VAL","VIEW",
+"YEAR"
+],
+commands:[
+"AND","APP","APPEND","AT","BACK",
+"BEEP","BREAK",
+"CLOSE","CLS","CONST","CONTINUE","COPY","COPYW","CREATE","CURSOR",
+"DELETE","DELETEW","DO",
+"EDIT","ELSE","ELSEIF","ENDA","ENDIF","ENDP","ENDWH","ERASE","ESCAPE","EXT",
+"FIRST",
+"GLOBAL","GOTO",
+"IF","INCLUDE","INPUT",
+"KSTAT",
+"LAST","LOADM","LOCAL","LOPEN","LPRINT",
+"NEXT","NOT",
+"OFF","ON","ONERR","OPEN","OR",
+"PAUSE","POKEB","POKEW","POSITION","PRINT","PROC",
+"RAISE","RANDOMIZE","REM","RENAME","RETURN",
+"SCREEN","STOP",
+"TRAP",
+"UNLOADM","UNTIL","UPDATE","USE",
+"VECTOR",
+"WHILE"
+],
+stringFuncs:[
+"CHR$",
+"DATIM$","DIR$",
+"ERR$",
+"FIX$",
+"GEN$","GET$",
+"HEX$",
+"KEY$","KEYS",
+"LEFT$","LOWER$",
+"MID$",
+"NUM$",
+"REPT$","RIGHT$",
+"SCI$",
+"UPPER$","USR$"
+]
+},
 
-    init: function () {
-        if (this.keywordMap) return;
-        this.keywordMap = {};
 
-        var self = this;
-        // Helper to populate map
-        function addKeywords(list, type) {
-            for (var i = 0; i < list.length; i++) {
-                self.keywordMap[list[i]] = type;
-            }
-        }
+lzKeywords:{
+functions:[
+"ACOS","ASIN",
+"DAYS",
+"DOW",
+"FINDW",
+"MAX","MEAN","MENUN","MIN",
+"STD","SUM",
+"VAR",
+"WEEK"
+],
+commands:[
+"CLOCK","UDG"
+],
+stringFuncs:[
+"DAYNAME$","DIRW$",
+"MONTH$"
+]
+},
 
-        addKeywords(this.keywordCategories.functions, 'kw-functions');
-        addKeywords(this.keywordCategories.commands, 'kw-commands');
-        addKeywords(this.keywordCategories.stringFuncs, 'kw-stringfuncs');
-    },
 
-    highlight: function (code) {
-        if (!code) return "";
+keywordMap:null,
+currentTargetSystem:null,
 
-        // Ensure map is initialized
-        this.init();
+init:function (targetSystem){
+targetSystem=targetSystem||'Standard';
 
-        // Helper for escaping HTML
-        function escapeHtml(text) {
-            return text
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/"/g, "&quot;")
-                .replace(/'/g, "&#039;");
-        }
 
-        // Tokenize and highlight
-        // We need to be careful with order. Strings and comments first.
+if(this.keywordMap&&this.currentTargetSystem===targetSystem)return;
 
-        var lines = code.split('\n');
-        var output = "";
-        var bracketLevel = 0;
+this.keywordMap={};
+this.currentTargetSystem=targetSystem;
 
-        for (var i = 0; i < lines.length; i++) {
-            var line = lines[i];
-            var highlightedLine = "";
-            var j = 0;
+var self=this;
 
-            while (j < line.length) {
-                var char = line[j];
+function addKeywords(list,type){
+for(var i=0;i<list.length;i++){
+self.keywordMap[list[i]]=type;
+}
+}
 
-                // Check for comment (REM or ')
-                // Note: REM must be a separate word or at start
-                // Added support for :REM and made matching stricter (word boundary)
-                if (char === '\'' || (line.substr(j, 3).toUpperCase() === "REM" && (j === 0 || /[\s:]/.test(line[j - 1])) && (j + 3 >= line.length || /[^A-Za-z0-9%$]/.test(line[j + 3])))) {
-                    highlightedLine += '<span class="opl-comment">' + escapeHtml(line.substr(j)) + '</span>';
-                    break; // Rest of line is comment
-                }
 
-                // Check for string
-                if (char === '"') {
-                    var end = j + 1;
-                    while (end < line.length) {
-                        if (line[end] === '"') {
-                            if (end + 1 < line.length && line[end + 1] === '"') {
-                                end += 2; // skip ""
-                                continue;
-                            } else {
-                                end++; // End of string (include closing quote)
-                                break;
-                            }
-                        }
-                        end++;
-                    }
-                    highlightedLine += '<span class="opl-string">' + escapeHtml(line.substring(j, end)) + '</span>';
-                    j = end;
-                    continue;
-                }
+addKeywords(this.keywordCategories.functions,'kw-functions');
+addKeywords(this.keywordCategories.commands,'kw-commands');
+addKeywords(this.keywordCategories.stringFuncs,'kw-stringfuncs');
 
-                // Check for number (hex or decimal)
-                if (/[0-9$]/.test(char)) {
-                    // Check for hex start $
-                    if (char === '$') {
-                        var match = line.substr(j).match(/^\$[0-9A-Fa-f]+/);
-                        if (match) {
-                            highlightedLine += '<span class="opl-integer">' + escapeHtml(match[0]) + '</span>';
-                            j += match[0].length;
-                            continue;
-                        }
-                    }
-                    // Decimal / Float
-                    var match = line.substr(j).match(/^[0-9]+(\.[0-9]+)?([Ee][+-]?[0-9]+)?/);
-                    if (match) {
-                        // Ensure it's not part of a variable name (preceded by letter)
-                        if (j > 0 && /[A-Za-z_]/.test(line[j - 1])) {
-                            highlightedLine += escapeHtml(char);
-                            j++;
-                            continue;
-                        }
 
-                        // Check if float (has . or E)
-                        if (match[1] || match[2]) {
-                            highlightedLine += '<span class="opl-float">' + escapeHtml(match[0]) + '</span>';
-                        } else {
-                            highlightedLine += '<span class="opl-integer">' + escapeHtml(match[0]) + '</span>';
-                        }
-                        j += match[0].length;
-                        continue;
-                    }
-                }
+if(targetSystem==='LZ'){
+addKeywords(this.lzKeywords.functions,'kw-functions');
+addKeywords(this.lzKeywords.commands,'kw-commands');
+addKeywords(this.lzKeywords.stringFuncs,'kw-stringfuncs');
+}
+},
 
-                // Check for Keywords or Labels
-                if (/[A-Za-z]/.test(char)) {
-                    // Check for Label first (word ending in ::) - Double Colon
-                    var labelMatch = line.substr(j).match(/^[A-Za-z][A-Za-z0-9]*[\$%&]?::/);
-                    if (labelMatch) {
-                        highlightedLine += '<span class="opl-label">' + escapeHtml(labelMatch[0]) + '</span>';
-                        j += labelMatch[0].length;
-                        continue;
-                    }
+highlight:function (code,targetSystem){
+if(!code)return "";
 
-                    // Check for Procedure Call (word ending in :) - Single Colon
-                    var procMatch = line.substr(j).match(/^[A-Za-z][A-Za-z0-9]*[\$%&]?:/);
-                    if (procMatch) {
-                        var procName = procMatch[0];
-                        if (procName.indexOf('%:') !== -1) {
-                            highlightedLine += '<span class="opl-proc-integer">' + escapeHtml(procName) + '</span>';
-                        } else if (procName.indexOf('$:') !== -1) {
-                            highlightedLine += '<span class="opl-proc-string">' + escapeHtml(procName) + '</span>';
-                        } else {
-                            highlightedLine += '<span class="opl-proc-float">' + escapeHtml(procName) + '</span>';
-                        }
-                        j += procName.length;
-                        continue;
-                    }
 
-                    // Check for Logical Field Reference (e.g. A.Field, B.Field$)
-                    var logicalMatch = line.substr(j).match(/^[A-Za-z]\.[A-Za-z0-9]+[\$%&]?/);
-                    if (logicalMatch) {
-                        var fieldRef = logicalMatch[0];
-                        if (fieldRef.indexOf('%') !== -1) {
-                            highlightedLine += '<span class="opl-var-integer">' + escapeHtml(fieldRef) + '</span>';
-                        } else if (fieldRef.indexOf('$') !== -1) {
-                            highlightedLine += '<span class="opl-var-string">' + escapeHtml(fieldRef) + '</span>';
-                        } else {
-                            highlightedLine += '<span class="opl-var-float">' + escapeHtml(fieldRef) + '</span>';
-                        }
-                        j += fieldRef.length;
-                        continue;
-                    }
+this.init(targetSystem);
 
-                    var match = line.substr(j).match(/^[A-Za-z][A-Za-z0-9]*[\$%&]?/);
-                    if (match) {
-                        var word = match[0];
-                        var upperWord = word.toUpperCase();
 
-                        if (this.keywordMap.hasOwnProperty(upperWord)) {
-                            var className = this.keywordMap[upperWord];
-                            highlightedLine += '<span class="' + className + '">' + escapeHtml(word) + '</span>';
-                        } else {
-                            // Variable or unknown function
-                            if (word.indexOf('%') !== -1) {
-                                highlightedLine += '<span class="opl-var-integer">' + escapeHtml(word) + '</span>';
-                            } else if (word.indexOf('$') !== -1) {
-                                highlightedLine += '<span class="opl-var-string">' + escapeHtml(word) + '</span>';
-                            } else {
-                                highlightedLine += '<span class="opl-var-float">' + escapeHtml(word) + '</span>';
-                            }
-                        }
-                        j += word.length;
-                        continue;
-                    }
-                }
+function escapeHtml(text){
+return text
+.replace(/&/g,"&amp;")
+.replace(/</g,"&lt;")
+.replace(/>/g,"&gt;")
+.replace(/"/g,"&quot;")
+.replace(/'/g,"&#039;");
+}
 
-                // Operators and punctuation
-                if (/[+\-*/=<>:,]/.test(char)) {
-                    highlightedLine += '<span class="opl-operator">' + escapeHtml(char) + '</span>';
-                    j++;
-                    continue;
-                }
+var lines=code.split('\n');
+var output="";
+var bracketLevel=0;
 
-                // Brackets
-                if (char === '(') {
-                    highlightedLine += '<span class="bracket-' + (bracketLevel % 3) + '">' + escapeHtml(char) + '</span>';
-                    bracketLevel++;
-                    j++;
-                    continue;
-                }
-                if (char === ')') {
-                    if (bracketLevel > 0) bracketLevel--;
-                    highlightedLine += '<span class="bracket-' + (bracketLevel % 3) + '">' + escapeHtml(char) + '</span>';
-                    j++;
-                    continue;
-                }
+for(var i=0;i<lines.length;i++){
+var line=lines[i];
+var highlightedLine="";
+var j=0;
+var isCommandPosition=true;
+var expectingOperator=false;
 
-                // Default: just add character
-                highlightedLine += escapeHtml(char);
-                j++;
-            }
-            output += highlightedLine + '\n';
-        }
+while(j<line.length){
+var char=line[j];
 
-        return output;
-    }
+
+
+if(char==='\''||(line.substr(j,3).toUpperCase()==="REM"&&(j===0|| /[\s:]/.test(line[j-1]))&&(j+3>=line.length|| /[^A-Za-z0-9%$]/.test(line[j+3])))){
+highlightedLine+='<span class="opl-comment">'+escapeHtml(line.substr(j))+'</span>';
+break;
+}
+
+
+if(char==='"'){
+var end=j+1;
+while(end<line.length){
+if(line[end]==='"'){
+if(end+1<line.length&&line[end+1]==='"'){
+end+=2;
+continue;
+}else {
+end++;
+break;
+}
+}
+end++;
+}
+highlightedLine+='<span class="opl-string">'+escapeHtml(line.substring(j,end))+'</span>';
+j=end;
+isCommandPosition=false;
+expectingOperator=true;
+continue;
+}
+
+
+if (/[0-9$]/.test(char)){
+
+var handledNum=false;
+if(char==='$'){
+var match=line.substr(j).match(/^\$[0-9A-Fa-f]+/);
+if(match){
+highlightedLine+='<span class="opl-integer">'+escapeHtml(match[0])+'</span>';
+j+=match[0].length;
+isCommandPosition=false;
+expectingOperator=true;
+continue;
+}
+}
+
+var match=line.substr(j).match(/^[0-9]+(\.[0-9]+)?([Ee][+-]?[0-9]+)?/);
+if(match){
+
+if(j>0&& /[A-Za-z_]/.test(line[j-1])){
+highlightedLine+=escapeHtml(char);
+j++;
+
+continue;
+}
+
+if(match[1]||match[2]){
+highlightedLine+='<span class="opl-float">'+escapeHtml(match[0])+'</span>';
+}else {
+highlightedLine+='<span class="opl-integer">'+escapeHtml(match[0])+'</span>';
+}
+j+=match[0].length;
+isCommandPosition=false;
+expectingOperator=true;
+continue;
+}
+}
+
+
+if (/[A-Za-z]/.test(char)){
+
+var logicalMatch=line.substr(j).match(/^[A-Za-z]\.[A-Za-z0-9]+[\$%&]?/);
+if(logicalMatch){
+var fieldRef=logicalMatch[0];
+if(fieldRef.indexOf('%')!==-1){
+highlightedLine+='<span class="opl-var-integer">'+escapeHtml(fieldRef)+'</span>';
+}else if(fieldRef.indexOf('$')!==-1){
+highlightedLine+='<span class="opl-var-string">'+escapeHtml(fieldRef)+'</span>';
+}else {
+highlightedLine+='<span class="opl-var-float">'+escapeHtml(fieldRef)+'</span>';
+}
+j+=fieldRef.length;
+isCommandPosition=false;
+expectingOperator=true;
+continue;
+}
+
+
+var match=line.substr(j).match(/^[A-Za-z][A-Za-z0-9]*[\$%&]?/);
+if(match){
+var word=match[0];
+var upperWord=word.toUpperCase();
+
+if(this.keywordMap.hasOwnProperty(upperWord)){
+
+var className=this.keywordMap[upperWord];
+highlightedLine+='<span class="'+className+'">'+escapeHtml(word)+'</span>';
+expectingOperator=false;
+
+
+
+
+
+
+
+
+}else {
+
+
+if(expectingOperator){
+
+
+highlightedLine+=escapeHtml(word);
+
+}else {
+
+
+var isLabel=false;
+var isAssignment=false;
+
+if(isCommandPosition){
+
+var lookaheadIndex=j+word.length;
+while(lookaheadIndex<line.length&& /\s/.test(line[lookaheadIndex])){
+lookaheadIndex++;
+}
+var nextChar=(lookaheadIndex<line.length)?line[lookaheadIndex]:null;
+
+if(nextChar===':'){
+isLabel=true;
+}else if(nextChar==='='){
+isAssignment=true;
+}
+}
+
+if(isLabel){
+highlightedLine+='<span class="opl-label">'+escapeHtml(word)+'</span>';
+
+}else if(isAssignment||!isCommandPosition){
+
+if(word.indexOf('%')!==-1){
+highlightedLine+='<span class="opl-var-integer">'+escapeHtml(word)+'</span>';
+}else if(word.indexOf('$')!==-1){
+highlightedLine+='<span class="opl-var-string">'+escapeHtml(word)+'</span>';
+}else {
+highlightedLine+='<span class="opl-var-float">'+escapeHtml(word)+'</span>';
+}
+expectingOperator=true;
+}else {
+
+highlightedLine+=escapeHtml(word);
+expectingOperator=false;
+}
+}
+}
+j+=word.length;
+isCommandPosition=false;
+continue;
+}
+}
+
+
+if (/[+\-*/=<>:,]/.test(char)){
+highlightedLine+='<span class="opl-operator">'+escapeHtml(char)+'</span>';
+
+
+if(char===':'){
+isCommandPosition=true;
+}else {
+isCommandPosition=false;
+}
+expectingOperator=false;
+
+j++;
+continue;
+}
+
+
+if(char==='('){
+highlightedLine+='<span class="bracket-'+(bracketLevel%3)+'">'+escapeHtml(char)+'</span>';
+bracketLevel++;
+j++;
+expectingOperator=false;
+continue;
+}
+if(char===')'){
+if(bracketLevel>0)bracketLevel--;
+highlightedLine+='<span class="bracket-'+(bracketLevel%3)+'">'+escapeHtml(char)+'</span>';
+j++;
+expectingOperator=true;
+continue;
+}
+
+
+
+if (/\s/.test(char)){
+highlightedLine+=escapeHtml(char);
+}else {
+highlightedLine+=escapeHtml(char);
+isCommandPosition=false;
+
+}
+j++;
+}
+output+=highlightedLine+'\n';
+}
+
+return output;
+}
 };
 
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { SyntaxHighlighter };
+if(typeof module!=='undefined'&&module.exports){
+module.exports={SyntaxHighlighter};
 }

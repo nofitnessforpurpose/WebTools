@@ -1,434 +1,430 @@
 'use strict';
 
-/**
- * DialogManager
- * -------------
- * Manages application-wide modal dialogs.
- */
-var DialogManager = {
 
-    showOptionsDialog: function () {
-        try {
-            var element = document.createElement('div');
-            element.className = 'options-dialog';
+var DialogManager={
 
-            // Generate Template
-            element.innerHTML = this._getOptionsTemplate();
+showOptionsDialog:function (){
+try{
+var element=document.createElement('div');
+element.className='options-dialog';
 
-            // Internal Helpers (captured for this instance)
-            var getCSSVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-            var setCSSVar = (name, value) => document.documentElement.style.setProperty(name, value);
 
-            var updateInputs = () => {
-                var inputs = {
-                    '--bg-color': element.querySelector('#edit-bg-color'),
-                    '--text-color': element.querySelector('#edit-text-color'),
-                    '--toolbar-bg': element.querySelector('#edit-toolbar-bg'),
-                    '--sidebar-bg': element.querySelector('#edit-sidebar-bg'),
-                    '--status-bar-bg': element.querySelector('#edit-status-bg'),
-                    '--list-selected-bg': element.querySelector('#edit-select-bg'),
-                    '--editor-text-color': element.querySelector('#edit-editor-text'),
-                    '--editor-cursor-color': element.querySelector('#edit-editor-cursor'),
-                    '--sidebar-item-text': element.querySelector('#edit-sidebar-text'),
-                    '--toolbar-border-color': element.querySelector('#edit-toolbar-border'),
-                    '--input-text-color': element.querySelector('#edit-input-text'),
-                    '--input-bg': element.querySelector('#edit-input-bg'),
-                    '--modal-bg': element.querySelector('#edit-modal-bg')
-                };
-                for (var key in inputs) {
-                    if (inputs[key]) inputs[key].value = getCSSVar(key) || '#000000';
-                }
+element.innerHTML=this._getOptionsTemplate();
 
-                var syntaxInputs = {
-                    '--syntax-functions': element.querySelector('#syntax-functions'),
-                    '--syntax-commands': element.querySelector('#syntax-commands'),
-                    '--syntax-stringfuncs': element.querySelector('#syntax-stringfuncs'),
-                    '--syntax-comment': element.querySelector('#syntax-comment'),
-                    '--syntax-label': element.querySelector('#syntax-label'),
-                    '--syntax-operator': element.querySelector('#syntax-operator'),
-                    '--syntax-type-integer': element.querySelector('#syntax-type-integer'),
-                    '--syntax-type-float': element.querySelector('#syntax-type-float'),
-                    '--syntax-type-string': element.querySelector('#syntax-type-string')
-                };
-                var currentTheme = ThemeManager.currentTheme;
-                var defs = ThemeManager.getThemeDefinition(currentTheme);
-                for (var key in syntaxInputs) {
-                    if (syntaxInputs[key]) syntaxInputs[key].value = defs[key] || getCSSVar(key) || '#000000';
-                }
-            };
 
-            var updateMMInputs = () => {
-                var mmColors = {
-                    '--mm-color-header': element.querySelector('#mm-color-header'),
-                    '--mm-color-procedure': element.querySelector('#mm-color-procedure'),
-                    '--mm-color-datafile': element.querySelector('#mm-color-datafile'),
-                    '--mm-color-diary': element.querySelector('#mm-color-diary'),
-                    '--mm-color-comms': element.querySelector('#mm-color-comms'),
-                    '--mm-color-sheet': element.querySelector('#mm-color-sheet'),
-                    '--mm-color-pager': element.querySelector('#mm-color-pager'),
-                    '--mm-color-notepad': element.querySelector('#mm-color-notepad'),
-                    '--mm-color-block': element.querySelector('#mm-color-block'),
-                    '--mm-color-record': element.querySelector('#mm-color-record'),
-                    '--mm-color-unknown': element.querySelector('#mm-color-unknown'),
-                    '--mm-color-free': element.querySelector('#mm-color-free')
-                };
-                var currentTheme = ThemeManager.currentTheme;
-                var defs = ThemeManager.getThemeDefinition(currentTheme);
-                for (var key in mmColors) {
-                    if (mmColors[key]) {
-                        mmColors[key].value = defs[key] || getCSSVar(key) || '#000000';
-                    }
-                }
-            };
+var getCSSVar=(name)=>getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+var setCSSVar=(name,value)=>document.documentElement.style.setProperty(name,value);
 
-            // Theme Select Logic
-            var themeSelect = element.querySelector('#opt-theme');
-            if (themeSelect) {
-                var availableThemes = ThemeManager.getAvailableThemes();
-                availableThemes.forEach(function (t) {
-                    var opt = document.createElement('option');
-                    opt.value = t.key; opt.text = t.name;
-                    themeSelect.appendChild(opt);
-                });
-                themeSelect.value = ThemeManager.currentTheme;
+var updateInputs=()=>{
+var inputs={
+'--bg-color':element.querySelector('#edit-bg-color'),
+'--text-color':element.querySelector('#edit-text-color'),
+'--toolbar-bg':element.querySelector('#edit-toolbar-bg'),
+'--sidebar-bg':element.querySelector('#edit-sidebar-bg'),
+'--status-bar-bg':element.querySelector('#edit-status-bg'),
+'--list-selected-bg':element.querySelector('#edit-select-bg'),
+'--editor-text-color':element.querySelector('#edit-editor-text'),
+'--editor-cursor-color':element.querySelector('#edit-editor-cursor'),
+'--sidebar-item-text':element.querySelector('#edit-sidebar-text'),
+'--toolbar-border-color':element.querySelector('#edit-toolbar-border'),
+'--input-text-color':element.querySelector('#edit-input-text'),
+'--input-bg':element.querySelector('#edit-input-bg'),
+'--modal-bg':element.querySelector('#edit-modal-bg')
+};
+for(var key in inputs){
+if(inputs[key])inputs[key].value=getCSSVar(key)||'#000000';
+}
 
-                var populateManagementSelects = () => {
-                    var import1 = element.querySelector('#import-custom1-source');
-                    var import2 = element.querySelector('#import-custom2-source');
-                    if (import1 && import2) {
-                        import1.innerHTML = '';
-                        import2.innerHTML = '';
-                        availableThemes.forEach(function (t) {
-                            var opt1 = document.createElement('option');
-                            var opt2 = document.createElement('option');
-                            opt1.value = t.key; opt1.text = t.name;
-                            opt2.value = t.key; opt2.text = t.name;
-                            import1.appendChild(opt1);
-                            import2.appendChild(opt2);
-                        });
-                    }
-                    var customNames = OptionsManager.getOption('customThemeNames') || {};
-                    var name1 = element.querySelector('#custom1-name');
-                    var name2 = element.querySelector('#custom2-name');
-                    if (name1) name1.value = customNames['custom1'] || 'Custom Theme 1';
-                    if (name2) name2.value = customNames['custom2'] || 'Custom Theme 2';
-                };
-                populateManagementSelects();
+var syntaxInputs={
+'--syntax-functions':element.querySelector('#syntax-functions'),
+'--syntax-commands':element.querySelector('#syntax-commands'),
+'--syntax-stringfuncs':element.querySelector('#syntax-stringfuncs'),
+'--syntax-comment':element.querySelector('#syntax-comment'),
+'--syntax-label':element.querySelector('#syntax-label'),
+'--syntax-operator':element.querySelector('#syntax-operator'),
+'--syntax-type-integer':element.querySelector('#syntax-type-integer'),
+'--syntax-type-float':element.querySelector('#syntax-type-float'),
+'--syntax-type-string':element.querySelector('#syntax-type-string')
+};
+var currentTheme=ThemeManager.currentTheme;
+var defs=ThemeManager.getThemeDefinition(currentTheme);
+for(var key in syntaxInputs){
+if(syntaxInputs[key])syntaxInputs[key].value=defs[key]||getCSSVar(key)||'#000000';
+}
+};
 
-                // Listeners for Management
-                var setupBtn = (id, action) => {
-                    var btn = element.querySelector(id);
-                    if (btn) btn.onclick = (e) => { e.preventDefault(); action(e); };
-                };
+var updateMMInputs=()=>{
+var mmColors={
+'--mm-color-header':element.querySelector('#mm-color-header'),
+'--mm-color-procedure':element.querySelector('#mm-color-procedure'),
+'--mm-color-datafile':element.querySelector('#mm-color-datafile'),
+'--mm-color-diary':element.querySelector('#mm-color-diary'),
+'--mm-color-comms':element.querySelector('#mm-color-comms'),
+'--mm-color-sheet':element.querySelector('#mm-color-sheet'),
+'--mm-color-pager':element.querySelector('#mm-color-pager'),
+'--mm-color-notepad':element.querySelector('#mm-color-notepad'),
+'--mm-color-block':element.querySelector('#mm-color-block'),
+'--mm-color-record':element.querySelector('#mm-color-record'),
+'--mm-color-unknown':element.querySelector('#mm-color-unknown'),
+'--mm-color-free':element.querySelector('#mm-color-free')
+};
+var currentTheme=ThemeManager.currentTheme;
+var defs=ThemeManager.getThemeDefinition(currentTheme);
+for(var key in mmColors){
+if(mmColors[key]){
+mmColors[key].value=defs[key]||getCSSVar(key)||'#000000';
+}
+}
+};
 
-                setupBtn('#btn-reset-themes', () => {
-                    if (confirm('Are you sure you want to reset ALL themes to default?')) {
-                        ThemeManager.resetAll();
-                        populateManagementSelects();
-                        setTimeout(updateInputs, 50);
-                        setTimeout(updateMMInputs, 50);
-                    }
-                });
 
-                setupBtn('#btn-rename-custom1', () => {
-                    var name = element.querySelector('#custom1-name').value;
-                    if (name) { ThemeManager.setThemeName('custom1', name); populateManagementSelects(); }
-                });
-                setupBtn('#btn-import-custom1', () => {
-                    var source = element.querySelector('#import-custom1-source').value;
-                    var name = element.querySelector('#custom1-name').value;
-                    if (confirm("Overwrite 'Custom Theme 1'?")) {
-                        ThemeManager.importTheme(source, 'custom1', name);
-                        populateManagementSelects();
-                        ThemeManager.setTheme('custom1');
-                        themeSelect.value = 'custom1';
-                        setTimeout(updateInputs, 50);
-                        setTimeout(updateMMInputs, 50);
-                    }
-                });
-                // ... (Repeating for Custom 2)
-                setupBtn('#btn-rename-custom2', () => {
-                    var name = element.querySelector('#custom2-name').value;
-                    if (name) { ThemeManager.setThemeName('custom2', name); populateManagementSelects(); }
-                });
-                setupBtn('#btn-import-custom2', () => {
-                    var source = element.querySelector('#import-custom2-source').value;
-                    var name = element.querySelector('#custom2-name').value;
-                    if (confirm("Overwrite 'Custom Theme 2'?")) {
-                        ThemeManager.importTheme(source, 'custom2', name);
-                        populateManagementSelects();
-                        ThemeManager.setTheme('custom2');
-                        themeSelect.value = 'custom2';
-                        setTimeout(updateInputs, 50);
-                        setTimeout(updateMMInputs, 50);
-                    }
-                });
-            }
+var themeSelect=element.querySelector('#opt-theme');
+if(themeSelect){
+var availableThemes=ThemeManager.getAvailableThemes();
+availableThemes.forEach(function (t){
+var opt=document.createElement('option');
+opt.value=t.key;opt.text=t.name;
+themeSelect.appendChild(opt);
+});
+themeSelect.value=ThemeManager.currentTheme;
 
-            // Initialize General Options
-            var setChecked = (id, opt) => {
-                var el = element.querySelector(id);
-                if (el) el.checked = OptionsManager.getOption(opt) !== false;
-            };
-            setChecked('#opt-linenumbers', 'showLineNumbers');
-            setChecked('#opt-folding', 'codeFolding');
-            setChecked('#opt-syntax', 'syntaxHighlighting');
-            setChecked('#opt-guidelines', 'showGuidelines');
-            setChecked('#opt-splash', 'showSplashScreen');
-            setChecked('#opt-restorepacks', 'restorePacks');
-            setChecked('#opt-show-toolbar', 'showIconToolbar');
-            setChecked('#opt-show-menubar', 'showMenuBar');
-            setChecked('#opt-enable-fkeys', 'enableFunctionKeys');
-            setChecked('#opt-stickyproc', 'stickyProcedureHeader');
-            setChecked('#opt-autocaps', 'autoUppercaseKeywords');
-            setChecked('#opt-confirmations', 'suppressConfirmations');
+var populateManagementSelects=()=>{
+var import1=element.querySelector('#import-custom1-source');
+var import2=element.querySelector('#import-custom2-source');
+if(import1&&import2){
+import1.innerHTML='';
+import2.innerHTML='';
+availableThemes.forEach(function (t){
+var opt1=document.createElement('option');
+var opt2=document.createElement('option');
+opt1.value=t.key;opt1.text=t.name;
+opt2.value=t.key;opt2.text=t.name;
+import1.appendChild(opt1);
+import2.appendChild(opt2);
+});
+}
+var customNames=OptionsManager.getOption('customThemeNames')||{};
+var name1=element.querySelector('#custom1-name');
+var name2=element.querySelector('#custom2-name');
+if(name1)name1.value=customNames['custom1']||'Custom Theme 1';
+if(name2)name2.value=customNames['custom2']||'Custom Theme 2';
+};
+populateManagementSelects();
 
-            var setCheckedTrue = (id, opt) => {
-                var el = element.querySelector(id);
-                if (el) el.checked = OptionsManager.getOption(opt) === true;
-            };
-            setCheckedTrue('#opt-show-addresses', 'showAddresses');
-            setCheckedTrue('#opt-grouprecords', 'groupDataRecords');
-            setCheckedTrue('#opt-collapsefiles', 'collapseDataFiles');
-            setCheckedTrue('#opt-hex-view', 'enableHexView');
-            setCheckedTrue('#opt-decompiler-log', 'showDecompilerLog');
-            setCheckedTrue('#opt-variable-storage', 'showVariableStorageWindow');
 
-            // Initialize Radios
-            var currentTarget = OptionsManager.getOption('targetSystem') || 'Standard';
-            var targetRadios = element.querySelectorAll("input[name='opt-target']");
-            targetRadios.forEach((r) => {
-                if (r.value === currentTarget) r.checked = true;
-                r.addEventListener('change', () => {
-                    if (r.checked) OptionsManager.setOption('targetSystem', r.value);
-                });
-            });
+var setupBtn=(id,action)=>{
+var btn=element.querySelector(id);
+if(btn)btn.onclick=(e)=>{e.preventDefault();action(e);};
+};
 
-            var addListener = (id, opt, action) => {
-                var el = element.querySelector(id);
-                if (el) el.addEventListener('change', function () {
-                    OptionsManager.setOption(opt, this.checked);
-                    if (action) action(this.checked);
-                });
-            };
+setupBtn('#btn-reset-themes',()=>{
+if(confirm('Are you sure you want to reset ALL themes to default?')){
+ThemeManager.resetAll();
+populateManagementSelects();
+setTimeout(updateInputs,50);
+setTimeout(updateMMInputs,50);
+}
+});
 
-            addListener('#opt-linenumbers', 'showLineNumbers', () => {
-                if (typeof editors !== 'undefined') editors.forEach(ed => ed.render && ed.render());
-            });
-            addListener('#opt-folding', 'codeFolding', () => {
-                if (typeof editors !== 'undefined') editors.forEach(ed => ed.render && ed.render());
-            });
-            addListener('#opt-syntax', 'syntaxHighlighting', () => {
-                if (typeof editors !== 'undefined') editors.forEach(ed => ed.render && ed.render());
-            });
-            // Removed duplicate opt-syntax
-            addListener('#opt-guidelines', 'showGuidelines', (val) => {
-                var packList = document.getElementById('pack-list');
-                if (val) packList.classList.remove('hide-guidelines');
-                else packList.classList.add('hide-guidelines');
-            });
-            addListener('#opt-show-addresses', 'showAddresses', (val) => {
-                var packList = document.getElementById('pack-list');
-                if (val) packList.classList.add('show-addresses');
-                else packList.classList.remove('show-addresses');
-            });
-            addListener('#opt-splash', 'showSplashScreen');
-            addListener('#opt-restorepacks', 'restorePacks', (val) => {
-                if (!val) localStorage.removeItem('opkedit_open_packs');
-            });
-            addListener('#opt-show-toolbar', 'showIconToolbar', (val) => {
-                if (!val && !OptionsManager.getOption('showMenuBar')) {
-                    element.querySelector('#opt-show-menubar').checked = true;
-                    OptionsManager.setOption('showMenuBar', true);
-                }
-            });
-            addListener('#opt-show-menubar', 'showMenuBar', (val) => {
-                if (!val && !OptionsManager.getOption('showIconToolbar')) {
-                    element.querySelector('#opt-show-toolbar').checked = true;
-                    OptionsManager.setOption('showIconToolbar', true);
-                }
-            });
-            addListener('#opt-enable-fkeys', 'enableFunctionKeys');
-            addListener('#opt-stickyproc', 'stickyProcedureHeader', () => {
-                if (AppStore.state.currentItem && AppStore.state.currentItem.type === 3) {
-                    if (typeof closeEditor === 'function' && closeEditor()) {
-                        selectItem(AppStore.state.currentPackIndex, AppStore.state.packs[AppStore.state.currentPackIndex].items.indexOf(AppStore.state.currentItem));
-                    }
-                }
-            });
-            addListener('#opt-confirmations', 'suppressConfirmations');
-            addListener('#opt-grouprecords', 'groupDataRecords', () => updateInventory());
-            addListener('#opt-collapsefiles', 'collapseDataFiles', () => updateInventory());
-            addListener('#opt-hex-view', 'enableHexView');
-            addListener('#opt-decompiler-log', 'showDecompilerLog', (val) => {
-                if (typeof decompilerLogWindow !== 'undefined' && decompilerLogWindow) {
-                    decompilerLogWindow.updateVisibility();
-                    if (val && AppStore.state.currentEditor instanceof ProcedureFileEditor) {
-                        AppStore.state.currentEditor.refreshDecompilerLog(true);
-                    }
-                }
-            });
-            addListener('#opt-variable-storage', 'showVariableStorageWindow', (val) => {
-                if (typeof variableStorageWindow !== 'undefined' && variableStorageWindow) {
-                    variableStorageWindow.updateVisibility();
-                    if (val && AppStore.state.currentEditor instanceof ProcedureFileEditor) {
-                        AppStore.state.currentEditor.refreshDecompilerLog(true);
-                    }
-                }
-            });
+setupBtn('#btn-rename-custom1',()=>{
+var name=element.querySelector('#custom1-name').value;
+if(name){ThemeManager.setThemeName('custom1',name);populateManagementSelects();}
+});
+setupBtn('#btn-import-custom1',()=>{
+var source=element.querySelector('#import-custom1-source').value;
+var name=element.querySelector('#custom1-name').value;
+if(confirm("Overwrite 'Custom Theme 1'?")){
+ThemeManager.importTheme(source,'custom1',name);
+populateManagementSelects();
+ThemeManager.setTheme('custom1');
+themeSelect.value='custom1';
+setTimeout(updateInputs,50);
+setTimeout(updateMMInputs,50);
+}
+});
 
-            // Selects
-            element.querySelector('#opt-hexbytes').value = OptionsManager.getOption('hexBytesPerRow') || 16;
-            element.querySelector('#opt-hexbytes').addEventListener('change', function () {
-                OptionsManager.setOption('hexBytesPerRow', parseInt(this.value));
-                if (AppStore.state.currentEditor instanceof HexEditor) AppStore.state.currentEditor.renderHexView();
-            });
+setupBtn('#btn-rename-custom2',()=>{
+var name=element.querySelector('#custom2-name').value;
+if(name){ThemeManager.setThemeName('custom2',name);populateManagementSelects();}
+});
+setupBtn('#btn-import-custom2',()=>{
+var source=element.querySelector('#import-custom2-source').value;
+var name=element.querySelector('#custom2-name').value;
+if(confirm("Overwrite 'Custom Theme 2'?")){
+ThemeManager.importTheme(source,'custom2',name);
+populateManagementSelects();
+ThemeManager.setTheme('custom2');
+themeSelect.value='custom2';
+setTimeout(updateInputs,50);
+setTimeout(updateMMInputs,50);
+}
+});
+}
 
-            element.querySelector('#opt-sheetmode').value = OptionsManager.getOption('spreadsheetMode') || 'grid';
-            element.querySelector('#opt-sheetmode').addEventListener('change', function () {
-                OptionsManager.setOption('spreadsheetMode', this.value);
-                if (AppStore.state.currentEditor instanceof SpreadsheetFileEditor) AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
-            });
 
-            // Memory Map Options
-            addListener('#opt-mm-pagebreaks', 'memoryMapShowPageBreaks', () => {
-                if (AppStore.state.currentEditor instanceof MemoryMapEditor) AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
-            });
-            element.querySelector('#opt-mm-size').value = OptionsManager.getOption('memoryMapDisplaySize') || 600;
-            element.querySelector('#opt-mm-size').addEventListener('change', function () {
-                OptionsManager.setOption('memoryMapDisplaySize', parseInt(this.value));
-                if (AppStore.state.currentEditor instanceof MemoryMapEditor) AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
-            });
-            element.querySelector('#opt-mm-height').value = OptionsManager.getOption('memoryMapBarHeight') || 30;
-            element.querySelector('#opt-mm-height').addEventListener('change', function () {
-                OptionsManager.setOption('memoryMapBarHeight', parseInt(this.value));
-                if (AppStore.state.currentEditor instanceof MemoryMapEditor) AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
-            });
+var setChecked=(id,opt)=>{
+var el=element.querySelector(id);
+if(el)el.checked=OptionsManager.getOption(opt)!==false;
+};
+setChecked('#opt-linenumbers','showLineNumbers');
+setChecked('#opt-folding','codeFolding');
+setChecked('#opt-syntax','syntaxHighlighting');
+setChecked('#opt-guidelines','showGuidelines');
+setChecked('#opt-splash','showSplashScreen');
+setChecked('#opt-restorepacks','restorePacks');
+setChecked('#opt-show-toolbar','showIconToolbar');
+setChecked('#opt-show-menubar','showMenuBar');
+setChecked('#opt-enable-fkeys','enableFunctionKeys');
+setChecked('#opt-stickyproc','stickyProcedureHeader');
+setChecked('#opt-autocaps','autoUppercaseKeywords');
+setChecked('#opt-confirmations','suppressConfirmations');
 
-            // Compiler Options
-            var langSelect = element.querySelector('#opt-language');
-            if (langSelect) {
-                langSelect.value = OptionsManager.getOption('defaultLanguage') || 'OPL';
-                langSelect.addEventListener('change', function () {
-                    OptionsManager.setOption('defaultLanguage', this.value);
-                });
-            }
+var setCheckedTrue=(id,opt)=>{
+var el=element.querySelector(id);
+if(el)el.checked=OptionsManager.getOption(opt)===true;
+};
+setCheckedTrue('#opt-show-addresses','showAddresses');
+setCheckedTrue('#opt-grouprecords','groupDataRecords');
+setCheckedTrue('#opt-collapsefiles','collapseDataFiles');
+setCheckedTrue('#opt-hex-view','enableHexView');
+setCheckedTrue('#opt-decompiler-log','showDecompilerLog');
+setCheckedTrue('#opt-variable-storage','showVariableStorageWindow');
 
-            var indentInput = element.querySelector('#opt-indent-size');
-            if (indentInput) {
-                indentInput.value = OptionsManager.getOption('indentSize') || 2;
-                indentInput.addEventListener('change', function () {
-                    var val = parseInt(this.value);
-                    if (val < 1) val = 1;
-                    if (val > 8) val = 8;
-                    OptionsManager.setOption('indentSize', val);
-                });
-            }
 
-            var mmOrientation = element.querySelector('#opt-mm-orientation');
-            if (mmOrientation) {
-                mmOrientation.value = OptionsManager.getOption('memoryMapOrientation') || 'horizontal';
-                mmOrientation.addEventListener('change', function () {
-                    OptionsManager.setOption('memoryMapOrientation', this.value);
-                    if (AppStore.state.currentEditor instanceof MemoryMapEditor) AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
-                });
-            }
+var currentTarget=OptionsManager.getOption('targetSystem')||'Standard';
+var targetRadios=element.querySelectorAll("input[name='opt-target']");
+targetRadios.forEach((r)=>{
+if(r.value===currentTarget)r.checked=true;
+r.addEventListener('change',()=>{
+if(r.checked)OptionsManager.setOption('targetSystem',r.value);
+});
+});
 
-            // Theme Select Listener
-            themeSelect.addEventListener('change', function () {
-                ThemeManager.setTheme(this.value);
-                setTimeout(updateInputs, 50);
-                setTimeout(updateMMInputs, 50);
-            });
+var addListener=(id,opt,action)=>{
+var el=element.querySelector(id);
+if(el)el.addEventListener('change',function (){
+OptionsManager.setOption(opt,this.checked);
+if(action)action(this.checked);
+});
+};
 
-            // Tab Switching Logic
-            var tabs = element.querySelectorAll('.tab-btn');
-            tabs.forEach((tab) => {
-                tab.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    element.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
-                    element.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                    tab.classList.add('active');
-                    var targetId = tab.getAttribute('data-tab');
-                    element.querySelector('#' + targetId).classList.add('active');
-                });
-            });
+addListener('#opt-linenumbers','showLineNumbers',()=>{
+if(typeof editors!=='undefined')editors.forEach(ed=>ed.render&&ed.render());
+});
+addListener('#opt-folding','codeFolding',()=>{
+if(typeof editors!=='undefined')editors.forEach(ed=>ed.render&&ed.render());
+});
+addListener('#opt-syntax','syntaxHighlighting',()=>{
+if(typeof editors!=='undefined')editors.forEach(ed=>ed.render&&ed.render());
+});
 
-            // Color Inputs
-            var colorInputs = element.querySelectorAll('input[type="color"]');
-            colorInputs.forEach(input => {
-                var varName = input.getAttribute('data-var');
-                if (varName) {
-                    input.addEventListener('input', function () {
-                        setCSSVar(varName, this.value);
-                        // Save to ThemeManager
-                        var currentTheme = ThemeManager.currentTheme;
-                        // We get the current definition (merged includes overrides)
-                        var defs = ThemeManager.getThemeDefinition(currentTheme);
-                        defs[varName] = this.value;
-                        ThemeManager.updateThemeDefinition(currentTheme, defs);
+addListener('#opt-guidelines','showGuidelines',(val)=>{
+var packList=document.getElementById('pack-list');
+if(val)packList.classList.remove('hide-guidelines');
+else packList.classList.add('hide-guidelines');
+});
+addListener('#opt-show-addresses','showAddresses',(val)=>{
+var packList=document.getElementById('pack-list');
+if(val)packList.classList.add('show-addresses');
+else packList.classList.remove('show-addresses');
+});
+addListener('#opt-splash','showSplashScreen');
+addListener('#opt-restorepacks','restorePacks',(val)=>{
+if(!val)localStorage.removeItem('opkedit_open_packs');
+});
+addListener('#opt-show-toolbar','showIconToolbar',(val)=>{
+if(!val&&!OptionsManager.getOption('showMenuBar')){
+element.querySelector('#opt-show-menubar').checked=true;
+OptionsManager.setOption('showMenuBar',true);
+}
+});
+addListener('#opt-show-menubar','showMenuBar',(val)=>{
+if(!val&&!OptionsManager.getOption('showIconToolbar')){
+element.querySelector('#opt-show-toolbar').checked=true;
+OptionsManager.setOption('showIconToolbar',true);
+}
+});
+addListener('#opt-enable-fkeys','enableFunctionKeys');
+addListener('#opt-stickyproc','stickyProcedureHeader',()=>{
+if(AppStore.state.currentItem&&AppStore.state.currentItem.type===3){
+if(typeof closeEditor==='function'&&closeEditor()){
+selectItem(AppStore.state.currentPackIndex,AppStore.state.packs[AppStore.state.currentPackIndex].items.indexOf(AppStore.state.currentItem));
+}
+}
+});
+addListener('#opt-confirmations','suppressConfirmations');
+addListener('#opt-grouprecords','groupDataRecords',()=>updateInventory());
+addListener('#opt-collapsefiles','collapseDataFiles',()=>updateInventory());
+addListener('#opt-hex-view','enableHexView');
+addListener('#opt-decompiler-log','showDecompilerLog',(val)=>{
+if(typeof decompilerLogWindow!=='undefined'&&decompilerLogWindow){
+decompilerLogWindow.updateVisibility();
+if(val&&AppStore.state.currentEditor instanceof ProcedureFileEditor){
+AppStore.state.currentEditor.refreshDecompilerLog(true);
+}
+}
+});
+addListener('#opt-variable-storage','showVariableStorageWindow',(val)=>{
+if(typeof variableStorageWindow!=='undefined'&&variableStorageWindow){
+variableStorageWindow.updateVisibility();
+if(val&&AppStore.state.currentEditor instanceof ProcedureFileEditor){
+AppStore.state.currentEditor.refreshDecompilerLog(true);
+}
+}
+});
 
-                        if (varName.startsWith('--mm-') && AppStore.state.currentEditor instanceof MemoryMapEditor) {
-                            AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
-                        }
-                    });
-                }
-            });
 
-            setupBtn('#reset-syntax', () => {
-                var currentTheme = ThemeManager.currentTheme;
-                var overrides = OptionsManager.getOption('themeOverrides') || {};
-                if (overrides[currentTheme]) {
-                    delete overrides[currentTheme];
-                    OptionsManager.setOption('themeOverrides', overrides);
-                    ThemeManager.applyTheme(currentTheme);
-                    setTimeout(updateInputs, 50);
-                }
-            });
+element.querySelector('#opt-hexbytes').value=OptionsManager.getOption('hexBytesPerRow')||16;
+element.querySelector('#opt-hexbytes').addEventListener('change',function (){
+OptionsManager.setOption('hexBytesPerRow',parseInt(this.value));
+if(AppStore.state.currentEditor instanceof HexEditor)AppStore.state.currentEditor.renderHexView();
+});
 
-            // Initialize Inputs
-            setTimeout(() => { updateInputs(); updateMMInputs(); }, 0);
+element.querySelector('#opt-sheetmode').value=OptionsManager.getOption('spreadsheetMode')||'grid';
+element.querySelector('#opt-sheetmode').addEventListener('change',function (){
+OptionsManager.setOption('spreadsheetMode',this.value);
+if(AppStore.state.currentEditor instanceof SpreadsheetFileEditor)AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
+});
 
-            var dialog = new ModalDialog(element, () => {
-                if (AppStore.state.currentEditor && AppStore.state.currentEditor.codeEditorInstance) {
-                    AppStore.state.currentEditor.codeEditorInstance.update();
-                }
-                if (AppStore.state.currentEditor instanceof HexEditor) AppStore.state.currentEditor.renderHexView();
-                updateInventory();
-            });
 
-            dialog.start();
-        } catch (e) {
-            console.error("Failed to open Options Dialog:", e);
-        }
-    },
+addListener('#opt-mm-pagebreaks','memoryMapShowPageBreaks',()=>{
+if(AppStore.state.currentEditor instanceof MemoryMapEditor)AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
+});
+element.querySelector('#opt-mm-size').value=OptionsManager.getOption('memoryMapDisplaySize')||600;
+element.querySelector('#opt-mm-size').addEventListener('change',function (){
+OptionsManager.setOption('memoryMapDisplaySize',parseInt(this.value));
+if(AppStore.state.currentEditor instanceof MemoryMapEditor)AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
+});
+element.querySelector('#opt-mm-height').value=OptionsManager.getOption('memoryMapBarHeight')||30;
+element.querySelector('#opt-mm-height').addEventListener('change',function (){
+OptionsManager.setOption('memoryMapBarHeight',parseInt(this.value));
+if(AppStore.state.currentEditor instanceof MemoryMapEditor)AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
+});
 
-    showAboutDialog: function (isSplash) {
-        var element = document.createElement('div');
-        element.innerHTML =
-            "<div style='text-align: center; padding: 20px; font-family: sans-serif;'>" +
-            "<img src='assets/pics/logo.gif' alt='Psion Logo' style='width: 25%; margin-bottom: 15px;'>" +
-            "<h2 style='margin-top: 0;'>OPK Editor 3</h2>" +
-            "<p>A modern editor for Psion Organiser II packs.</p>" +
-            "<p>Version " + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '3.0.x') + "</p>" +
-            "<hr style='margin: 15px auto; width: 80%; border: 0; border-top: 1px solid #ccc;'>" +
-            "<p>Original by <b>Jaap Scherphuis</b></p>" +
-            "<p>Icons by <b>Font Awesome</b></p>" +
-            "<p>Implemented with precision by <b>Antigravity</b>.</p>" +
-            "<p>Reimagined by <b>NFfP</b>.</p>" +
-            "</div>";
 
-        var dialog = new ModalDialog(element, null);
-        dialog.start();
+var langSelect=element.querySelector('#opt-language');
+if(langSelect){
+langSelect.value=OptionsManager.getOption('defaultLanguage')||'OPL';
+langSelect.addEventListener('change',function (){
+OptionsManager.setOption('defaultLanguage',this.value);
+});
+}
 
-        if (isSplash) {
-            setTimeout(() => dialog.stop(), 3000);
-        }
-    },
+var indentInput=element.querySelector('#opt-indent-size');
+if(indentInput){
+indentInput.value=OptionsManager.getOption('indentSize')||2;
+indentInput.addEventListener('change',function (){
+var val=parseInt(this.value);
+if(val<1)val=1;
+if(val>8)val=8;
+OptionsManager.setOption('indentSize',val);
+});
+}
 
-    showKeyMapDialog: function () {
-        var element = document.createElement('div');
-        element.innerHTML = `
+var mmOrientation=element.querySelector('#opt-mm-orientation');
+if(mmOrientation){
+mmOrientation.value=OptionsManager.getOption('memoryMapOrientation')||'horizontal';
+mmOrientation.addEventListener('change',function (){
+OptionsManager.setOption('memoryMapOrientation',this.value);
+if(AppStore.state.currentEditor instanceof MemoryMapEditor)AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
+});
+}
+
+
+themeSelect.addEventListener('change',function (){
+ThemeManager.setTheme(this.value);
+setTimeout(updateInputs,50);
+setTimeout(updateMMInputs,50);
+});
+
+
+var tabs=element.querySelectorAll('.tab-btn');
+tabs.forEach((tab)=>{
+tab.addEventListener('click',(e)=>{
+e.preventDefault();
+element.querySelectorAll('.tab-btn').forEach(t=>t.classList.remove('active'));
+element.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+tab.classList.add('active');
+var targetId=tab.getAttribute('data-tab');
+element.querySelector('#'+targetId).classList.add('active');
+});
+});
+
+
+var colorInputs=element.querySelectorAll('input[type="color"]');
+colorInputs.forEach(input=>{
+var varName=input.getAttribute('data-var');
+if(varName){
+input.addEventListener('input',function (){
+setCSSVar(varName,this.value);
+
+var currentTheme=ThemeManager.currentTheme;
+
+var defs=ThemeManager.getThemeDefinition(currentTheme);
+defs[varName]=this.value;
+ThemeManager.updateThemeDefinition(currentTheme,defs);
+
+if(varName.startsWith('--mm-')&&AppStore.state.currentEditor instanceof MemoryMapEditor){
+AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
+}
+});
+}
+});
+
+setupBtn('#reset-syntax',()=>{
+var currentTheme=ThemeManager.currentTheme;
+var overrides=OptionsManager.getOption('themeOverrides')||{};
+if(overrides[currentTheme]){
+delete overrides[currentTheme];
+OptionsManager.setOption('themeOverrides',overrides);
+ThemeManager.applyTheme(currentTheme);
+setTimeout(updateInputs,50);
+}
+});
+
+
+setTimeout(()=>{updateInputs();updateMMInputs();},0);
+
+var dialog=new ModalDialog(element,()=>{
+if(AppStore.state.currentEditor&&AppStore.state.currentEditor.codeEditorInstance){
+AppStore.state.currentEditor.codeEditorInstance.update();
+}
+if(AppStore.state.currentEditor instanceof HexEditor)AppStore.state.currentEditor.renderHexView();
+updateInventory();
+});
+
+dialog.start();
+}catch(e){
+console.error("Failed to open Options Dialog:",e);
+}
+},
+
+showAboutDialog:function (isSplash){
+var element=document.createElement('div');
+element.innerHTML=
+"<div style='text-align: center; padding: 20px; font-family: sans-serif;'>" +
+"<img src='assets/pics/logo.gif' alt='Psion Logo' style='width: 25%; margin-bottom: 15px;'>" +
+"<h2 style='margin-top: 0;'>OPK Editor 3</h2>" +
+"<p>A modern editor for Psion Organiser II packs.</p>" +
+"<p>Version "+(typeof APP_VERSION!=='undefined'?APP_VERSION:'3.0.x')+"</p>" +
+"<hr style='margin: 15px auto; width: 80%; border: 0; border-top: 1px solid #ccc;'>" +
+"<p>Original by <b>Jaap Scherphuis</b></p>" +
+"<p>Icons by <b>Font Awesome</b></p>" +
+"<p>Implemented with precision by <b>Antigravity</b>.</p>" +
+"<p>Reimagined by <b>NFfP</b>.</p>" +
+"</div>";
+
+var dialog=new ModalDialog(element,null);
+dialog.start();
+
+if(isSplash){
+setTimeout(()=>dialog.stop(),3000);
+}
+},
+
+showKeyMapDialog:function (){
+var element=document.createElement('div');
+element.innerHTML=`
             <div style="text-align: center; padding: 10px; font-family: sans-serif;">
                 <h2 style="margin-top: 5px;">Key Map</h2>
                 <div style="text-align: left; margin-top: 15px; display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; font-size: 14px;">
@@ -449,13 +445,13 @@ var DialogManager = {
                 <p style="font-size: 12px; opacity: 0.8;">Function keys are enabled in <b>Options > Visuals</b>.</p>
             </div>`;
 
-        var dialog = new ModalDialog(element, null);
-        dialog.start();
-    },
+var dialog=new ModalDialog(element,null);
+dialog.start();
+},
 
-    showErrorDialog: function (msg) {
-        var element = document.createElement('div');
-        element.innerHTML = `
+showErrorDialog:function (msg){
+var element=document.createElement('div');
+element.innerHTML=`
             <div style="padding: 10px; font-family: sans-serif; min-width: 400px;">
                 <h3 style="margin-top: 0; color: #d32f2f; border-bottom: 2px solid #d32f2f; padding-bottom: 10px;">
                     <i class="fas fa-exclamation-triangle"></i> Compilation Error
@@ -468,33 +464,33 @@ var DialogManager = {
                 </div>
             </div>`;
 
-        var dialog = new ModalDialog(element, null, null, "Close");
+var dialog=new ModalDialog(element,null,null,"Close");
 
-        // Add Copy Listener
-        var copyBtn = element.querySelector('#btn-copy-error');
-        if (copyBtn) {
-            copyBtn.addEventListener('click', function (e) {
-                e.preventDefault();
-                navigator.clipboard.writeText(msg).then(function () {
-                    var originalHTML = copyBtn.innerHTML;
-                    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-                    copyBtn.style.color = 'green';
-                    setTimeout(function () {
-                        copyBtn.innerHTML = originalHTML;
-                        copyBtn.style.color = '';
-                    }, 2000);
-                }).catch(function (err) {
-                    console.error('Failed to copy text: ', err);
-                    alert("Failed to copy to clipboard.");
-                });
-            });
-        }
 
-        dialog.start();
-    },
+var copyBtn=element.querySelector('#btn-copy-error');
+if(copyBtn){
+copyBtn.addEventListener('click',function (e){
+e.preventDefault();
+navigator.clipboard.writeText(msg).then(function (){
+var originalHTML=copyBtn.innerHTML;
+copyBtn.innerHTML='<i class="fas fa-check"></i> Copied!';
+copyBtn.style.color='green';
+setTimeout(function (){
+copyBtn.innerHTML=originalHTML;
+copyBtn.style.color='';
+},2000);
+}).catch(function (err){
+console.error('Failed to copy text: ',err);
+alert("Failed to copy to clipboard.");
+});
+});
+}
 
-    _getOptionsTemplate: function () {
-        return `
+dialog.start();
+},
+
+_getOptionsTemplate:function (){
+return `
         <div class="tabs-container">
             <div class="tabs-header">
                 <button class="tab-btn active" data-tab="tab-general">General</button>
@@ -704,5 +700,5 @@ var DialogManager = {
             </div>
         </div>
         `;
-    }
+}
 };

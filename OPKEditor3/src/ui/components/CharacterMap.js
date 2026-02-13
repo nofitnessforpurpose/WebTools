@@ -1,147 +1,147 @@
-var CharacterMap = (function () {
-    var doc = document;
-    var win = window;
+var CharacterMap=(function (){
+var doc=document;
+var win=window;
 
-    // Font Data XP (The corrected data from previous steps)
-    var FONT_DATA_XP = new Uint8Array([
-        0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, 0, 0, 4, 0, 10, 10, 10, 0, 0, 0, 0, 0, 10, 10, 31, 10, 31, 10, 10, 0, 4, 15, 20, 14, 5, 30, 4, 0, 24, 25, 2, 4, 8, 19, 3, 0, 12, 18, 20, 8, 21, 18, 13, 0, 12, 4, 8, 0, 0, 0, 0, 0,
-        2, 4, 8, 8, 8, 4, 2, 0, 8, 4, 2, 2, 2, 4, 8, 0, 0, 4, 21, 14, 21, 4, 0, 0, 0, 4, 4, 31, 4, 4, 0, 0, 0, 0, 0, 0, 12, 4, 8, 0, 0, 0, 0, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 12, 0, 0, 1, 2, 4, 8, 16, 0, 0,
-        14, 17, 19, 21, 25, 17, 14, 0, 4, 12, 4, 4, 4, 4, 14, 0, 14, 17, 1, 2, 4, 8, 31, 0, 31, 2, 4, 2, 1, 17, 14, 0, 2, 6, 10, 18, 31, 2, 2, 0, 31, 16, 30, 1, 1, 17, 14, 0, 6, 8, 16, 30, 17, 17, 14, 0, 31, 1, 2, 4, 8, 8, 8, 0,
-        14, 17, 17, 14, 17, 17, 14, 0, 14, 17, 17, 15, 1, 2, 12, 0, 0, 12, 12, 0, 12, 12, 0, 0, 0, 12, 12, 0, 12, 4, 8, 0, 2, 4, 8, 16, 8, 4, 2, 0, 0, 0, 31, 0, 31, 0, 0, 0, 8, 4, 2, 1, 2, 4, 8, 0, 14, 17, 1, 2, 4, 0, 4, 0,
-        14, 17, 1, 13, 21, 21, 14, 0, 14, 17, 17, 17, 31, 17, 17, 0, 30, 17, 17, 30, 17, 17, 30, 0, 14, 17, 16, 16, 16, 17, 14, 0, 28, 18, 17, 17, 17, 18, 28, 0, 31, 16, 16, 30, 16, 16, 31, 0, 31, 16, 16, 30, 16, 16, 16, 0, 14, 17, 16, 23, 17, 17, 15, 0,
-        17, 17, 17, 31, 17, 17, 17, 0, 14, 4, 4, 4, 4, 4, 14, 0, 7, 2, 2, 2, 2, 18, 12, 0, 17, 18, 20, 24, 20, 18, 17, 0, 16, 16, 16, 16, 16, 16, 31, 0, 17, 27, 21, 21, 17, 17, 17, 0, 17, 17, 25, 21, 19, 17, 17, 0, 14, 17, 17, 17, 17, 17, 14, 0,
-        30, 17, 17, 30, 16, 16, 16, 0, 14, 17, 17, 17, 21, 18, 13, 0, 30, 17, 17, 30, 20, 18, 17, 0, 15, 16, 16, 14, 1, 1, 30, 0, 31, 4, 4, 4, 4, 4, 4, 0, 17, 17, 17, 17, 17, 17, 14, 0, 17, 17, 17, 17, 17, 10, 4, 0, 17, 17, 17, 21, 21, 21, 10, 0,
-        17, 17, 10, 4, 10, 17, 17, 0, 17, 17, 17, 10, 4, 4, 4, 0, 31, 1, 2, 4, 8, 16, 31, 0, 14, 8, 8, 8, 8, 8, 14, 0, 17, 10, 31, 4, 31, 4, 4, 0, 14, 2, 2, 2, 2, 2, 14, 0, 4, 10, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 31, 0,
-        8, 4, 2, 0, 0, 0, 0, 0, 0, 0, 14, 1, 15, 17, 15, 0, 16, 16, 22, 25, 17, 17, 30, 0, 0, 0, 14, 16, 16, 17, 14, 0, 1, 1, 13, 19, 17, 17, 15, 0, 0, 0, 14, 17, 31, 16, 14, 0, 6, 9, 8, 28, 8, 8, 8, 0, 0, 15, 17, 17, 15, 1, 14, 0,
-        16, 16, 22, 25, 17, 17, 17, 0, 4, 0, 12, 4, 4, 4, 14, 0, 2, 0, 6, 2, 2, 18, 12, 0, 16, 16, 18, 20, 24, 20, 18, 0, 12, 4, 4, 4, 4, 4, 14, 0, 0, 0, 26, 21, 21, 17, 17, 0, 0, 0, 22, 25, 17, 17, 17, 0, 0, 0, 14, 17, 17, 17, 14, 0,
-        0, 0, 30, 17, 30, 16, 16, 0, 0, 0, 13, 19, 15, 1, 1, 0, 0, 0, 22, 25, 16, 16, 16, 0, 0, 0, 14, 16, 14, 1, 30, 0, 8, 8, 28, 8, 8, 9, 6, 0, 0, 0, 17, 17, 17, 19, 13, 0, 0, 0, 17, 17, 17, 10, 4, 0, 0, 0, 17, 17, 21, 21, 10, 0,
-        0, 0, 17, 10, 4, 10, 17, 0, 0, 0, 17, 17, 15, 1, 14, 0, 0, 0, 31, 2, 4, 8, 31, 0, 2, 4, 4, 8, 4, 4, 2, 0, 4, 4, 4, 4, 4, 4, 4, 0, 8, 4, 4, 2, 4, 4, 8, 0, 0, 4, 2, 31, 2, 4, 0, 0, 0, 4, 8, 31, 8, 4, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 28, 20, 28, 0, 7, 4, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 28, 0, 0, 0, 0, 0, 16, 8, 4, 0, 0, 0, 0, 12, 12, 0, 0, 0, 0, 31, 1, 31, 1, 2, 4, 0, 0, 0, 31, 1, 6, 4, 8, 0,
-        0, 0, 2, 4, 12, 20, 4, 0, 0, 0, 4, 31, 17, 1, 6, 0, 0, 0, 0, 31, 4, 4, 31, 0, 0, 0, 2, 31, 6, 10, 18, 0, 0, 0, 8, 31, 9, 10, 8, 0, 0, 0, 0, 14, 2, 2, 31, 0, 0, 0, 30, 2, 30, 2, 30, 0, 0, 0, 0, 21, 21, 1, 6, 0,
-        0, 0, 0, 31, 0, 0, 0, 0, 31, 1, 5, 6, 4, 4, 8, 0, 1, 2, 4, 12, 20, 4, 4, 0, 4, 31, 17, 17, 1, 2, 4, 0, 0, 31, 4, 4, 4, 4, 31, 0, 2, 31, 2, 6, 10, 18, 2, 0, 8, 31, 9, 9, 9, 9, 18, 0, 4, 31, 4, 31, 4, 4, 4, 0,
-        0, 15, 9, 17, 1, 2, 12, 0, 8, 15, 18, 2, 2, 2, 4, 0, 0, 31, 1, 1, 1, 1, 31, 0, 10, 31, 10, 10, 2, 4, 8, 0, 0, 24, 1, 25, 1, 2, 28, 0, 0, 31, 1, 2, 4, 10, 17, 0, 8, 31, 9, 10, 8, 8, 7, 0, 0, 17, 17, 9, 1, 2, 12, 0,
-        0, 15, 9, 21, 3, 2, 12, 0, 2, 28, 4, 31, 4, 4, 8, 0, 0, 21, 21, 21, 1, 2, 4, 0, 14, 0, 31, 4, 4, 4, 8, 0, 8, 8, 8, 12, 10, 8, 8, 0, 4, 4, 31, 4, 4, 8, 16, 0, 0, 14, 0, 0, 0, 0, 31, 0, 0, 31, 1, 10, 4, 10, 16, 0,
-        4, 31, 2, 4, 14, 21, 4, 0, 2, 2, 2, 2, 2, 4, 8, 0, 0, 4, 2, 17, 17, 17, 17, 0, 16, 16, 31, 16, 16, 16, 15, 0, 0, 31, 1, 1, 1, 2, 12, 0, 0, 8, 20, 2, 1, 1, 0, 0, 4, 31, 4, 4, 21, 21, 4, 0, 0, 31, 1, 1, 10, 4, 2, 0,
-        0, 14, 0, 14, 0, 14, 1, 0, 0, 4, 8, 16, 17, 31, 1, 0, 0, 1, 1, 10, 4, 10, 16, 0, 0, 31, 8, 31, 8, 8, 7, 0, 8, 8, 31, 9, 10, 8, 8, 0, 0, 14, 2, 2, 2, 2, 31, 0, 0, 31, 1, 31, 1, 1, 31, 0, 14, 0, 31, 1, 1, 2, 4, 0,
-        18, 18, 18, 18, 2, 4, 8, 0, 0, 4, 20, 20, 21, 21, 22, 0, 0, 16, 16, 17, 18, 20, 24, 0, 0, 31, 17, 17, 17, 17, 31, 0, 0, 31, 17, 17, 1, 2, 4, 0, 0, 24, 0, 1, 1, 2, 28, 0, 4, 18, 8, 0, 0, 0, 0, 0, 28, 20, 28, 0, 0, 0, 0, 0,
-        0, 0, 9, 21, 18, 18, 13, 0, 10, 0, 14, 1, 15, 17, 15, 0, 0, 0, 14, 17, 30, 17, 30, 16, 0, 0, 14, 16, 12, 17, 14, 0, 0, 0, 17, 17, 17, 19, 29, 16, 0, 0, 15, 20, 18, 17, 14, 0, 0, 0, 6, 9, 17, 17, 30, 16, 0, 0, 15, 17, 17, 17, 15, 1,
-        0, 0, 7, 4, 4, 20, 8, 0, 0, 2, 26, 2, 0, 0, 0, 0, 2, 0, 6, 2, 2, 2, 2, 2, 0, 20, 8, 20, 0, 0, 0, 0, 0, 4, 14, 20, 21, 14, 4, 0, 8, 8, 28, 8, 28, 8, 15, 0, 14, 0, 22, 25, 17, 17, 17, 0, 10, 0, 14, 17, 17, 17, 14, 0,
-        0, 0, 22, 25, 17, 17, 30, 16, 0, 0, 13, 19, 17, 17, 15, 1, 0, 14, 17, 31, 17, 17, 14, 0, 0, 0, 0, 11, 21, 26, 0, 0, 0, 0, 14, 17, 17, 10, 27, 0, 10, 0, 17, 17, 17, 19, 13, 0, 31, 16, 8, 4, 8, 16, 31, 0, 0, 0, 31, 10, 10, 10, 19, 0,
-        31, 0, 17, 10, 4, 10, 17, 0, 0, 0, 17, 17, 17, 17, 15, 1, 0, 1, 30, 4, 31, 4, 4, 0, 0, 0, 31, 8, 15, 9, 17, 0, 0, 0, 31, 21, 31, 17, 17, 0, 0, 0, 4, 0, 31, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 31, 31, 31, 31, 31, 31, 31, 31
-    ]);
 
-    // Font Data LZ (The new data from user)
-    var FONT_DATA_LZ = new Uint8Array([
-        0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4, 4, 0, 0, 4, 0, 10, 10, 10, 0, 0, 0, 0, 0, 10, 10, 31, 10, 31, 10, 10, 0, 4, 15, 20, 14, 5, 30, 4, 0, 24, 25, 2, 4, 8, 19, 3, 0, 12, 18, 20, 8, 21, 18, 13, 0, 12, 4, 8, 0, 0, 0, 0, 0,
-        2, 4, 8, 8, 8, 4, 2, 0, 8, 4, 2, 2, 2, 4, 8, 0, 0, 4, 21, 14, 21, 4, 0, 0, 0, 4, 4, 31, 4, 4, 0, 0, 0, 0, 0, 0, 12, 4, 8, 0, 0, 0, 0, 31, 0, 0, 0, 0, 0, 0, 0, 0, 0, 12, 12, 0, 0, 1, 2, 4, 8, 16, 0, 0,
-        14, 17, 19, 21, 25, 17, 14, 0, 4, 12, 4, 4, 4, 4, 14, 0, 14, 17, 1, 2, 4, 8, 31, 0, 31, 2, 4, 2, 1, 17, 14, 0, 2, 6, 10, 18, 31, 2, 2, 0, 31, 16, 30, 1, 1, 17, 14, 0, 6, 8, 16, 30, 17, 17, 14, 0, 31, 1, 2, 4, 8, 8, 8, 0,
-        14, 17, 17, 14, 17, 17, 14, 0, 14, 17, 17, 15, 1, 2, 12, 0, 0, 12, 12, 0, 12, 12, 0, 0, 0, 12, 12, 0, 12, 4, 8, 0, 2, 4, 8, 16, 8, 4, 2, 0, 0, 0, 31, 0, 31, 0, 0, 0, 8, 4, 2, 1, 2, 4, 8, 0, 14, 17, 1, 2, 4, 0, 4, 0,
-        14, 17, 1, 13, 21, 21, 14, 0, 14, 17, 17, 17, 31, 17, 17, 0, 30, 17, 17, 30, 17, 17, 30, 0, 14, 17, 16, 16, 16, 17, 14, 0, 28, 18, 17, 17, 17, 18, 28, 0, 31, 16, 16, 30, 16, 16, 31, 0, 31, 16, 16, 30, 16, 16, 16, 0, 14, 17, 16, 23, 17, 17, 15, 0,
-        17, 17, 17, 31, 17, 17, 17, 0, 14, 4, 4, 4, 4, 4, 14, 0, 7, 2, 2, 2, 2, 18, 12, 0, 17, 18, 20, 24, 20, 18, 17, 0, 16, 16, 16, 16, 16, 16, 31, 0, 17, 27, 21, 21, 17, 17, 17, 0, 17, 17, 25, 21, 19, 17, 17, 0, 14, 17, 17, 17, 17, 17, 14, 0,
-        30, 17, 17, 30, 16, 16, 16, 0, 14, 17, 17, 17, 21, 18, 13, 0, 30, 17, 17, 30, 20, 18, 17, 0, 15, 16, 16, 14, 1, 1, 30, 0, 31, 4, 4, 4, 4, 4, 4, 0, 17, 17, 17, 17, 17, 17, 14, 0, 17, 17, 17, 17, 17, 10, 4, 0, 17, 17, 17, 21, 21, 21, 10, 0,
-        17, 17, 10, 4, 10, 17, 17, 0, 17, 17, 17, 10, 4, 4, 4, 0, 31, 1, 2, 4, 8, 16, 31, 0, 14, 8, 8, 8, 8, 8, 14, 0, 0, 16, 8, 4, 2, 1, 0, 0, 14, 2, 2, 2, 2, 2, 14, 0, 4, 10, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 31, 0,
-        8, 4, 2, 0, 0, 0, 0, 0, 0, 0, 14, 1, 15, 17, 15, 0, 16, 16, 22, 25, 17, 17, 30, 0, 0, 0, 14, 16, 16, 17, 14, 0, 1, 1, 13, 19, 17, 17, 15, 0, 0, 0, 14, 17, 31, 16, 14, 0, 6, 9, 8, 28, 8, 8, 8, 0, 0, 15, 17, 17, 15, 1, 14, 0,
-        16, 16, 22, 25, 17, 17, 17, 0, 4, 0, 12, 4, 4, 4, 14, 0, 2, 0, 6, 2, 2, 18, 12, 0, 16, 16, 18, 20, 24, 20, 18, 0, 12, 4, 4, 4, 4, 4, 14, 0, 0, 0, 26, 21, 21, 17, 17, 0, 0, 0, 22, 25, 17, 17, 17, 0, 0, 0, 14, 17, 17, 17, 14, 0,
-        0, 0, 30, 17, 30, 16, 16, 0, 0, 0, 13, 19, 15, 1, 1, 0, 0, 0, 22, 25, 16, 16, 16, 0, 0, 0, 14, 16, 14, 1, 30, 0, 8, 8, 28, 8, 8, 9, 6, 0, 0, 0, 17, 17, 17, 19, 13, 0, 0, 0, 17, 17, 17, 10, 4, 0, 0, 0, 17, 17, 21, 21, 10, 0,
-        0, 0, 17, 10, 4, 10, 17, 0, 0, 0, 17, 17, 15, 1, 14, 0, 0, 0, 31, 2, 4, 8, 31, 0, 2, 4, 4, 8, 4, 4, 2, 0, 4, 4, 4, 4, 4, 4, 4, 0, 8, 4, 4, 2, 4, 4, 8, 0, 0, 4, 2, 31, 2, 4, 0, 0, 0, 4, 8, 31, 8, 4, 0, 0,
-        14, 17, 16, 16, 17, 14, 4, 0, 10, 0, 17, 17, 17, 19, 13, 0, 2, 4, 14, 17, 31, 16, 14, 0, 4, 10, 14, 1, 15, 17, 15, 0, 10, 0, 14, 1, 15, 17, 15, 0, 8, 4, 14, 1, 15, 17, 15, 0, 4, 0, 14, 1, 15, 17, 15, 0, 0, 0, 14, 16, 17, 14, 4, 0,
-        4, 10, 14, 17, 31, 16, 14, 0, 10, 0, 14, 17, 31, 16, 14, 0, 8, 4, 14, 17, 31, 16, 14, 0, 10, 0, 12, 4, 4, 4, 14, 0, 4, 10, 12, 4, 4, 4, 14, 0, 4, 2, 12, 4, 4, 4, 14, 0, 10, 0, 14, 17, 17, 31, 17, 0, 4, 0, 14, 17, 17, 31, 17, 0,
-        4, 8, 31, 16, 30, 16, 31, 0, 0, 0, 26, 5, 30, 20, 11, 0, 15, 20, 20, 22, 28, 20, 23, 0, 4, 10, 0, 14, 17, 17, 14, 0, 10, 0, 0, 14, 17, 17, 14, 0, 4, 2, 0, 14, 17, 17, 14, 0, 4, 10, 17, 17, 17, 19, 13, 0, 8, 4, 17, 17, 17, 19, 13, 0,
-        10, 0, 17, 17, 15, 1, 14, 0, 10, 0, 14, 17, 17, 17, 14, 0, 10, 0, 17, 17, 17, 17, 14, 0, 0, 0, 14, 19, 21, 25, 14, 0, 6, 9, 8, 28, 8, 30, 25, 0, 14, 19, 19, 21, 25, 25, 14, 0, 0, 0, 10, 4, 10, 0, 0, 0, 2, 5, 4, 14, 4, 8, 16, 0,
-        2, 4, 14, 1, 15, 17, 15, 0, 4, 8, 12, 4, 4, 4, 14, 0, 4, 8, 0, 14, 17, 17, 14, 0, 2, 4, 17, 17, 17, 19, 13, 0, 5, 10, 22, 25, 17, 17, 17, 0, 5, 10, 17, 25, 21, 19, 17, 0, 14, 1, 15, 17, 15, 0, 14, 0, 14, 17, 17, 17, 14, 0, 14, 0,
-        4, 0, 4, 8, 16, 17, 14, 0, 4, 14, 21, 4, 4, 4, 0, 0, 0, 4, 4, 4, 21, 14, 4, 0, 18, 20, 8, 22, 9, 2, 7, 0, 18, 20, 10, 22, 10, 15, 2, 0, 4, 0, 0, 4, 4, 4, 4, 0, 0, 5, 10, 20, 10, 5, 0, 0, 0, 20, 10, 5, 10, 20, 0, 0,
-        14, 16, 14, 1, 17, 14, 4, 0, 0, 14, 16, 14, 1, 14, 4, 0, 14, 0, 14, 16, 23, 17, 14, 0, 14, 0, 15, 17, 15, 1, 14, 0, 4, 0, 14, 4, 4, 4, 14, 0, 2, 4, 14, 17, 17, 31, 17, 0, 4, 10, 14, 17, 17, 31, 17, 0, 8, 4, 14, 17, 17, 31, 17, 0,
-        14, 17, 23, 21, 23, 17, 14, 0, 0, 0, 0, 12, 4, 4, 14, 0, 31, 9, 8, 8, 8, 8, 28, 0, 0, 0, 4, 10, 17, 17, 31, 0, 0, 0, 4, 10, 17, 17, 17, 0, 0, 31, 0, 14, 0, 31, 0, 0, 17, 10, 31, 4, 31, 4, 4, 0, 0, 31, 10, 10, 10, 10, 10, 0,
-        14, 4, 14, 21, 14, 4, 14, 0, 4, 21, 21, 21, 21, 14, 4, 0, 0, 0, 0, 13, 18, 18, 13, 0, 0, 0, 10, 10, 4, 10, 4, 0, 0, 14, 8, 4, 10, 18, 12, 0, 0, 0, 14, 16, 28, 16, 14, 0, 5, 10, 14, 1, 15, 17, 15, 0, 5, 10, 14, 17, 17, 31, 17, 0,
-        4, 6, 8, 8, 4, 2, 4, 0, 0, 0, 22, 9, 9, 9, 1, 0, 0, 0, 6, 9, 31, 18, 12, 0, 0, 0, 18, 20, 24, 20, 18, 0, 0, 0, 16, 8, 4, 10, 17, 0, 8, 12, 16, 12, 16, 12, 2, 0, 0, 0, 7, 12, 18, 12, 0, 0, 0, 0, 14, 16, 12, 2, 6, 0,
-        0, 0, 14, 4, 4, 4, 2, 0, 0, 0, 18, 9, 9, 5, 6, 0, 4, 10, 31, 16, 30, 16, 31, 0, 10, 0, 31, 16, 30, 16, 31, 0, 4, 2, 31, 16, 30, 16, 31, 0, 0, 0, 4, 21, 21, 14, 4, 0, 2, 4, 14, 4, 4, 4, 14, 0, 4, 10, 14, 4, 4, 4, 14, 0,
-        10, 0, 14, 4, 4, 4, 14, 0, 0, 0, 27, 17, 17, 21, 10, 0, 4, 8, 0, 13, 18, 18, 13, 0, 2, 4, 14, 16, 28, 16, 14, 0, 2, 4, 22, 9, 9, 9, 1, 0, 2, 4, 27, 17, 17, 21, 10, 0, 8, 4, 14, 4, 4, 4, 14, 0, 28, 20, 28, 0, 0, 0, 0, 0,
-        2, 4, 14, 17, 17, 17, 14, 0, 0, 0, 14, 17, 30, 17, 30, 16, 4, 10, 14, 17, 17, 17, 14, 0, 8, 4, 14, 17, 17, 17, 14, 0, 5, 10, 0, 14, 17, 17, 14, 0, 5, 10, 14, 17, 17, 17, 14, 0, 0, 0, 17, 17, 19, 29, 16, 16, 0, 12, 18, 18, 28, 16, 16, 16,
-        0, 0, 7, 4, 4, 20, 8, 0, 0, 2, 26, 2, 0, 0, 0, 0, 4, 10, 17, 17, 17, 17, 14, 0, 8, 4, 17, 17, 17, 17, 14, 0, 0, 4, 14, 20, 21, 14, 4, 0, 2, 4, 17, 17, 10, 4, 4, 0, 2, 4, 17, 17, 15, 1, 14, 0, 2, 4, 17, 17, 17, 17, 14, 0,
-        28, 8, 14, 9, 14, 8, 28, 0, 4, 4, 31, 4, 4, 0, 31, 0, 0, 14, 17, 31, 17, 17, 14, 0, 0, 0, 0, 11, 21, 26, 0, 0, 0, 0, 14, 17, 17, 10, 27, 0, 21, 10, 21, 10, 21, 10, 21, 10, 31, 16, 8, 4, 8, 16, 31, 0, 0, 0, 31, 10, 10, 10, 19, 0,
-        16, 8, 24, 10, 22, 15, 2, 0, 0, 10, 27, 31, 14, 14, 4, 0, 0, 4, 14, 31, 14, 4, 0, 0, 4, 14, 14, 27, 27, 4, 14, 0, 4, 14, 31, 31, 21, 4, 14, 0, 0, 0, 4, 0, 31, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 31, 31, 31, 31, 31, 31, 31, 31
-    ]);
+var FONT_DATA_XP=new Uint8Array([
+0,0,0,0,0,0,0,0,4,4,4,4,0,0,4,0,10,10,10,0,0,0,0,0,10,10,31,10,31,10,10,0,4,15,20,14,5,30,4,0,24,25,2,4,8,19,3,0,12,18,20,8,21,18,13,0,12,4,8,0,0,0,0,0,
+2,4,8,8,8,4,2,0,8,4,2,2,2,4,8,0,0,4,21,14,21,4,0,0,0,4,4,31,4,4,0,0,0,0,0,0,12,4,8,0,0,0,0,31,0,0,0,0,0,0,0,0,0,12,12,0,0,1,2,4,8,16,0,0,
+14,17,19,21,25,17,14,0,4,12,4,4,4,4,14,0,14,17,1,2,4,8,31,0,31,2,4,2,1,17,14,0,2,6,10,18,31,2,2,0,31,16,30,1,1,17,14,0,6,8,16,30,17,17,14,0,31,1,2,4,8,8,8,0,
+14,17,17,14,17,17,14,0,14,17,17,15,1,2,12,0,0,12,12,0,12,12,0,0,0,12,12,0,12,4,8,0,2,4,8,16,8,4,2,0,0,0,31,0,31,0,0,0,8,4,2,1,2,4,8,0,14,17,1,2,4,0,4,0,
+14,17,1,13,21,21,14,0,14,17,17,17,31,17,17,0,30,17,17,30,17,17,30,0,14,17,16,16,16,17,14,0,28,18,17,17,17,18,28,0,31,16,16,30,16,16,31,0,31,16,16,30,16,16,16,0,14,17,16,23,17,17,15,0,
+17,17,17,31,17,17,17,0,14,4,4,4,4,4,14,0,7,2,2,2,2,18,12,0,17,18,20,24,20,18,17,0,16,16,16,16,16,16,31,0,17,27,21,21,17,17,17,0,17,17,25,21,19,17,17,0,14,17,17,17,17,17,14,0,
+30,17,17,30,16,16,16,0,14,17,17,17,21,18,13,0,30,17,17,30,20,18,17,0,15,16,16,14,1,1,30,0,31,4,4,4,4,4,4,0,17,17,17,17,17,17,14,0,17,17,17,17,17,10,4,0,17,17,17,21,21,21,10,0,
+17,17,10,4,10,17,17,0,17,17,17,10,4,4,4,0,31,1,2,4,8,16,31,0,14,8,8,8,8,8,14,0,17,10,31,4,31,4,4,0,14,2,2,2,2,2,14,0,4,10,17,0,0,0,0,0,0,0,0,0,0,0,31,0,
+8,4,2,0,0,0,0,0,0,0,14,1,15,17,15,0,16,16,22,25,17,17,30,0,0,0,14,16,16,17,14,0,1,1,13,19,17,17,15,0,0,0,14,17,31,16,14,0,6,9,8,28,8,8,8,0,0,15,17,17,15,1,14,0,
+16,16,22,25,17,17,17,0,4,0,12,4,4,4,14,0,2,0,6,2,2,18,12,0,16,16,18,20,24,20,18,0,12,4,4,4,4,4,14,0,0,0,26,21,21,17,17,0,0,0,22,25,17,17,17,0,0,0,14,17,17,17,14,0,
+0,0,30,17,30,16,16,0,0,0,13,19,15,1,1,0,0,0,22,25,16,16,16,0,0,0,14,16,14,1,30,0,8,8,28,8,8,9,6,0,0,0,17,17,17,19,13,0,0,0,17,17,17,10,4,0,0,0,17,17,21,21,10,0,
+0,0,17,10,4,10,17,0,0,0,17,17,15,1,14,0,0,0,31,2,4,8,31,0,2,4,4,8,4,4,2,0,4,4,4,4,4,4,4,0,8,4,4,2,4,4,8,0,0,4,2,31,2,4,0,0,0,4,8,31,8,4,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,28,20,28,0,7,4,4,4,0,0,0,0,0,0,0,4,4,4,28,0,0,0,0,0,16,8,4,0,0,0,0,12,12,0,0,0,0,31,1,31,1,2,4,0,0,0,31,1,6,4,8,0,
+0,0,2,4,12,20,4,0,0,0,4,31,17,1,6,0,0,0,0,31,4,4,31,0,0,0,2,31,6,10,18,0,0,0,8,31,9,10,8,0,0,0,0,14,2,2,31,0,0,0,30,2,30,2,30,0,0,0,0,21,21,1,6,0,
+0,0,0,31,0,0,0,0,31,1,5,6,4,4,8,0,1,2,4,12,20,4,4,0,4,31,17,17,1,2,4,0,0,31,4,4,4,4,31,0,2,31,2,6,10,18,2,0,8,31,9,9,9,9,18,0,4,31,4,31,4,4,4,0,
+0,15,9,17,1,2,12,0,8,15,18,2,2,2,4,0,0,31,1,1,1,1,31,0,10,31,10,10,2,4,8,0,0,24,1,25,1,2,28,0,0,31,1,2,4,10,17,0,8,31,9,10,8,8,7,0,0,17,17,9,1,2,12,0,
+0,15,9,21,3,2,12,0,2,28,4,31,4,4,8,0,0,21,21,21,1,2,4,0,14,0,31,4,4,4,8,0,8,8,8,12,10,8,8,0,4,4,31,4,4,8,16,0,0,14,0,0,0,0,31,0,0,31,1,10,4,10,16,0,
+4,31,2,4,14,21,4,0,2,2,2,2,2,4,8,0,0,4,2,17,17,17,17,0,16,16,31,16,16,16,15,0,0,31,1,1,1,2,12,0,0,8,20,2,1,1,0,0,4,31,4,4,21,21,4,0,0,31,1,1,10,4,2,0,
+0,14,0,14,0,14,1,0,0,4,8,16,17,31,1,0,0,1,1,10,4,10,16,0,0,31,8,31,8,8,7,0,8,8,31,9,10,8,8,0,0,14,2,2,2,2,31,0,0,31,1,31,1,1,31,0,14,0,31,1,1,2,4,0,
+18,18,18,18,2,4,8,0,0,4,20,20,21,21,22,0,0,16,16,17,18,20,24,0,0,31,17,17,17,17,31,0,0,31,17,17,1,2,4,0,0,24,0,1,1,2,28,0,4,18,8,0,0,0,0,0,28,20,28,0,0,0,0,0,
+0,0,9,21,18,18,13,0,10,0,14,1,15,17,15,0,0,0,14,17,30,17,30,16,0,0,14,16,12,17,14,0,0,0,17,17,17,19,29,16,0,0,15,20,18,17,14,0,0,0,6,9,17,17,30,16,0,0,15,17,17,17,15,1,
+0,0,7,4,4,20,8,0,0,2,26,2,0,0,0,0,2,0,6,2,2,2,2,2,0,20,8,20,0,0,0,0,0,4,14,20,21,14,4,0,8,8,28,8,28,8,15,0,14,0,22,25,17,17,17,0,10,0,14,17,17,17,14,0,
+0,0,22,25,17,17,30,16,0,0,13,19,17,17,15,1,0,14,17,31,17,17,14,0,0,0,0,11,21,26,0,0,0,0,14,17,17,10,27,0,10,0,17,17,17,19,13,0,31,16,8,4,8,16,31,0,0,0,31,10,10,10,19,0,
+31,0,17,10,4,10,17,0,0,0,17,17,17,17,15,1,0,1,30,4,31,4,4,0,0,0,31,8,15,9,17,0,0,0,31,21,31,17,17,0,0,0,4,0,31,0,4,0,0,0,0,0,0,0,0,0,31,31,31,31,31,31,31,31
+]);
 
-    // Separate storage for UDG data (chars 0-7)
-    // 8 chars * 8 bytes = 64 bytes
-    var UDG_DATA_XP = new Uint8Array(64);
-    var UDG_DATA_LZ = new Uint8Array(64);
 
-    // Active Data
-    var CURRENT_FONT_DATA = new Uint8Array(2048);
+var FONT_DATA_LZ=new Uint8Array([
+0,0,0,0,0,0,0,0,4,4,4,4,0,0,4,0,10,10,10,0,0,0,0,0,10,10,31,10,31,10,10,0,4,15,20,14,5,30,4,0,24,25,2,4,8,19,3,0,12,18,20,8,21,18,13,0,12,4,8,0,0,0,0,0,
+2,4,8,8,8,4,2,0,8,4,2,2,2,4,8,0,0,4,21,14,21,4,0,0,0,4,4,31,4,4,0,0,0,0,0,0,12,4,8,0,0,0,0,31,0,0,0,0,0,0,0,0,0,12,12,0,0,1,2,4,8,16,0,0,
+14,17,19,21,25,17,14,0,4,12,4,4,4,4,14,0,14,17,1,2,4,8,31,0,31,2,4,2,1,17,14,0,2,6,10,18,31,2,2,0,31,16,30,1,1,17,14,0,6,8,16,30,17,17,14,0,31,1,2,4,8,8,8,0,
+14,17,17,14,17,17,14,0,14,17,17,15,1,2,12,0,0,12,12,0,12,12,0,0,0,12,12,0,12,4,8,0,2,4,8,16,8,4,2,0,0,0,31,0,31,0,0,0,8,4,2,1,2,4,8,0,14,17,1,2,4,0,4,0,
+14,17,1,13,21,21,14,0,14,17,17,17,31,17,17,0,30,17,17,30,17,17,30,0,14,17,16,16,16,17,14,0,28,18,17,17,17,18,28,0,31,16,16,30,16,16,31,0,31,16,16,30,16,16,16,0,14,17,16,23,17,17,15,0,
+17,17,17,31,17,17,17,0,14,4,4,4,4,4,14,0,7,2,2,2,2,18,12,0,17,18,20,24,20,18,17,0,16,16,16,16,16,16,31,0,17,27,21,21,17,17,17,0,17,17,25,21,19,17,17,0,14,17,17,17,17,17,14,0,
+30,17,17,30,16,16,16,0,14,17,17,17,21,18,13,0,30,17,17,30,20,18,17,0,15,16,16,14,1,1,30,0,31,4,4,4,4,4,4,0,17,17,17,17,17,17,14,0,17,17,17,17,17,10,4,0,17,17,17,21,21,21,10,0,
+17,17,10,4,10,17,17,0,17,17,17,10,4,4,4,0,31,1,2,4,8,16,31,0,14,8,8,8,8,8,14,0,0,16,8,4,2,1,0,0,14,2,2,2,2,2,14,0,4,10,17,0,0,0,0,0,0,0,0,0,0,0,31,0,
+8,4,2,0,0,0,0,0,0,0,14,1,15,17,15,0,16,16,22,25,17,17,30,0,0,0,14,16,16,17,14,0,1,1,13,19,17,17,15,0,0,0,14,17,31,16,14,0,6,9,8,28,8,8,8,0,0,15,17,17,15,1,14,0,
+16,16,22,25,17,17,17,0,4,0,12,4,4,4,14,0,2,0,6,2,2,18,12,0,16,16,18,20,24,20,18,0,12,4,4,4,4,4,14,0,0,0,26,21,21,17,17,0,0,0,22,25,17,17,17,0,0,0,14,17,17,17,14,0,
+0,0,30,17,30,16,16,0,0,0,13,19,15,1,1,0,0,0,22,25,16,16,16,0,0,0,14,16,14,1,30,0,8,8,28,8,8,9,6,0,0,0,17,17,17,19,13,0,0,0,17,17,17,10,4,0,0,0,17,17,21,21,10,0,
+0,0,17,10,4,10,17,0,0,0,17,17,15,1,14,0,0,0,31,2,4,8,31,0,2,4,4,8,4,4,2,0,4,4,4,4,4,4,4,0,8,4,4,2,4,4,8,0,0,4,2,31,2,4,0,0,0,4,8,31,8,4,0,0,
+14,17,16,16,17,14,4,0,10,0,17,17,17,19,13,0,2,4,14,17,31,16,14,0,4,10,14,1,15,17,15,0,10,0,14,1,15,17,15,0,8,4,14,1,15,17,15,0,4,0,14,1,15,17,15,0,0,0,14,16,17,14,4,0,
+4,10,14,17,31,16,14,0,10,0,14,17,31,16,14,0,8,4,14,17,31,16,14,0,10,0,12,4,4,4,14,0,4,10,12,4,4,4,14,0,4,2,12,4,4,4,14,0,10,0,14,17,17,31,17,0,4,0,14,17,17,31,17,0,
+4,8,31,16,30,16,31,0,0,0,26,5,30,20,11,0,15,20,20,22,28,20,23,0,4,10,0,14,17,17,14,0,10,0,0,14,17,17,14,0,4,2,0,14,17,17,14,0,4,10,17,17,17,19,13,0,8,4,17,17,17,19,13,0,
+10,0,17,17,15,1,14,0,10,0,14,17,17,17,14,0,10,0,17,17,17,17,14,0,0,0,14,19,21,25,14,0,6,9,8,28,8,30,25,0,14,19,19,21,25,25,14,0,0,0,10,4,10,0,0,0,2,5,4,14,4,8,16,0,
+2,4,14,1,15,17,15,0,4,8,12,4,4,4,14,0,4,8,0,14,17,17,14,0,2,4,17,17,17,19,13,0,5,10,22,25,17,17,17,0,5,10,17,25,21,19,17,0,14,1,15,17,15,0,14,0,14,17,17,17,14,0,14,0,
+4,0,4,8,16,17,14,0,4,14,21,4,4,4,0,0,0,4,4,4,21,14,4,0,18,20,8,22,9,2,7,0,18,20,10,22,10,15,2,0,4,0,0,4,4,4,4,0,0,5,10,20,10,5,0,0,0,20,10,5,10,20,0,0,
+14,16,14,1,17,14,4,0,0,14,16,14,1,14,4,0,14,0,14,16,23,17,14,0,14,0,15,17,15,1,14,0,4,0,14,4,4,4,14,0,2,4,14,17,17,31,17,0,4,10,14,17,17,31,17,0,8,4,14,17,17,31,17,0,
+14,17,23,21,23,17,14,0,0,0,0,12,4,4,14,0,31,9,8,8,8,8,28,0,0,0,4,10,17,17,31,0,0,0,4,10,17,17,17,0,0,31,0,14,0,31,0,0,17,10,31,4,31,4,4,0,0,31,10,10,10,10,10,0,
+14,4,14,21,14,4,14,0,4,21,21,21,21,14,4,0,0,0,0,13,18,18,13,0,0,0,10,10,4,10,4,0,0,14,8,4,10,18,12,0,0,0,14,16,28,16,14,0,5,10,14,1,15,17,15,0,5,10,14,17,17,31,17,0,
+4,6,8,8,4,2,4,0,0,0,22,9,9,9,1,0,0,0,6,9,31,18,12,0,0,0,18,20,24,20,18,0,0,0,16,8,4,10,17,0,8,12,16,12,16,12,2,0,0,0,7,12,18,12,0,0,0,0,14,16,12,2,6,0,
+0,0,14,4,4,4,2,0,0,0,18,9,9,5,6,0,4,10,31,16,30,16,31,0,10,0,31,16,30,16,31,0,4,2,31,16,30,16,31,0,0,0,4,21,21,14,4,0,2,4,14,4,4,4,14,0,4,10,14,4,4,4,14,0,
+10,0,14,4,4,4,14,0,0,0,27,17,17,21,10,0,4,8,0,13,18,18,13,0,2,4,14,16,28,16,14,0,2,4,22,9,9,9,1,0,2,4,27,17,17,21,10,0,8,4,14,4,4,4,14,0,28,20,28,0,0,0,0,0,
+2,4,14,17,17,17,14,0,0,0,14,17,30,17,30,16,4,10,14,17,17,17,14,0,8,4,14,17,17,17,14,0,5,10,0,14,17,17,14,0,5,10,14,17,17,17,14,0,0,0,17,17,19,29,16,16,0,12,18,18,28,16,16,16,
+0,0,7,4,4,20,8,0,0,2,26,2,0,0,0,0,4,10,17,17,17,17,14,0,8,4,17,17,17,17,14,0,0,4,14,20,21,14,4,0,2,4,17,17,10,4,4,0,2,4,17,17,15,1,14,0,2,4,17,17,17,17,14,0,
+28,8,14,9,14,8,28,0,4,4,31,4,4,0,31,0,0,14,17,31,17,17,14,0,0,0,0,11,21,26,0,0,0,0,14,17,17,10,27,0,21,10,21,10,21,10,21,10,31,16,8,4,8,16,31,0,0,0,31,10,10,10,19,0,
+16,8,24,10,22,15,2,0,0,10,27,31,14,14,4,0,0,4,14,31,14,4,0,0,4,14,14,27,27,4,14,0,4,14,31,31,21,4,14,0,0,0,4,0,31,0,4,0,0,0,0,0,0,0,0,0,31,31,31,31,31,31,31,31
+]);
 
-    // Active Data
-    var CURRENT_FONT_DATA = new Uint8Array(2048);
 
-    // Function to load the selected font into CURRENT_FONT_DATA
-    function loadFont(sourceData, udgData) {
-        // Both source datasets seem to start at 0x20 in terms of content (first byte is 0, but offset 8 is '!')
-        // We copy starting at offset 256 effectively. E.g. sourceData[0] -> FONT_DATA[256].
 
-        // Clear current
-        for (var k = 0; k < 2048; k++) CURRENT_FONT_DATA[k] = 0;
+var UDG_DATA_XP=new Uint8Array(64);
+var UDG_DATA_LZ=new Uint8Array(64);
 
-        // Copy sourceData (starting at Char 32 / offset 256)
-        var offset = 32 * 8; // 256
-        for (var i = 0; i < sourceData.length; i++) {
-            if (offset + i < CURRENT_FONT_DATA.length) {
-                CURRENT_FONT_DATA[offset + i] = sourceData[i];
-            }
-        }
 
-        // Copy UDG data (chars 0-7, starting at offset 0)
-        if (udgData) {
-            for (var i = 0; i < udgData.length; i++) {
-                if (i < CURRENT_FONT_DATA.length) {
-                    CURRENT_FONT_DATA[i] = udgData[i];
-                }
-            }
-        }
-    }
+var CURRENT_FONT_DATA=new Uint8Array(2048);
 
-    // Default load XP
-    // Default load XP
-    loadFont(FONT_DATA_XP, UDG_DATA_XP);
 
-    // Check if running as child
-    if (window.location.search.indexOf('feature=charmap') !== -1) {
-        window.addEventListener('load', initChildEnvironment);
-    }
+var CURRENT_FONT_DATA=new Uint8Array(2048);
 
-    function openWindow() {
-        var width = 900;
-        var height = 800;
 
-        var left = (screen.width - width) / 2;
-        var top = (screen.height - height) / 2;
+function loadFont(sourceData,udgData){
 
-        var winParams = [
-            'width=' + width,
-            'height=' + height,
-            'left=' + left,
-            'top=' + top,
-            'menubar=no',
-            'toolbar=no',
-            'location=no',
-            'status=no',
-            'resizable=yes',
-            'scrollbars=yes'
-        ].join(',');
 
-        var childWin = win.open('index.html?feature=charmap', 'PsionCharacterMap', winParams);
-        childWin.focus();
-    }
 
-    function initChildEnvironment() {
-        doc.body.innerHTML = '';
-        doc.title = 'Psion Character Map';
 
-        var style = doc.createElement('style');
-        style.textContent = `
+for(var k=0;k<2048;k++)CURRENT_FONT_DATA[k]=0;
+
+
+var offset=32*8;
+for(var i=0;i<sourceData.length;i++){
+if(offset+i<CURRENT_FONT_DATA.length){
+CURRENT_FONT_DATA[offset+i]=sourceData[i];
+}
+}
+
+
+if(udgData){
+for(var i=0;i<udgData.length;i++){
+if(i<CURRENT_FONT_DATA.length){
+CURRENT_FONT_DATA[i]=udgData[i];
+}
+}
+}
+}
+
+
+
+loadFont(FONT_DATA_XP,UDG_DATA_XP);
+
+
+if(window.location.search.indexOf('feature=charmap')!==-1){
+window.addEventListener('load',initChildEnvironment);
+}
+
+function openWindow(){
+var width=900;
+var height=800;
+
+var left=(screen.width-width)/2;
+var top=(screen.height-height)/2;
+
+var winParams=[
+'width='+width,
+'height='+height,
+'left='+left,
+'top='+top,
+'menubar=no',
+'toolbar=no',
+'location=no',
+'status=no',
+'resizable=yes',
+'scrollbars=yes'
+].join(',');
+
+var childWin=win.open('index.html?feature=charmap','PsionCharacterMap',winParams);
+childWin.focus();
+}
+
+function initChildEnvironment(){
+doc.body.innerHTML='';
+doc.title='Psion Character Map';
+
+var style=doc.createElement('style');
+style.textContent=`
             :root {
                 --lcd-bg: #9ea792;
                 --lcd-pixel-on: rgba(26, 27, 24, 0.9);
@@ -236,389 +236,389 @@ var CharacterMap = (function () {
             .ui-btn:hover { background: var(--border-color); }
             .ui-btn:active { opacity: 0.8; }
         `;
-        doc.head.appendChild(style);
+doc.head.appendChild(style);
 
-        // Inject Theme from Opener directly to documentElement
-        if (window.opener && window.opener.document) {
-            var parentRoot = window.opener.document.documentElement;
-            // Copy inline styles (variables)
-            doc.documentElement.style.cssText = parentRoot.style.cssText;
-            // Copy theme attribute
-            if (parentRoot.hasAttribute('data-theme')) {
-                doc.documentElement.setAttribute('data-theme', parentRoot.getAttribute('data-theme'));
-            }
-        }
 
-        doc.head.appendChild(style);
+if(window.opener&&window.opener.document){
+var parentRoot=window.opener.document.documentElement;
 
-        var toolbar = doc.createElement('div');
-        toolbar.className = 'toolbar';
-        var infoPanel = doc.createElement('div');
-        infoPanel.className = 'info-panel';
+doc.documentElement.style.cssText=parentRoot.style.cssText;
 
-        // --- State ---
-        var currentFont = 'XP';
-        var displayMode = 'CHR$'; // 'CHR$' or 'ASC'
-        var lastSelectedCode = 0;
+if(parentRoot.hasAttribute('data-theme')){
+doc.documentElement.setAttribute('data-theme',parentRoot.getAttribute('data-theme'));
+}
+}
 
-        // --- Elements ---
+doc.head.appendChild(style);
 
-        // Mode Toggle
-        var modeBtn = doc.createElement('button');
-        modeBtn.className = 'ui-btn';
-        modeBtn.innerHTML = 'Mode:<br>CHR$';
-        modeBtn.onclick = function () {
-            if (displayMode === 'CHR$') displayMode = 'ASC';
-            else if (displayMode === 'ASC') displayMode = 'UDG';
-            else displayMode = 'CHR$';
+var toolbar=doc.createElement('div');
+toolbar.className='toolbar';
+var infoPanel=doc.createElement('div');
+infoPanel.className='info-panel';
 
-            modeBtn.innerHTML = 'Mode:<br>' + displayMode;
-            updateInfo(lastSelectedCode, selectedInfo, codeInput, displayMode, currentFont);
-            codeInput.readOnly = (displayMode !== 'UDG');
-        };
 
-        var selectedInfo = doc.createElement('div');
-        selectedInfo.className = 'selected-char-view';
-        selectedInfo.textContent = 'Select a character...';
+var currentFont='XP';
+var displayMode='CHR$';
+var lastSelectedCode=0;
 
-        var codeInput = doc.createElement('input');
-        codeInput.className = 'char-code-input';
-        codeInput.type = 'text';
-        codeInput.readOnly = true; // Default to readOnly (CHR$/ASC), toggled in modeBtn
 
-        codeInput.onchange = function () {
-            if (displayMode === 'UDG') {
-                parseAndApplyUDG(codeInput.value);
-            }
-        };
 
-        function parseAndApplyUDG(text) {
-            text = text.trim();
-            // Regex to match syntax with either $Hex or Decimal args
-            // Part for byte: ($[0-9A-F]+|\d+)
-            var bytePart = "\\s*,\\s*(\\$[0-9A-Fa-f]+|\\d+)";
-            var bytePart8 = "";
-            for (var k = 0; k < 8; k++) bytePart8 += bytePart;
 
-            // XP Format: UDG:(code, b1, b2...)
-            var matchXPRegex = new RegExp("^UDG:\\s*\\(\\s*(\\d+)" + bytePart8 + "\\s*\\)$", "i");
-            // LZ Format: UDG code, b1, b2...
-            var matchLZRegex = new RegExp("^UDG\\s+(\\d+)" + bytePart8 + "$", "i");
+var modeBtn=doc.createElement('button');
+modeBtn.className='ui-btn';
+modeBtn.innerHTML='Mode:<br>CHR$';
+modeBtn.onclick=function (){
+if(displayMode==='CHR$')displayMode='ASC';
+else if(displayMode==='ASC')displayMode='UDG';
+else displayMode='CHR$';
 
-            var matchXP = text.match(matchXPRegex);
-            var matchLZ = text.match(matchLZRegex);
+modeBtn.innerHTML='Mode:<br>'+displayMode;
+updateInfo(lastSelectedCode,selectedInfo,codeInput,displayMode,currentFont);
+codeInput.readOnly=(displayMode!=='UDG');
+};
 
-            var match = matchXP || matchLZ;
-            if (match) {
-                var code = parseInt(match[1], 10);
-                if (code >= 0 && code <= 7) {
-                    var bytes = [];
-                    for (var i = 0; i < 8; i++) {
-                        var valStr = match[2 + i];
-                        var val;
-                        if (valStr.indexOf('$') !== -1) {
-                            val = parseInt(valStr.replace('$', ''), 16);
-                        } else {
-                            val = parseInt(valStr, 10);
-                        }
-                        bytes.push(val);
-                    }
+var selectedInfo=doc.createElement('div');
+selectedInfo.className='selected-char-view';
+selectedInfo.textContent='Select a character...';
 
-                    // Update CURRENT_FONT_DATA
-                    var offset = code * 8;
-                    for (var i = 0; i < 8; i++) {
-                        CURRENT_FONT_DATA[offset + i] = bytes[i];
-                    }
+var codeInput=doc.createElement('input');
+codeInput.className='char-code-input';
+codeInput.type='text';
+codeInput.readOnly=true;
 
-                    // Update the source data as well so it persists if font is toggled back and forth?
-                    // The requirement implies "transfer To and From...". If we edit it here, it should probably strictly edit the CURRENT active font.
-                    // But if we toggle font, loadFont overwrites CURRENT. So if we want persistence we should update source too.
-                    // Assuming edits are meant to persist for the session.
-                    if (currentFont === 'XP') {
-                        for (var i = 0; i < 8; i++) UDG_DATA_XP[offset + i] = bytes[i];
-                    } else {
-                        for (var i = 0; i < 8; i++) UDG_DATA_LZ[offset + i] = bytes[i];
-                    }
+codeInput.onchange=function (){
+if(displayMode==='UDG'){
+parseAndApplyUDG(codeInput.value);
+}
+};
 
-                    // Repaint Grid
-                    mapContainer.innerHTML = '';
-                    renderSVGGrid(mapContainer, function (c) {
-                        lastSelectedCode = c;
-                        updateInfo(c, selectedInfo, codeInput, displayMode, currentFont);
-                    });
+function parseAndApplyUDG(text){
+text=text.trim();
 
-                    // Restore selection
-                    selectCharByCode(code); // Select the modified char? Or stay on current?
-                    // If user edited char 0 while selecting char 0, select char 0.
-                    // But if they edited char 0 while selecting char 1 (typed UDG 0...), maybe stay on char 1?
-                    // Let's re-select the currently selected code to ensure UI consistency.
-                    selectCharByCode(lastSelectedCode);
-                }
-            }
-        }
 
-        var copyBtn = doc.createElement('button');
-        copyBtn.className = 'ui-btn';
-        copyBtn.textContent = 'Copy';
-        copyBtn.onclick = function () {
-            codeInput.select();
-            doc.execCommand('copy');
-        };
+var bytePart="\\s*,\\s*(\\$[0-9A-Fa-f]+|\\d+)";
+var bytePart8="";
+for(var k=0;k<8;k++)bytePart8+=bytePart;
 
-        // Font Toggle (Float right via margin-left: auto)
-        var fontBtn = doc.createElement('button');
-        fontBtn.className = 'ui-btn';
-        fontBtn.style.marginLeft = 'auto';
-        fontBtn.innerHTML = 'Font:<br>XP';
-        fontBtn.onclick = function () {
-            if (currentFont === 'XP') {
-                currentFont = 'LZ';
-                loadFont(FONT_DATA_LZ, UDG_DATA_LZ);
-            } else {
-                currentFont = 'XP';
-                loadFont(FONT_DATA_XP, UDG_DATA_XP);
-            }
-            fontBtn.innerHTML = 'Font:<br>' + currentFont;
-            // Clear and Re-render
-            mapContainer.innerHTML = '';
-            renderSVGGrid(mapContainer, function (code) {
-                lastSelectedCode = code;
-                updateInfo(code, selectedInfo, codeInput, displayMode, currentFont);
-            });
-        };
 
-        // Append elements
-        infoPanel.appendChild(modeBtn);
-        infoPanel.appendChild(selectedInfo);
-        infoPanel.appendChild(codeInput);
-        infoPanel.appendChild(copyBtn);
-        infoPanel.appendChild(fontBtn);
+var matchXPRegex=new RegExp("^UDG:\\s*\\(\\s*(\\d+)"+bytePart8+"\\s*\\)$","i");
 
-        toolbar.appendChild(infoPanel);
-        doc.body.appendChild(toolbar);
+var matchLZRegex=new RegExp("^UDG\\s+(\\d+)"+bytePart8+"$","i");
 
-        var mapContainer = doc.createElement('div');
-        mapContainer.className = 'map-container';
-        doc.body.appendChild(mapContainer);
+var matchXP=text.match(matchXPRegex);
+var matchLZ=text.match(matchLZRegex);
 
-        // Initial render
-        renderSVGGrid(mapContainer, function (code) {
-            lastSelectedCode = code;
-            updateInfo(code, selectedInfo, codeInput, displayMode, currentFont);
-        });
+var match=matchXP||matchLZ;
+if(match){
+var code=parseInt(match[1],10);
+if(code>=0&&code<=7){
+var bytes=[];
+for(var i=0;i<8;i++){
+var valStr=match[2+i];
+var val;
+if(valStr.indexOf('$')!==-1){
+val=parseInt(valStr.replace('$',''),16);
+}else {
+val=parseInt(valStr,10);
+}
+bytes.push(val);
+}
 
-        // Ensure focusable for keyboard events
-        mapContainer.tabIndex = 0;
-        mapContainer.focus();
 
-        // --- Keyboard Navigation ---
-        doc.addEventListener('keydown', function (e) {
-            // Only handle if map has focus or body has focus 
-            // (checking activeElement is safe for this simple popup)
-            var active = doc.activeElement;
-            if (active && (active.tagName === 'INPUT')) return; // Let input handle its own keys if focused
+var offset=code*8;
+for(var i=0;i<8;i++){
+CURRENT_FONT_DATA[offset+i]=bytes[i];
+}
 
-            // Map visual columns to logical high nibbles
-            var colIndices = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
-            // Current position
-            var currentByte = lastSelectedCode;
-            var currentRow = currentByte & 0x0F;
-            var currentHighNibble = (currentByte >> 4) & 0x0F;
 
-            // Find current visual column index
-            var currentCol = colIndices.indexOf(currentHighNibble);
-            if (currentCol === -1) currentCol = 0; // Fallback
 
-            var newRow = currentRow;
-            var newCol = currentCol;
 
-            if (e.key === 'ArrowUp') {
-                if (newRow > 0) newRow--;
-                e.preventDefault();
-            } else if (e.key === 'ArrowDown') {
-                if (newRow < 15) newRow++;
-                e.preventDefault();
-            } else if (e.key === 'ArrowLeft') {
-                if (newCol > 0) newCol--;
-                e.preventDefault();
-            } else if (e.key === 'ArrowRight') {
-                if (newCol < colIndices.length - 1) newCol++;
-                e.preventDefault();
-            } else {
-                return; // Not a nav key
-            }
+if(currentFont==='XP'){
+for(var i=0;i<8;i++)UDG_DATA_XP[offset+i]=bytes[i];
+}else {
+for(var i=0;i<8;i++)UDG_DATA_LZ[offset+i]=bytes[i];
+}
 
-            // Calculate new code
-            var newHighNibble = colIndices[newCol];
-            var newCode = (newHighNibble << 4) | newRow;
 
-            // Select it visually
-            selectCharByCode(newCode);
-        });
+mapContainer.innerHTML='';
+renderSVGGrid(mapContainer,function (c){
+lastSelectedCode=c;
+updateInfo(c,selectedInfo,codeInput,displayMode,currentFont);
+});
 
-        function selectCharByCode(code) {
-            // Find the rect
-            var rect = mapContainer.querySelector(`.char-cell[data-code="${code}"]`);
-            if (rect) {
-                // Trigger click to reuse selection logic
-                // Using dispatchEvent to ensure full emulation or just calling logic?
-                // Calling logic manually is cleaner than faking events usually, but onclick is bound.
-                // Let's fake the click to trigger the existing listener which handles rendering class + callback.
-                var clickEvent = new MouseEvent('click', {
-                    view: window,
-                    bubbles: true,
-                    cancelable: true
-                });
-                rect.dispatchEvent(clickEvent);
 
-                // Ensure visible
-                rect.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-            }
-        }
-    }
+selectCharByCode(code);
 
-    function renderSVGGrid(container, onSelect) {
-        var cellSize = 48; // Increased for larger chars
 
-        // Custom Columns as requested (Fx included)
-        var colHeaders = ['0x', '2x', '3x', '4x', '5x', '6x', '7x', '8x', '9x', 'Ax', 'Bx', 'Cx', 'Dx', 'Ex', 'Fx'];
-        var colIndices = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]; // Hex values for high nibble
 
-        var gridCols = colHeaders.length;
-        var gridRows = 16;
-        var labelOffset = 24;
+selectCharByCode(lastSelectedCode);
+}
+}
+}
 
-        var svgWidth = gridCols * cellSize + labelOffset;
-        var svgHeight = gridRows * cellSize + labelOffset;
+var copyBtn=doc.createElement('button');
+copyBtn.className='ui-btn';
+copyBtn.textContent='Copy';
+copyBtn.onclick=function (){
+codeInput.select();
+doc.execCommand('copy');
+};
 
-        var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-        svg.setAttribute('id', 'char-grid-svg');
-        svg.setAttribute('width', svgWidth);
-        svg.setAttribute('height', svgHeight);
-        svg.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
 
-        // Column Labels
-        for (var i = 0; i < gridCols; i++) {
-            var tText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-            tText.setAttribute('x', labelOffset + i * cellSize + cellSize / 2);
-            tText.setAttribute('y', 16);
-            tText.setAttribute('class', 'grid-label');
-            tText.textContent = colHeaders[i];
-            svg.appendChild(tText);
-        }
+var fontBtn=doc.createElement('button');
+fontBtn.className='ui-btn';
+fontBtn.style.marginLeft='auto';
+fontBtn.innerHTML='Font:<br>XP';
+fontBtn.onclick=function (){
+if(currentFont==='XP'){
+currentFont='LZ';
+loadFont(FONT_DATA_LZ,UDG_DATA_LZ);
+}else {
+currentFont='XP';
+loadFont(FONT_DATA_XP,UDG_DATA_XP);
+}
+fontBtn.innerHTML='Font:<br>'+currentFont;
 
-        // Row Labels (x0 - xF)
-        for (var i = 0; i < 16; i++) {
-            var hex = i.toString(16).toUpperCase();
-            var lText = document.createElementNS("http://www.w3.org/2000/svg", "text");
-            lText.setAttribute('x', 10);
-            lText.setAttribute('y', labelOffset + i * cellSize + cellSize / 2 + 4);
-            lText.setAttribute('class', 'grid-label');
-            lText.textContent = 'x' + hex;
-            svg.appendChild(lText);
-        }
+mapContainer.innerHTML='';
+renderSVGGrid(mapContainer,function (code){
+lastSelectedCode=code;
+updateInfo(code,selectedInfo,codeInput,displayMode,currentFont);
+});
+};
 
-        var selectedRect = null;
 
-        for (var r = 0; r < 16; r++) { // 0x_0 to 0x_F
-            for (var c = 0; c < gridCols; c++) {
-                var hiNibble = colIndices[c];
-                var charCode = (hiNibble << 4) | r;
+infoPanel.appendChild(modeBtn);
+infoPanel.appendChild(selectedInfo);
+infoPanel.appendChild(codeInput);
+infoPanel.appendChild(copyBtn);
+infoPanel.appendChild(fontBtn);
 
-                var x = labelOffset + c * cellSize;
-                var y = labelOffset + r * cellSize;
+toolbar.appendChild(infoPanel);
+doc.body.appendChild(toolbar);
 
-                var group = document.createElementNS("http://www.w3.org/2000/svg", "g");
-                group.setAttribute('transform', `translate(${x},${y})`);
+var mapContainer=doc.createElement('div');
+mapContainer.className='map-container';
+doc.body.appendChild(mapContainer);
 
-                // Draw Pixels
-                // Center 5x8 in 48x48
-                var pSize = 5; // Stride
-                var pGap = 1;  // Gap
-                var pRect = pSize - pGap; // 4px
 
-                var pOffX = (cellSize - (5 * pSize)) / 2;
-                var pOffY = (cellSize - (8 * pSize)) / 2;
+renderSVGGrid(mapContainer,function (code){
+lastSelectedCode=code;
+updateInfo(code,selectedInfo,codeInput,displayMode,currentFont);
+});
 
-                var charBytes = CURRENT_FONT_DATA.subarray(charCode * 8, (charCode * 8) + 8);
 
-                for (var row = 0; row < 8; row++) {
-                    var byte = charBytes[row];
-                    for (var col = 0; col < 5; col++) {
-                        var isSet = (byte >> (4 - col)) & 1;
-                        if (isSet) {
-                            var pixel = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                            pixel.setAttribute('x', pOffX + col * pSize);
-                            pixel.setAttribute('y', pOffY + row * pSize);
-                            pixel.setAttribute('width', pRect);
-                            pixel.setAttribute('height', pRect);
-                            pixel.setAttribute('class', 'pixel');
-                            group.appendChild(pixel);
-                        }
-                    }
-                }
+mapContainer.tabIndex=0;
+mapContainer.focus();
 
-                var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                rect.setAttribute('x', 0);
-                rect.setAttribute('y', 0);
-                rect.setAttribute('width', cellSize);
-                rect.setAttribute('height', cellSize);
-                rect.setAttribute('class', 'char-cell');
-                rect.dataset.code = charCode;
 
-                rect.onclick = function (e) {
-                    if (selectedRect) selectedRect.classList.remove('selected');
-                    e.target.classList.add('selected');
-                    selectedRect = e.target;
-                    var code = parseInt(e.target.dataset.code);
-                    if (onSelect) onSelect(code);
-                };
+doc.addEventListener('keydown',function (e){
 
-                group.appendChild(rect);
-                svg.appendChild(group);
-            }
-        }
 
-        container.appendChild(svg);
-    }
+var active=doc.activeElement;
+if(active&&(active.tagName==='INPUT'))return;
 
-    function updateInfo(code, display, input, mode, fontMode) {
-        var hex = code.toString(16).toUpperCase().padStart(2, '0');
-        var char = (code >= 32 && code <= 126) ? String.fromCharCode(code) : '.';
 
-        display.innerHTML = `<span style="font-size: 1.5em; font-weight: bold; display: block;">${char}</span><span style="font-size: 0.9em; color: #555; font-weight: normal;">0x${hex} / ${code}</span>`;
+var colIndices=[0,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
 
-        if (mode === 'ASC') {
-            if (code >= 32 && code <= 126) {
-                var c = String.fromCharCode(code);
-                if (c === '"') input.value = 'ASC(CHR$(34))';
-                else input.value = `ASC("${c}")`;
-            } else {
-                input.value = `ASC(CHR$(${code}))`;
-            }
-        } else if (mode === 'UDG') {
-            // Fetch bytes
-            var offset = code * 8;
-            var bytes = [];
-            for (var i = 0; i < 8; i++) {
-                bytes.push('$' + CURRENT_FONT_DATA[offset + i].toString(16).toUpperCase().padStart(2, '0'));
-            }
-            var bytesStr = bytes.join(',');
 
-            if (fontMode === 'XP') {
-                input.value = `UDG:(${code},${bytesStr})`;
-            } else {
-                // LZ Mode
-                input.value = `UDG ${code},${bytesStr}`;
-            }
-        } else {
-            // CHR$ mode: Always show CHR$(code) as requested
-            input.value = `CHR$(${code})`;
-        }
-    }
+var currentByte=lastSelectedCode;
+var currentRow=currentByte&0x0F;
+var currentHighNibble=(currentByte>>4)&0x0F;
 
-    return {
-        openWindow: openWindow
-    };
+
+var currentCol=colIndices.indexOf(currentHighNibble);
+if(currentCol===-1)currentCol=0;
+
+var newRow=currentRow;
+var newCol=currentCol;
+
+if(e.key==='ArrowUp'){
+if(newRow>0)newRow--;
+e.preventDefault();
+}else if(e.key==='ArrowDown'){
+if(newRow<15)newRow++;
+e.preventDefault();
+}else if(e.key==='ArrowLeft'){
+if(newCol>0)newCol--;
+e.preventDefault();
+}else if(e.key==='ArrowRight'){
+if(newCol<colIndices.length-1)newCol++;
+e.preventDefault();
+}else {
+return;
+}
+
+
+var newHighNibble=colIndices[newCol];
+var newCode=(newHighNibble<<4)|newRow;
+
+
+selectCharByCode(newCode);
+});
+
+function selectCharByCode(code){
+
+var rect=mapContainer.querySelector(`.char-cell[data-code="${code}"]`);
+if(rect){
+
+
+
+
+var clickEvent=new MouseEvent('click',{
+view:window,
+bubbles:true,
+cancelable:true
+});
+rect.dispatchEvent(clickEvent);
+
+
+rect.scrollIntoView({block:'nearest',inline:'nearest'});
+}
+}
+}
+
+function renderSVGGrid(container,onSelect){
+var cellSize=48;
+
+
+var colHeaders=['0x','2x','3x','4x','5x','6x','7x','8x','9x','Ax','Bx','Cx','Dx','Ex','Fx'];
+var colIndices=[0,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+
+var gridCols=colHeaders.length;
+var gridRows=16;
+var labelOffset=24;
+
+var svgWidth=gridCols*cellSize+labelOffset;
+var svgHeight=gridRows*cellSize+labelOffset;
+
+var svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+svg.setAttribute('id','char-grid-svg');
+svg.setAttribute('width',svgWidth);
+svg.setAttribute('height',svgHeight);
+svg.setAttribute('viewBox',`0 0 ${svgWidth} ${svgHeight}`);
+
+
+for(var i=0;i<gridCols;i++){
+var tText=document.createElementNS("http://www.w3.org/2000/svg","text");
+tText.setAttribute('x',labelOffset+i*cellSize+cellSize/2);
+tText.setAttribute('y',16);
+tText.setAttribute('class','grid-label');
+tText.textContent=colHeaders[i];
+svg.appendChild(tText);
+}
+
+
+for(var i=0;i<16;i++){
+var hex=i.toString(16).toUpperCase();
+var lText=document.createElementNS("http://www.w3.org/2000/svg","text");
+lText.setAttribute('x',10);
+lText.setAttribute('y',labelOffset+i*cellSize+cellSize/2+4);
+lText.setAttribute('class','grid-label');
+lText.textContent='x'+hex;
+svg.appendChild(lText);
+}
+
+var selectedRect=null;
+
+for(var r=0;r<16;r++){
+for(var c=0;c<gridCols;c++){
+var hiNibble=colIndices[c];
+var charCode=(hiNibble<<4)|r;
+
+var x=labelOffset+c*cellSize;
+var y=labelOffset+r*cellSize;
+
+var group=document.createElementNS("http://www.w3.org/2000/svg","g");
+group.setAttribute('transform',`translate(${x},${y})`);
+
+
+
+var pSize=5;
+var pGap=1;
+var pRect=pSize-pGap;
+
+var pOffX=(cellSize-(5*pSize))/2;
+var pOffY=(cellSize-(8*pSize))/2;
+
+var charBytes=CURRENT_FONT_DATA.subarray(charCode*8,(charCode*8)+8);
+
+for(var row=0;row<8;row++){
+var byte=charBytes[row];
+for(var col=0;col<5;col++){
+var isSet=(byte>>(4-col))&1;
+if(isSet){
+var pixel=document.createElementNS("http://www.w3.org/2000/svg","rect");
+pixel.setAttribute('x',pOffX+col*pSize);
+pixel.setAttribute('y',pOffY+row*pSize);
+pixel.setAttribute('width',pRect);
+pixel.setAttribute('height',pRect);
+pixel.setAttribute('class','pixel');
+group.appendChild(pixel);
+}
+}
+}
+
+var rect=document.createElementNS("http://www.w3.org/2000/svg","rect");
+rect.setAttribute('x',0);
+rect.setAttribute('y',0);
+rect.setAttribute('width',cellSize);
+rect.setAttribute('height',cellSize);
+rect.setAttribute('class','char-cell');
+rect.dataset.code=charCode;
+
+rect.onclick=function (e){
+if(selectedRect)selectedRect.classList.remove('selected');
+e.target.classList.add('selected');
+selectedRect=e.target;
+var code=parseInt(e.target.dataset.code);
+if(onSelect)onSelect(code);
+};
+
+group.appendChild(rect);
+svg.appendChild(group);
+}
+}
+
+container.appendChild(svg);
+}
+
+function updateInfo(code,display,input,mode,fontMode){
+var hex=code.toString(16).toUpperCase().padStart(2,'0');
+var char=(code>=32&&code<=126)?String.fromCharCode(code):'.';
+
+display.innerHTML=`<span style="font-size: 1.5em; font-weight: bold; display: block;">${char}</span><span style="font-size: 0.9em; color: #555; font-weight: normal;">0x${hex} / ${code}</span>`;
+
+if(mode==='ASC'){
+if(code>=32&&code<=126){
+var c=String.fromCharCode(code);
+if(c==='"')input.value='ASC(CHR$(34))';
+else input.value=`ASC("${c}")`;
+}else {
+input.value=`ASC(CHR$(${code}))`;
+}
+}else if(mode==='UDG'){
+
+var offset=code*8;
+var bytes=[];
+for(var i=0;i<8;i++){
+bytes.push('$'+CURRENT_FONT_DATA[offset+i].toString(16).toUpperCase().padStart(2,'0'));
+}
+var bytesStr=bytes.join(',');
+
+if(fontMode==='XP'){
+input.value=`UDG:(${code},${bytesStr})`;
+}else {
+
+input.value=`UDG ${code},${bytesStr}`;
+}
+}else {
+
+input.value=`CHR$(${code})`;
+}
+}
+
+return {
+openWindow:openWindow
+};
 })();
