@@ -4,6 +4,12 @@ A modern, web-based editor for Psion Organiser II Data Packs (OPK files). This t
 
 This repository is intended to be accessed at https://nofitnessforpurpose.github.io/WebTools/OPKEditor3/
 
+
+[![Organiser](https://img.shields.io/badge/gadget-Organiser_II-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Psion_Organiser)
+[![Static Badge](https://img.shields.io/badge/license-CC_BY_NC_SA_4.0-brightgreen/nofitnessforpurpose/WebTools/OPKEDITOR3?style=flat-square)](https://github.com/vitorsr/cc/blob/master/CC-BY-NC-4.0.md)
+[![Maintenance](https://img.shields.io/badge/maintained%3F-yes-green.svg?style=flat-square)](https://github.com/nofitnessforpurpose/WebTools/OPKEDITOR3/graphs/commit-activity)
+[![Static Badge](https://img.shields.io/badge/format-CODE-blue?style=flat-square)](https://en.wikipedia.org/)
+
 ## Features
 
 *   **Modern UI**: A completely redesigned interface with a dark/light theme system.
@@ -47,6 +53,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 *   Icons by **Font Awesome**
 *   Implemented by **Antigravity**
 *   Re-imagined by NFfP
+
 
 
 
