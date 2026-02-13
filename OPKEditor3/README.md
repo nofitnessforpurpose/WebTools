@@ -14,11 +14,13 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 *   **Pack Map**: Visual pack layout tool
 *   **Visualiser**: Procedure & Global Visualisation
 *   **Theme Support**: Switch between themes via the Options menu, also with custom themes support.
+*   **Drag and drop**: Supports dropping of pack files directly into the Pack Contents view.
 *   **Pack Management**: Create new packs, open existing ones (.opk, .hex, .bin), and save changes.
 *   **Item Management**: Add, delete, and import items (procedures, data files, notepad entries).
+*   **Multiple Pack Support**: View multiple packs simultaneously
 *   **Intel HEX Export**: Export packs to Intel HEX format for burning to EPROMs.
 *   **Chrome, Firefox & IE**: Supports multiple browsers.
-
+    
 ## Usage
 
 1.  **Open a Pack**: Click "Open" to load an existing .opk or .hex file.
@@ -31,7 +33,6 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 5.  **Import Items**: Click "Import Item" to load .opl, .odb, or binary files.
 6.  **Save**: Click "Save" to download the modified .opk file.
 7.  **Options**: Click "Options" to configure the editor (Theme, Line Numbers, Code Folding).
-8.  **Drag and drop**: Supports dropping of pack files directly into the Pack Contents view.
 
 ## Technical Details
 
@@ -46,6 +47,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 *   Icons by **Font Awesome**
 *   Implemented by **Antigravity**
 *   Re-imagined by NFfP
+
 
 
 
