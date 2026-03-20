@@ -2,19 +2,12 @@
 
 A web-based tool for downloading data packs from the Psion Organiser II via the Comms Link interface. This tool implements the Psion Link Protocol to perform boot injection and data pack transfer operations directly in your browser using the Web Serial API.
 
-This repository is intended to be accessed at <a href ="https://nofitnessforpurpose.github.io/WebTools/LinkTool/">https://nofitnessforpurpose.github.io/WebTools/LinkTool</a>
-
-[![Organiser](https://img.shields.io/badge/gadget-Organiser_II-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Psion_Organiser)
-[![Static Badge](https://img.shields.io/badge/license-CC_BY_NC_SA_4.0-brightgreen/nofitnessforpurpose/WebTools/LinkTool?style=flat-square)](https://github.com/vitorsr/cc/blob/master/CC-BY-NC-4.0.md)
-[![Maintenance](https://img.shields.io/badge/maintained%3F-yes-green.svg?style=flat-square)](https://github.com/nofitnessforpurpose/WebTools/LinkTool/graphs/commit-activity)
-[![Static Badge](https://img.shields.io/badge/format-CODE-blue?style=flat-square)](https://en.wikipedia.org/)
-
-
 ## Features
 
 *   **Web Serial API**: Direct serial communication with Psion Organiser II hardware via browser
 *   **Boot Injection**: Automated bootstrap code download to device RAM
-*   **Data Pack Transfer**: Download data packs from Packs B and C (Make to follow)
+*   **Pack Reading**: Download data packs from Packs B and C (Read Mode)
+*   **Pack Writing**: Flash .OPK files to Datapacks (Write Mode) - *New!*
 *   **Protocol Implementation**: Full implementation of the Psion Link Protocol with:
     *   CRC checksums for data integrity
     *   Phase-based state machine (HEADER/BODY phases)
@@ -41,7 +34,6 @@ This repository is intended to be accessed at <a href ="https://nofitnessforpurp
 *   **CRC Algorithm**: Check sum verification to ensure data integrity
 *   **Output Format**: OPK files with magic header, length field, and terminator
 
-
 ## Browser Support
 
 This tool requires a browser with Web Serial API support:
@@ -60,7 +52,7 @@ This tool requires a browser with Web Serial API support:
 
 ## License
 
-Creative Commons - See License
+MIT
 
 Check Attribution [source www](https://www.jaapsch.net/psion/) for elements covered under a Non Commercial basis use.
 
@@ -71,6 +63,3 @@ See [Organiser 2](https://www.organiser2.com/) forum.
 ## Please note:
 
 All information is For Indication only. No association, affiliation, recommendation, suitability, fitness for purpose should be assumed or is implied. Registered trademarks are owned by their respective registrants.
-
-
-
