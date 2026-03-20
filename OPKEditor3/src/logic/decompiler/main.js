@@ -439,18 +439,31 @@ log(sOff,getHexBytes(sOff,3),`StrFixup Addr:${toEvenHex(addr, 2).replace('0x', '
 
 if(offset<codeBlock.length){
 
-if(offset+2<=qcodeInstructionStart){
-const arrFixSize=readWordBE();
-log(offset-2,getHexBytes(offset-2,2),"ArrFixTblSize",arrFixSize.toString(),"Array fixup table length");
+const gap=qcodeInstructionStart-offset;
 
-const arrFixEnd=offset+arrFixSize;
-while(offset<arrFixEnd&&offset<codeBlock.length){
+
+if(gap>=2){
+
+const arrFixSize=(codeBlock[offset]<<8)|(codeBlock[offset+1]);
+
+
+if(arrFixSize+2<=gap){
+const actualSize=readWordBE();
+log(offset-2,getHexBytes(offset-2,2),"ArrFixTblSize",actualSize.toString(),"Array fixup table length");
+
+const arrFixEnd=offset+actualSize;
+while(offset<arrFixEnd&&offset+3<codeBlock.length){
 const aOff=offset;
 const addr=readWordBE();
 const len=readWordBE();
 arrayFixups[addr]=len;
 log(aOff,getHexBytes(aOff,4),`ArrFixup Addr:${toEvenHex(addr, 2).replace('0x', '')}`,`Len:${len}`);
 }
+}
+
+offset=qcodeInstructionStart;
+}else {
+offset=qcodeInstructionStart;
 }
 }
 
@@ -1361,6 +1374,19 @@ const gotoTarget=(prev.pc+1)+prev.args.D;
 
 
 if(gotoTarget<=inst.pc&&gotoTarget>(inst.pc-20)){
+
+
+if(flow.starts[gotoTarget]){
+flow.starts[gotoTarget]=flow.starts[gotoTarget].filter(s=>s.type!=='DO'||s.cond!==prev.pc);
+if(flow.starts[gotoTarget].length===0)delete flow.starts[gotoTarget];
+}
+if(flow.targets[prev.pc]){
+flow.targets[prev.pc]=flow.targets[prev.pc].filter(t=>t.type!=='UNTIL'||t.start!==gotoTarget);
+if(flow.targets[prev.pc].length===0)delete flow.targets[prev.pc];
+}
+if(flow.jumps[prev.pc]&&flow.jumps[prev.pc].type==='INF_LOOP'){
+delete flow.jumps[prev.pc];
+}
 
 addStart(gotoTarget,{type:'WHILE',end:target});
 addTarget(prev.pc,{type:'ENDWH',start:gotoTarget});

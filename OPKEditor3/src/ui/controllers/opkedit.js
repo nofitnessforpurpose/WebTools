@@ -416,6 +416,104 @@ closeAllMenus();
 });
 }
 
+var menuPackHeaderHelp=document.getElementById('menu-pack-header-help');
+if(menuPackHeaderHelp){
+menuPackHeaderHelp.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof PackHeaderHelp!=='undefined'){
+PackHeaderHelp.openWindow();
+}else {
+alert("Pack Header Help component not loaded.");
+}
+});
+}
+
+
+
+var menuHelpStartHere=document.getElementById('menu-help-start-here');
+if(menuHelpStartHere){
+menuHelpStartHere.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpStartHere!=='undefined')HelpStartHere.openWindow();
+});
+}
+
+var menuHelpPhysicalConnection=document.getElementById('menu-help-physical-connection');
+if(menuHelpPhysicalConnection){
+menuHelpPhysicalConnection.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpPhysicalConnection!=='undefined')HelpPhysicalConnection.openWindow();
+});
+}
+
+var menuHelpOverview=document.getElementById('menu-help-overview');
+if(menuHelpOverview){
+menuHelpOverview.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpOverview!=='undefined')HelpOverview.openWindow();
+});
+}
+
+var menuHelpPackContents=document.getElementById('menu-help-pack-contents');
+if(menuHelpPackContents){
+menuHelpPackContents.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpPackContents!=='undefined')HelpPackContents.openWindow();
+});
+}
+
+var menuHelpMemoryMap=document.getElementById('menu-help-memory-map');
+if(menuHelpMemoryMap){
+menuHelpMemoryMap.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpMemoryMap!=='undefined')HelpMemoryMap.openWindow();
+});
+}
+
+var menuHelpPackSummary=document.getElementById('menu-help-pack-summary');
+if(menuHelpPackSummary){
+menuHelpPackSummary.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpPackSummary!=='undefined')HelpPackSummary.openWindow();
+});
+}
+
+var menuHelpOPLEditor=document.getElementById('menu-help-opl-editor');
+if(menuHelpOPLEditor){
+menuHelpOPLEditor.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpOPLEditor!=='undefined')HelpOPLEditor.openWindow();
+});
+}
+
+var menuHelpVisualizer=document.getElementById('menu-help-visualizer');
+if(menuHelpVisualizer){
+menuHelpVisualizer.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpVisualizer!=='undefined')HelpVisualizer.openWindow();
+});
+}
+
+var menuHelpOptions=document.getElementById('menu-help-options');
+if(menuHelpOptions){
+menuHelpOptions.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpOptions!=='undefined')HelpOptions.openWindow();
+});
+}
+
+
+
 var menuOplErrors=document.getElementById('menu-opl-errors');
 if(menuOplErrors){
 menuOplErrors.addEventListener('click',function (e){

@@ -34,7 +34,7 @@ fileIdMap:{}
 pack.items.forEach(function (item){
 if(!item.deleted&&item.type===1){
 var fileId=item.data[10]&0x7f;
-packData.fileIdMap[fileId]=item.name.toUpperCase();
+packData.fileIdMap[fileId]="DATA_"+item.name.toUpperCase();
 }
 });
 
@@ -42,7 +42,7 @@ packData.fileIdMap[fileId]=item.name.toUpperCase();
 pack.items.forEach(function (item){
 if(item.deleted)return;
 if(item.type===1){
-var nodeName=item.name.toUpperCase();
+var nodeName="DATA_"+item.name.toUpperCase();
 system.nodes[nodeName]={
 type:'DATA_FILE',
 packIndex:pIdx,
@@ -52,7 +52,7 @@ id:item.data[10]&0x7f,
 records:[],
 degree:0
 };
-packData.dataFiles.push(item.name);
+packData.dataFiles.push(nodeName);
 }
 });
 
@@ -62,7 +62,7 @@ if(item.deleted)return;
 
 if(packData.fileIdMap[item.type]){
 var parentName=packData.fileIdMap[item.type];
-var uniqueId=item.name.toUpperCase()+"_REC_"+idx;
+var uniqueId=parentName+"_REC_"+idx;
 
 if(!system.nodes[uniqueId]){
 system.nodes[uniqueId]={
@@ -925,31 +925,23 @@ packName:pack.name,
 type:'data',
 collapsed:dataCollapsed
 });
-
 if(!dataCollapsed){
 var currentDataRowY=dataY+50;
 var dataCols=Math.floor((innerW-20)/(dataFileWidth+80));
 if(dataCols<1)dataCols=1;
-
 var rowH=0;
 var rowNodes=[];
-
 dataFiles.forEach((dfName,i)=>{
 var col=i%dataCols;
 if(col===0&&i>0){
-
 currentDataRowY+=rowH+20;
 rowH=0;
 }
-
 var fileNode=data.nodes[dfName.toUpperCase()];
 var h=fileNode._calcHeight;
 if(h>rowH)rowH=h;
-
 var x=innerX+30+col*(dataFileWidth+80);
 var y=currentDataRowY;
-
-
 layout.nodes[dfName.toUpperCase()]={
 x:x,y:y,w:dataFileWidth,h:h,
 type:'DATA_FILE',
@@ -959,10 +951,8 @@ packName:pack.name,
 collapsed:collapsedState[dfName.toUpperCase()],
 rank:col
 };
-
-
 if(!collapsedState[dfName.toUpperCase()]){
-var records=fileNode.records;
+var records=fileNode.records||[];
 records.forEach((recName,rIdx)=>{
 layout.nodes[recName]={
 x:x+20,
@@ -983,41 +973,17 @@ rank:col
 }else {
 dataH=0;
 }
-
 var packW=innerW+cardPadding*2;
 var packH=(dataY+(dataFiles.length>0?dataH:0))-currentY+cardPadding;
-
-
 if(packH<100)packH=100;
-
-
 var packCollapsed=containerState&&containerState[pack.name]&&containerState[pack.name].pack;
 if(packCollapsed){
 packH=30+cardPadding;
-
-
-
-
-
-
-
 if(packCollapsed){
-
 layout.innerCards.pop();
 layout.pools.pop();
-
-
-
-
-
-
 }
 }
-
-
-
-
-
 layout.packs.push({
 x:packMargin,
 y:currentY,
@@ -1028,11 +994,8 @@ packName:pack.name,
 type:'pack',
 collapsed:packCollapsed
 });
-
 currentY+=packH+packMargin;
 });
-
-
 return layout;
 }
 
@@ -2362,12 +2325,7 @@ var d=drawOrthogonalPath(points,10);
 
 var strokeColor="var(--link-color)";
 
-if(link.type==='CALL'){
-
-if(src.label.endsWith('%'))strokeColor="#4CAF50";
-else if(src.label.endsWith('$'))strokeColor="#E040FB";
-else strokeColor="#FF9800";
-}else if(link.dataType){
+if(link.dataType){
 if(link.dataType==='Integer')strokeColor="#4CAF50";
 else if(link.dataType==='String')strokeColor="#E040FB";
 else strokeColor="#FF9800";
@@ -2447,20 +2405,12 @@ fo.setAttribute("height",n.h);
 var div=doc.createElement("div");
 var isEmpty=(!n.params||n.params.length===0)&&(!n.locals||n.locals.length===0)&&(!n.globals||n.globals.length===0);
 if(n.type==='DATA_FILE'){
-var fileNode=data.nodes[n.id];
-
-
-var originalNode=data.nodes[n.label.toUpperCase()];
-
-
-
-
-
-
-
-
-
-isEmpty=(!data.nodes[n.label.toUpperCase()].records||data.nodes[n.label.toUpperCase()].records.length===0);
+var originalNode=data.nodes[key];
+if(originalNode&&originalNode.records){
+isEmpty=originalNode.records.length===0;
+}else {
+isEmpty=true;
+}
 }
 
 div.className="node-card "+(n.type==='GLOBAL'?'global':'')+(n.collapsed?' collapsed':'')+(isEmpty?' empty':'')+(n.type==='DATA_FILE'?' data_file':'')+(n.type==='DATA_RECORD'?' data_record':'');
@@ -2469,8 +2419,9 @@ var iconChar=n.collapsed?'+':'-';
 
 
 var typeClass="type-float";
-if(n.label.endsWith('%'))typeClass="type-int";
-else if(n.label.endsWith('$'))typeClass="type-str";
+var baseLabel=n.label.split('(')[0];
+if(baseLabel.endsWith('%'))typeClass="type-int";
+else if(baseLabel.endsWith('$'))typeClass="type-str";
 
 var html=`<div class="node-header ${typeClass}">
                                 <span class="node-title">${n.label}</span>
