@@ -123,8 +123,10 @@ self.callback(EditorMessage.CHANGEMADE);
 });
 }
 
-
 this.reloadContent(true);
+
+
+this.createToobarButtons();
 
 
 if(this.codeEditorContainer){
@@ -206,7 +208,12 @@ var isDecrypted=false;
 
 if(!isEncrypted){
 
-for(var i=0;i<lnnotes;i++){
+var limit=lnnotes;
+
+if(limit>0&&chld.data[lnheader+4 + limit-1]===0){
+limit--;
+}
+for(var i=0;i<limit;i++){
 var c=chld.data[lnheader+4 + i];
 fullText+=(c==0)?"\n":String.fromCharCode(c);
 }
@@ -226,6 +233,15 @@ if(isDecrypted){
 this.displayDecryptedContent(fullText);
 }else {
 
+
+var password=document.getElementById("password").value;
+if(password!==""){
+var passkey=calcNotepadKey(password,false);
+var ln=lnheader+4;
+fullText=decodeMessage(passkey,chld.data,ln,lnnotes);
+this.displayDecryptedContent(fullText);
+return;
+}
 this.currentTitle=this.item.name||"********";
 
 
@@ -248,6 +264,8 @@ this.syncEditorContent();
 
 var fnInput=document.getElementById("filename");
 if(fnInput)fnInput.value=this.item.name;
+
+this.syncEditorContent();
 }
 
 LZNotepadFileEditor.prototype.displayDecryptedContent=function (fullText){
@@ -262,6 +280,9 @@ this.currentBody=this.currentBody.substring(1);
 this.currentTitle="UNKNOWN";
 this.currentBody=fullText;
 }
+
+
+this.originalBody=this.currentBody;
 
 document.getElementById("notepad").disabled=false;
 document.getElementById("notepad-body-helper").style.display='none';
@@ -283,6 +304,8 @@ this.codeEditorInstance.setValue(this.currentBody);
 this.codeEditorInstance.setReadOnly(isRO);
 this.codeEditorInstance.update();
 }
+
+this.updateToolbarButtons();
 }
 
 LZNotepadFileEditor.prototype.finish=function (){
@@ -351,8 +374,10 @@ if(wasEncrypted&&!encrypt){
 
 
 var passkey=calcNotepadKey(password,false);
-var ln=chld.data[0]*256+chld.data[1]+4;
-fullText=decodeMessage(passkey,chld.data,ln);
+var lnh=chld.data[0]*256+chld.data[1];
+var ln=lnh+4;
+var lnnotes=chld.data[lnh+2]*256+chld.data[lnh+3];
+fullText=decodeMessage(passkey,chld.data,ln,lnnotes);
 
 
 encodedData=[];
@@ -360,6 +385,7 @@ for(var i=0;i<fullText.length;i++){
 var c=fullText.charCodeAt(i);
 encodedData.push((c===10)?0:c);
 }
+encodedData.push(0);
 }else {
 
 
@@ -388,18 +414,15 @@ for(var i=0;i<fullText.length;i++){
 var c=fullText.charCodeAt(i);
 encodedData.push((c===10)?0:c);
 }
+encodedData.push(0);
 }
 }
 
 
+
+var newlnheader=(encrypt&&password!=="")?11:2;
 var newdata=new Uint8Array(2+newlnheader+2 + encodedData.length);
 var nmbd=document.getElementById("numbered").checked;
-
-if(encrypt&&password!==""){
-newlnheader=11;
-}else {
-newlnheader=2;
-}
 
 newdata[0]=(newlnheader>>8)&0xff;
 newdata[1]=newlnheader&0xff;
@@ -536,3 +559,164 @@ this.reloadContent(true);
 
 return baseResult||differ||nameChanged;
 }
+
+LZNotepadFileEditor.prototype.createToobarButtons=function (){
+var self=this;
+var header=document.getElementById('editor-header');
+if(!header)return;
+
+
+var existingLeft=document.getElementById('editor-left-tools');
+if(existingLeft)existingLeft.remove();
+var existingRight=document.getElementById('editor-right-tools');
+if(existingRight)existingRight.remove();
+
+var leftTools=document.createElement('div');
+leftTools.id='editor-left-tools';
+leftTools.style.display='inline-flex';
+leftTools.style.alignItems='center';
+leftTools.style.marginRight='10px';
+
+function createHeaderBtn(iconClass,title,clickHandler){
+var b=document.createElement('button');
+b.innerHTML='<i class="'+iconClass+'"></i>';
+b.className='icon-btn';
+b.title=title;
+b.addEventListener('click',function (e){
+e.preventDefault();
+clickHandler(e);
+});
+b.addEventListener('mousedown',function (e){e.preventDefault();});
+return b;
+}
+
+
+var applyBtn=createHeaderBtn('fas fa-circle-check','Apply Changes',function (){
+if(self.item.deleted)return;
+if(self.applyChanges()){
+
+if(typeof currentPackIndex!=='undefined'&&currentPackIndex>=0&&typeof packs!=='undefined'&&packs[currentPackIndex]){
+packs[currentPackIndex].unsaved=true;
+}
+if(window.updateInventory)window.updateInventory();
+if(window.saveSession)window.saveSession();
+
+
+if(typeof updateItemButtons==='function')updateItemButtons(false);
+
+if(typeof setStatus==='function')setStatus("Changes applied to Notepad");
+}
+});
+if(this.item.deleted)applyBtn.disabled=true;
+leftTools.appendChild(applyBtn);
+this.applyBtn=applyBtn;
+
+
+var discardBtn=createHeaderBtn('fas fa-undo','Discard Changes',function (){
+if(self.item.deleted)return;
+
+var suppress=(typeof OptionsManager!=='undefined')?OptionsManager.getOption('suppressConfirmations'):false;
+if(suppress||confirm("Discard unsaved changes?")){
+if(typeof discardEdits==='function'){
+discardEdits();
+}else {
+
+self.initialise(self.item);
+if(typeof updateItemButtons==='function')updateItemButtons(false);
+}
+if(typeof setStatus==='function')setStatus("Edits discarded");
+}
+});
+discardBtn.disabled=true;
+leftTools.appendChild(discardBtn);
+this.discardBtn=discardBtn;
+
+
+var div1=document.createElement('span');
+div1.innerHTML='|';
+div1.style.margin='0 10px 0 2px';
+div1.style.color='var(--border-color)';
+div1.style.opacity='0.5';
+leftTools.appendChild(div1);
+
+
+leftTools.appendChild(createHeaderBtn('fas fa-mouse-pointer','Select All',function (){
+if(self.codeEditorInstance){
+self.codeEditorInstance.selectAll();
+}else {
+var ta=document.getElementById('notepad');
+if(ta)ta.select();
+}
+}));
+
+
+leftTools.appendChild(createHeaderBtn('far fa-copy','Copy the selected text to clipboard',function (){
+document.execCommand('copy');
+}));
+
+
+leftTools.appendChild(createHeaderBtn('fas fa-file-export','Copy the entire note to clipboard',function (){
+if(self.codeEditorInstance){
+var text=self.codeEditorInstance.getValue();
+navigator.clipboard.writeText(text);
+}else {
+var ta=document.getElementById('notepad');
+if(ta)navigator.clipboard.writeText(ta.value);
+}
+}));
+
+
+var pasteBtn=createHeaderBtn('fas fa-paste','Paste text from clipboard at cursor position',function (){
+if(self.item.deleted)return;
+navigator.clipboard.readText().then(function (text){
+if(!text)return;
+var target=null;
+if(self.codeEditorInstance)target=self.codeEditorInstance.inputLayer;
+else target=document.getElementById('notepad');
+
+if(target){
+if(typeof target.setRangeText==='function'){
+target.setRangeText(text,target.selectionStart,target.selectionEnd,'end');
+target.dispatchEvent(new Event('input'));
+}else {
+target.value+=text;
+target.dispatchEvent(new Event('input'));
+}
+if(self.codeEditorInstance)self.codeEditorInstance.onChange();
+}
+}).catch(function (e){console.error(e);});
+});
+if(this.item.deleted)pasteBtn.disabled=true;
+leftTools.appendChild(pasteBtn);
+
+header.insertBefore(leftTools,header.firstChild);
+
+
+this.updateToolbarButtons();
+};
+
+LZNotepadFileEditor.prototype.updateToolbarButtons=function (){
+var hasChanges=this.hasUnsavedChanges();
+var isDeleted=this.item.deleted;
+
+if(this.applyBtn){
+this.applyBtn.disabled=isDeleted||!hasChanges;
+}
+if(this.discardBtn){
+this.discardBtn.disabled=isDeleted||!hasChanges;
+}
+};
+
+LZNotepadFileEditor.prototype.updateEditorContent=function (text){
+if(this.codeEditorInstance){
+this.codeEditorInstance.setValue(text);
+this.codeEditorInstance.update();
+}else {
+var ta=document.getElementById('notepad');
+if(ta){
+ta.value=text;
+ta.dispatchEvent(new Event('input'));
+}
+}
+this.callback(EditorMessage.CHANGEMADE);
+};

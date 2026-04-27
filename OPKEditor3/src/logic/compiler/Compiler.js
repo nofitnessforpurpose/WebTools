@@ -1122,9 +1122,8 @@ emit(0x24);emit(t.value.length);
 for(var k=0;k<t.value.length;k++)emit(t.value.charCodeAt(k));
 return 2;
 }else if((t.type==='KEYWORD'||t.type==='IDENTIFIER')&&
-(t.value==='LEN'||t.value==='ASC'||t.value==='MID$'||
-t.value==='PEEKB'||t.value==='PEEKW'||t.value==='ADDR')){
-var op=t.value;
+(['LEN','ASC','MID$','PEEKB','PEEKW','ADDR'].includes(t.value.toUpperCase()))){
+var op=t.value.toUpperCase();
 if(peek()&&peek().value==='(')next();
 else throw new Error("Error on line "+t.line+": Expected '('");
 if(op==='LEN'){
@@ -2014,6 +2013,7 @@ emit(0x7B);
 }
 }else if(t.type==='IDENTIFIER'){
 var isCall=false;
+var isExplicitCall=false;
 var isLabel=false;
 var isAssign=false;
 var hasIndices=false;
@@ -2067,34 +2067,43 @@ continue;
 }
 }
 }
-if(peek()&&peek().value===':'){
+var upper=t.value.toUpperCase();
+var op=activeOpcodes[upper];
+var isZeroArgBuiltin=(op&&QCODE_DEFS[op]&&QCODE_DEFS[op].pops==='');
+var next1=(ptr<tokens.length)?tokens[ptr]:null;
+var next2=(ptr+1<tokens.length)?tokens[ptr+1]:null;
+if(next1&&next1.value===':'){
+if(next2&&next2.value===':'){
 next();
-if(peek()&&peek().value===':'){
 next();
 isLabel=true;
 labels[t.value.toUpperCase()]=qcode.length;
-}
-else {
+}else {
+if(isZeroArgBuiltin){
+isCall=true;
+}else {
+next();
+isExplicitCall=true;
 if(t.value.toUpperCase()===procName.toUpperCase()){
 if(peek()&&peek().value==='('){
 isCall=true;
 }else {
 isCall=true;
 }
+}else {
+isCall=true;
 }
-else isCall=true;
+}
 }
 }else {
 if(peek()&&peek().value==='('){
-if(targetSystem==='Standard'){
+if(targetSystem==='Standard'&&!op){
 isCall=false;
 }else {
 isCall=true;
 }
 }else {
-var upper=t.value.toUpperCase();
-var op=activeOpcodes[upper];
-if(op&&QCODE_DEFS[op]&&QCODE_DEFS[op].pops===''){
+if(isZeroArgBuiltin){
 isCall=true;
 }else {
 error("Procedure call '"+t.value+"' must be followed by ':' or have arguments");
@@ -2204,7 +2213,7 @@ break;
 }
 }
 var argCount=argTypes.length;
-if(builtinOp){
+if(builtinOp&&!isExplicitCall){
 emit(builtinOp);
 }else {
 emit(0x20);emit(argCount);

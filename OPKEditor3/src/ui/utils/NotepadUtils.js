@@ -12,6 +12,8 @@ var p=[0,0,0,0,0,0,0,0];
 
 var s=password.toUpperCase();
 var len=s.length;
+
+if(s.length===0)s=" ";
 while(s.length<8)s=s+s;
 var t=0;
 for(var i=0;i<8;i++){
@@ -60,12 +62,13 @@ p[8]=(len+d[t])&0xFF;
 return p;
 }
 
-function decodeMessage(key,message,start){
+function decodeMessage(key,message,start,encryptedLen){
 var s="";
 var i=start;
 
+var titleStart=i;
 do{
-if(message[i]===undefined)return s;
+if(message[i]===undefined||(i-titleStart)>100)return s;
 s+=String.fromCharCode(message[i]);
 i++;
 }while(message[i-1]!=58);
@@ -77,11 +80,19 @@ s+="\n";
 
 var kix=0;
 var c=0;
-while(message[i]!==undefined){
+var end=(encryptedLen!==undefined)?(start+encryptedLen):message.length;
+while(i<end){
+var isLast=(i===end-1);
 var t=message[i++];
 c=(c+163)&0xFF;
 key[kix]=(key[kix]+c)&0xFF;
 t=(t-key[kix])&0xFF;
+
+if(t==0&&isLast){
+
+break;
+}
+
 if(t==0)s+="\n";
 else s+=String.fromCharCode(t);
 kix=(kix+1)&7;
@@ -116,5 +127,13 @@ t=(t+key[kix])&0xFF;
 output[output.length]=t;
 kix=(kix+1)&7;
 }
+
+
+var term=0;
+c=(c+163)&0xFF;
+key[kix]=(key[kix]+c)&0xFF;
+term=(term+key[kix])&0xFF;
+output[output.length]=term;
+
 return output;
 }

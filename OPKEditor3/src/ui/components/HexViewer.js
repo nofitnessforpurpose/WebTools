@@ -65,10 +65,6 @@ copyBtn.className='icon-btn';
 copyBtn.title='Copy to Clipboard';
 copyBtn.innerHTML='<i class="fas fa-copy"></i>';
 copyBtn.style.marginRight='10px';
-copyBtn.style.background='none';
-copyBtn.style.border='none';
-copyBtn.style.cursor='pointer';
-copyBtn.style.color='var(--icon-color, #555)';
 copyBtn.onclick=copyToClipboard;
 
 
@@ -76,10 +72,6 @@ var closeBtn=document.createElement('button');
 closeBtn.className='icon-btn';
 closeBtn.title='Close';
 closeBtn.innerHTML='<i class="fas fa-times"></i>';
-closeBtn.style.background='none';
-closeBtn.style.border='none';
-closeBtn.style.cursor='pointer';
-closeBtn.style.color='var(--icon-color, #555)';
 closeBtn.onclick=hide;
 
 controls.appendChild(copyBtn);

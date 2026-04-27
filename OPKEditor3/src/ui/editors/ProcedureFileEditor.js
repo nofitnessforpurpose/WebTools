@@ -203,13 +203,6 @@ function createHeaderBtn(iconClass,title,clickHandler){
 var b=document.createElement('button');
 b.innerHTML='<i class="'+iconClass+'"></i>';
 b.className='icon-btn';
-b.style.background='none';
-b.style.border='none';
-b.style.color='var(--text-color)';
-b.style.cursor='pointer';
-b.style.fontSize='14px';
-b.style.marginRight='8px';
-b.style.padding='2px';
 b.title=title;
 b.addEventListener('click',function (e){
 e.preventDefault();
@@ -369,11 +362,6 @@ leftTools.appendChild(div);
 var btn=document.createElement('button');
 btn.innerHTML='<i class="fas fa-gears"></i>';
 btn.className='icon-btn';
-btn.style.background='none';
-btn.style.border='none';
-btn.style.color='var(--text-color)';
-btn.style.cursor='pointer';
-btn.style.fontSize='13px';
 btn.title='Translate (Compile Source to Object Code)';
 btn.addEventListener('click',function (e){
 if(self.item.deleted)return;
@@ -389,11 +377,6 @@ var stripBtn=document.createElement('button');
 stripBtn.innerHTML='<i class="fa-solid fa-file-zipper"></i>';
 stripBtn.className='icon-btn';
 stripBtn.style.marginLeft='5px';
-stripBtn.style.background='none';
-stripBtn.style.border='none';
-stripBtn.style.color='var(--text-color)';
-stripBtn.style.cursor='pointer';
-stripBtn.style.fontSize='13px';
 stripBtn.title='Copy Object Code';
 stripBtn.addEventListener('click',function (e){
 if(self.item.deleted)return;
@@ -408,11 +391,6 @@ var extractBtn=document.createElement('button');
 extractBtn.innerHTML='<i class="fa-solid fa-file-circle-plus"></i>';
 extractBtn.className='icon-btn';
 extractBtn.style.marginLeft='5px';
-extractBtn.style.background='none';
-extractBtn.style.border='none';
-extractBtn.style.color='var(--text-color)';
-extractBtn.style.cursor='pointer';
-extractBtn.style.fontSize='13px';
 extractBtn.title='Extract Source to New Record';
 extractBtn.addEventListener('click',function (e){
 if(self.item.deleted)return;
@@ -479,45 +457,36 @@ var isDeleted=this.item.deleted;
 if(this.translateBtn){
 this.translateBtn.disabled=isDeleted||hasChanges;
 this.translateBtn.title=hasChanges?"Save changes before Translating":"Translate (Compile Source to Object Code)";
-this.translateBtn.style.opacity=(isDeleted||hasChanges)?'0.5':'1';
 }
 if(this.stripBtn){
 this.stripBtn.disabled=isDeleted||hasChanges;
 this.stripBtn.title=hasChanges?"Save changes before Copying Object Code":"Copy Object Code";
-this.stripBtn.style.opacity=(isDeleted||hasChanges)?'0.5':'1';
 }
 if(this.extractBtn){
 this.extractBtn.disabled=isDeleted||hasChanges;
 this.extractBtn.title=hasChanges?"Save changes before Extracting Source":"Extract Source to New Record";
-this.extractBtn.style.opacity=(isDeleted||hasChanges)?'0.5':'1';
 }
 
 
 if(this.applyBtn){
 this.applyBtn.disabled=isDeleted||!hasChanges;
-this.applyBtn.style.opacity=(isDeleted||!hasChanges)?'0.5':'1';
 }
 if(this.discardBtn){
 this.discardBtn.disabled=isDeleted||!hasChanges;
-this.discardBtn.style.opacity=(isDeleted||!hasChanges)?'0.5':'1';
 }
 
 if(this.formatBtn){
 this.formatBtn.disabled=isDeleted;
-this.formatBtn.style.opacity=isDeleted?'0.5':'1';
 }
 if(this.minifyBtn){
 this.minifyBtn.disabled=isDeleted;
-this.minifyBtn.style.opacity=isDeleted?'0.5':'1';
 }
 
 if(this.indentBtn){
 this.indentBtn.disabled=isDeleted;
-this.indentBtn.style.opacity=isDeleted?'0.5':'1';
 }
 if(this.outdentBtn){
 this.outdentBtn.disabled=isDeleted;
-this.outdentBtn.style.opacity=isDeleted?'0.5':'1';
 }
 }
 
@@ -611,6 +580,7 @@ txt=document.getElementById("sourcecode").value;
 
 
 
+
 var srcBytes=[];
 for(var i=0;i<txt.length;i++){
 var c=txt.charCodeAt(i);
@@ -619,10 +589,9 @@ srcBytes.push(c===10?0:c);
 
 
 srcBytes.push(0);
-srcBytes.push(0);
 
 
-var newlnsrc=srcBytes.length-2;
+var newlnsrc=srcBytes.length;
 
 
 
