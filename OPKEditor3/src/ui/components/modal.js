@@ -25,10 +25,12 @@ document.body.removeChild(self.dialog);
 if(self.cancelcallback)self.cancelcallback(e);
 };
 var okfunction=function (e){
+
+
+if(self.okcallback)self.okcallback(e);
 if(self.dialog.parentNode){
 document.body.removeChild(self.dialog);
 }
-if(self.okcallback)self.okcallback(e);
 };
 this.dialog.querySelector("#okbutton").addEventListener('click',okfunction,false);
 this.dialog.querySelector("#cancelbutton").addEventListener('click',cancelfunction,false);

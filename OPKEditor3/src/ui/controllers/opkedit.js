@@ -81,6 +81,7 @@ new LZNotepadFileEditor(legacyEditorElement,codeEditorElement,handleEditorMessag
 new SpreadsheetFileEditor(legacyEditorElement,handleEditorMessage),
 new PagerSetupFileEditor(legacyEditorElement,handleEditorMessage),
 new DiaryFileEditor(legacyEditorElement,handleEditorMessage),
+new NativeCodeEditor(legacyEditorElement,codeEditorElement,handleEditorMessage),
 new RecordEditor(legacyEditorElement,handleEditorMessage),
 new HexEditor(legacyEditorElement,handleEditorMessage,[4,8,9,10,11,12,13,14,15]),
 new MemoryMapEditor(legacyEditorElement,handleEditorMessage)
@@ -215,6 +216,15 @@ updateInventory();
 }
 closeAllMenus();
 });
+
+var menuBootablePack=document.getElementById('menu-bootable-pack');
+if(menuBootablePack){
+menuBootablePack.addEventListener('click',function (e){
+e.preventDefault();
+openBootableWizard();
+closeAllMenus();
+});
+}
 }
 
 
@@ -224,6 +234,12 @@ if(document.getElementById('menu-open-pack')){
 document.getElementById('menu-open-pack').addEventListener('click',function (e){
 e.preventDefault();
 if(fileInputPack)fileInputPack.click();
+closeAllMenus();
+});
+
+document.getElementById('menu-open-url').addEventListener('click',function (e){
+e.preventDefault();
+openPackFromURL();
 closeAllMenus();
 });
 
@@ -342,7 +358,8 @@ else importItemEl.classList.add('disabled');
 
 var exportItemEl=document.getElementById('menu-export-item');
 if(exportItemEl){
-if(itemSelected)exportItemEl.classList.remove('disabled');
+var canExport=itemSelected||packOpen;
+if(canExport)exportItemEl.classList.remove('disabled');
 else exportItemEl.classList.add('disabled');
 }
 
@@ -473,6 +490,15 @@ menuHelpMemoryMap.addEventListener('click',function (e){
 e.preventDefault();
 closeAllMenus();
 if(typeof HelpMemoryMap!=='undefined')HelpMemoryMap.openWindow();
+});
+}
+
+var menuHelpBootablePack=document.getElementById('menu-help-bootable-pack');
+if(menuHelpBootablePack){
+menuHelpBootablePack.addEventListener('click',function (e){
+e.preventDefault();
+closeAllMenus();
+if(typeof HelpBootablePack!=='undefined')HelpBootablePack.openWindow();
 });
 }
 
@@ -832,9 +858,42 @@ a.click();
 document.body.removeChild(a);
 }
 
+function getExportExtension(item){
+var type=item.type;
+if(type===1)return ".odb";
+if(type>=2&&type<=15){
+
+var isText=false;
+if(type===3){
+if(item.child&&item.child.child&&item.child.child.data){
+var payload=item.child.child.data;
+if(payload.length>=2){
+var lncode=(payload[0]<<8)|payload[1];
+if(lncode===0)isText=true;
+}
+}
+}
+if(isText)return ".opl";
+return ".OB"+type.toString(16).toUpperCase();
+}
+if(type>=16)return ".odb";
+return ".bin";
+}
+
 function exportCurrentItem(){
 var pack=packs[currentPackIndex];
-if(!pack||!currentItem)return;
+if(!pack){
+alert("There is no Data Pack selected for export.");
+return;
+}
+
+
+var isPackExport=(currentItem===null||(currentItem&&(currentItem.type===-1||currentItem.type===255)));
+
+if(isPackExport){
+showExportPackDialog(pack);
+return;
+}
 
 var filename="item.bin";
 if(currentItem.name){
@@ -842,12 +901,10 @@ filename=currentItem.name.trim();
 }
 
 
-var type=currentItem.type;
-if(type===1)filename+=".odb";
-else if(type>=2&&type<=15){
-filename+=".OB"+type.toString(16).toUpperCase();
-}else if(type>=16)filename+=".odb";
-else if(!filename.match(/\.[a-z0-9]{3}$/i))filename+=".bin";
+var ext=getExportExtension(currentItem);
+if(!filename.toLowerCase().endsWith(ext)){
+filename+=ext;
+}
 
 var userFilename=prompt("Save item as:",filename);
 if(userFilename){
@@ -855,9 +912,184 @@ var url=pack.getItemURL(currentItem);
 if(url){
 downloadFileFromUrl(userFilename,url);
 }else {
-alert("Cannot export this item type (id: "+type+"). Only standard files (OPL, ODB, Notepad, etc) are supported.");
+alert("Cannot export this item type (id: "+currentItem.type+"). Only standard files (OPL, ODB, Notepad, etc) are supported.");
 }
 }
+}
+
+function showExportPackDialog(pack){
+var element=document.createElement('div');
+var defaultName=pack.filename?pack.filename.replace(/\.[^/.]+$/,""):"PACK";
+var supportsPicker=!!window.showDirectoryPicker;
+var isSecure=window.isSecureContext;
+var hasZip=(typeof ZipUtils!=='undefined');
+var pickerStatus="";
+
+if(supportsPicker&&isSecure){
+pickerStatus="<div style='color: #2e7d32; margin-top: 5px; font-size: 11px;'><i class='fas fa-circle-check'></i> Folder selection supported. You will be prompted to choose a target directory.</div>";
+}else if(hasZip){
+pickerStatus="<div style='color: #2e7d32; margin-top: 5px; font-size: 11px;'><i class='fas fa-file-zipper'></i> Folder selection not available. Exporting as a single <b>.ZIP</b> file.</div>";
+}else {
+pickerStatus="<div style='color: #d32f2f; margin-top: 5px; font-size: 11px;'><i class='fas fa-triangle-exclamation'></i> Batch export not supported. Falling back to individual downloads.</div>";
+}
+
+element.innerHTML=
+"<div style='padding: 10px;'>" +
+"<h3>Export Data Pack</h3>" +
+"<p>This will export the pack structure as a <b>.BLD</b> file and all objects as separate files.</p>" +
+"<div style='margin: 15px 0;'>" +
+"<label>Output Base Filename:<br>" +
+"<input type='text' id='export-base-name' value='"+defaultName+"' style='width: 100%; margin-top: 5px; padding: 5px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color);'></label>" +
+"</div>" +
+pickerStatus +
+"<div style='font-size: 11px; opacity: 0.7; margin-top: 10px;'>" +
+"<i class='fas fa-info-circle'></i> Untranslated OPL source will be exported as .OPL but excluded from the .BLD file." +
+"</div>" +
+"</div>";
+
+var dialog=new ModalDialog(element,function (){
+var baseName=element.querySelector('#export-base-name').value.trim()||defaultName;
+performPackExport(pack,baseName);
+});
+dialog.start();
+}
+
+async function performPackExport(pack,baseName){
+
+if(window.showDirectoryPicker){
+try{
+const dirHandle=await window.showDirectoryPicker({
+id:'opk-export',
+startIn:'downloads'
+});
+
+const writeFile=async (handle,name,content)=>{
+const fileHandle=await handle.getFileHandle(name,{create:true});
+const writable=await fileHandle.createWritable();
+await writable.write(content);
+await writable.close();
+};
+
+
+var bldContent=generateBLDContent(pack,baseName);
+await writeFile(dirHandle,baseName+".bld",bldContent);
+
+
+var count=0;
+for(var i=0;i<pack.items.length;i++){
+var item=pack.items[i];
+if(item.type===-1||item.type===255||item.deleted)continue;
+
+var name=item.name?item.name.trim():"ITEM"+i;
+var ext=getExportExtension(item);
+var url=pack.getItemURL(item);
+
+if(url){
+const response=await fetch(url);
+const blob=await response.blob();
+await writeFile(dirHandle,name+ext,blob);
+count++;
+}
+}
+alert("Successfully exported "+count+" items and "+baseName+".bld to the selected directory.");
+return;
+}catch(e){
+if(e.name==='AbortError')return;
+alert("Folder Picker failed: "+e.message+"\n\nFalling back to standard downloads.");
+console.warn("Directory picker failed, falling back to standard downloads:",e);
+}
+}
+
+
+if(typeof ZipUtils!=='undefined'){
+try{
+var zipFiles=[];
+
+
+var bldContent=generateBLDContent(pack,baseName);
+zipFiles.push({name:baseName+".bld",content:bldContent});
+
+
+var count=0;
+for(var i=0;i<pack.items.length;i++){
+var item=pack.items[i];
+if(item.type===-1||item.type===255||item.deleted)continue;
+
+var name=item.name?item.name.trim():"ITEM"+i;
+var ext=getExportExtension(item);
+var url=pack.getItemURL(item);
+
+if(url){
+const response=await fetch(url);
+const blob=await response.blob();
+zipFiles.push({name:name+ext,content:blob});
+count++;
+}
+}
+
+const zipBlob=await ZipUtils.createZip(zipFiles);
+const zipUrl=URL.createObjectURL(zipBlob);
+downloadFileFromUrl(baseName+".zip",zipUrl);
+alert("Successfully bundled "+count+" items and "+baseName+".bld into "+baseName+".zip");
+return;
+}catch(e){
+console.warn("ZIP generation failed, falling back to standard downloads:",e);
+}
+}
+
+
+var bldContent=generateBLDContent(pack,baseName);
+var bldBlob=new Blob([bldContent],{type:'text/plain'});
+var bldUrl=URL.createObjectURL(bldBlob);
+
+
+downloadFileFromUrl(baseName+".bld",bldUrl);
+
+
+for(var i=0;i<pack.items.length;i++){
+var item=pack.items[i];
+if(item.type===-1||item.type===255||item.deleted)continue;
+
+var name=item.name?item.name.trim():"ITEM"+i;
+var ext=getExportExtension(item);
+var url=pack.getItemURL(item);
+if(url){
+downloadFileFromUrl(name+ext,url);
+}
+}
+}
+
+function generateBLDContent(pack,baseName){
+var header=pack.items[0];
+var headerByte=header.data[0];
+var sc=header.data[1];
+var sizeKB=sc*8;
+
+var flags=[];
+if(headerByte&0x08)flags.push("NOCOPY");
+if(headerByte&0x10)flags.push("NOWRITE");
+
+var flagStr=flags.length>0?", "+flags.join(" "):"";
+
+var sanitizedBaseName=baseName.replace(/ /g,'-').substring(0,8).toUpperCase();
+
+var lines=[];
+lines.push(sanitizedBaseName+" "+sizeKB+flagStr);
+
+for(var i=0;i<pack.items.length;i++){
+var item=pack.items[i];
+if(item.type===-1||item.type===255||item.deleted)continue;
+
+var name=(item.name?item.name.trim():"ITEM"+i).replace(/ /g,'-').substring(0,8).toUpperCase();
+var ext=getExportExtension(item).substring(1).toUpperCase();
+if(ext==="OPL")continue;
+
+
+var paddedName=(name+"        ").substring(0,8);
+lines.push(paddedName+" "+ext);
+}
+
+return lines.join("\r\n")+"\r\n";
 }
 
 function updateItemButtons(isDirty){
@@ -883,12 +1115,14 @@ toolbarButtons.btnNewPack.setActive(!isDirty);
 toolbarButtons.btnOpenPack.setActive(!isDirty);
 toolbarButtons.btnSavePack.setActive(hasPack);
 toolbarButtons.btnImportItem.setActive(hasPack&&!isDirty);
-toolbarButtons.btnExportItem.setActive(!!currentItem&&!isDirty);
+toolbarButtons.btnExportItem.setActive(hasPack&&!isDirty);
 toolbarButtons.btnNewProc.setActive(hasPack&&!isDirty);
 toolbarButtons.btnNewNotepad.setActive(hasPack&&!isDirty);
 toolbarButtons.btnNewData.setActive(hasPack&&!isDirty);
+if(toolbarButtons.btnBootablePack){
+toolbarButtons.btnBootablePack.setActive(!isDirty);
+}
 toolbarButtons.btnDelete.setActive(canDelete);
-toolbarButtons.btnApply.setActive(isDirty);
 toolbarButtons.btnApply.setActive(isDirty);
 toolbarButtons.btnDiscard.setActive(isDirty);
 
@@ -977,6 +1211,7 @@ addItemToPack(hdritem);
 updateInventory();
 }
 });
+toolbarButtons.btnBootablePack=createToolbarBtn('tbtn-bootable-pack','fa-solid fa-splotch','Bootable Pack Wizard',openBootableWizard);
 
 createSeparator();
 
@@ -1509,13 +1744,26 @@ return;
 itemSelected(packIdx,itemIdx);
 }
 
-function itemSelected(packIndex,itemIndex,event){
-var pack=packs[packIndex];
-if(!pack)return false;
-var isok=itemIndex>=0&&itemIndex<pack.items.length;
-if(!isok)return false;
 
+function itemSelected(packIndex,itemIndex,event){
+if(typeof packs==='undefined'||!packs[packIndex])return false;
+
+var pack=packs[packIndex];
 var item=pack.items[itemIndex];
+if(!item)return false;
+
+
+lastFocusedItemIndex=itemIndex;
+
+if(currentItem==item&&(!event||(!event.ctrlKey&&!event.shiftKey))){
+
+if(typeof PackContents!=='undefined'&&PackContents.selectItem){
+PackContents.selectItem(packIndex,itemIndex);
+}
+return true;
+}
+
+if(!closeEditor())return false;
 
 
 var isSpecial=(item.name==="MAIN"||item.type===255);
@@ -1532,12 +1780,6 @@ if(event.ctrlKey){
 var idx=selectedItems.indexOf(item);
 if(idx>=0){
 selectedItems.splice(idx,1);
-
-
-
-
-
-
 }else {
 selectedItems.push(item);
 }
@@ -1547,13 +1789,7 @@ selectedItems=[];
 var start=Math.min(lastFocusedItemIndex,itemIndex);
 var end=Math.max(lastFocusedItemIndex,itemIndex);
 for(var k=start;k<=end;k++){
-var it=pack.items[k];
-
-
-
-
-
-selectedItems.push(it);
+selectedItems.push(pack.items[k]);
 }
 }else {
 selectedItems=[item];
@@ -1567,9 +1803,6 @@ selectedItems=[item];
 if(selectedItems.length>1){
 setStatus(selectedItems.length+" items selected");
 }else if(event&&!event.ctrlKey&&!event.shiftKey){
-
-
-
 if(typeof statusmessageelement!=='undefined'&&statusmessageelement){
 if(statusmessageelement.innerText.indexOf("selected")!==-1){
 statusmessageelement.innerText="";
@@ -1580,103 +1813,89 @@ statusmessageelement.innerText="";
 
 
 
-
-
-
-lastFocusedItemIndex=itemIndex;
-
-if(currentItem==pack.items[itemIndex]){
-
-
-if(typeof PackContents!=='undefined'&&PackContents.selectItem){
-PackContents.selectItem(packIndex,itemIndex);
-}
-return true;
-}
-
-if(!closeEditor())return false;
-
 currentPackIndex=packIndex;
-selectedPackIndex=-1;
-currentItem=pack.items[itemIndex];
-var tp=currentItem.type;
 
-var i=0;
+selectedPackIndex=-1;
+var it=item;
+var tp=it.type;
+
+
+
+
+var checkData=it.getFullData();
+if(tp===3&&it.child){
+checkData=it.child.getFullData();
+}
+
 var selectedEditor=null;
 
+var isNative=(typeof NativeDecoder!=='undefined'&&tp!==3&&tp!==0x83)?NativeDecoder.isNative(checkData,tp):false;
 
-if(tp===0){
-
-
-
-if(currentItem.data.length>=2&&currentItem.data[0]+2===currentItem.data.length){
-
-
-var recType=currentItem.data[1]&0x7f;
-if(recType>=16&&recType<=126){
-
-var recordEditor=editors.find(function (e){return e instanceof RecordEditor;});
-if(recordEditor){
-selectedEditor=recordEditor;
+if(checkData){
+var hex="";
+var logLen=Math.min(checkData.length,16);
+for(var i=0;i<logLen;i++)hex+=checkData[i].toString(16).toUpperCase().padStart(2,'0')+" ";
+console.log("Record Bytes (first 16 of "+checkData.length+"):",hex);
 }
-}else {
 
-var hexEditor=editors.find(function (e){return e instanceof HexEditor;});
-if(hexEditor){
-selectedEditor=hexEditor;
-}
-}
-}else {
-
-var hexEditor=editors.find(function (e){return e instanceof HexEditor;});
-if(hexEditor){
-selectedEditor=hexEditor;
-}
-}
+if(isNative){
+selectedEditor=editors.find(function (e){return e instanceof NativeCodeEditor;});
 }
 
 if(!selectedEditor){
-while(i<editors.length&&!editors[i].acceptsType(tp)){
-i++;
+
+selectedEditor=editors.find(function (e){return e.acceptsType(tp,it);});
 }
-if(i<editors.length){
-selectedEditor=editors[i];
+
+
+if(!selectedEditor&&tp===0){
+
+if(it.data.length>=2&&it.data[0]+2===it.data.length){
+var recType=it.data[1]&0x7f;
+if(recType>=16&&recType<=126){
+selectedEditor=editors.find(function (e){return e instanceof RecordEditor;});
+}
+}
+
+
+if(!selectedEditor){
+selectedEditor=editors.find(function (e){return e instanceof HexEditor;});
 }
 }
 
 if(selectedEditor){
-if(selectedEditor instanceof HexEditor){
-if(!OptionsManager.getOption('enableHexView')){
 
+if(selectedEditor instanceof ProcedureFileEditor){
 
-
-selectedEditor=null;
-}
-}
-}
-
-if(selectedEditor){
-currentEditor=selectedEditor;
-legacyEditorElement.style.display='block';
-
-
-var startAddr=0;
-currentEditor.initialise(currentItem,startAddr);
+legacyEditorElement.style.display="block";
+codeEditorElement.style.display="block";
 }else {
 
-
-
-
+legacyEditorElement.style.display="block";
+codeEditorElement.style.display="none";
 }
 
+selectedEditor.initialise(it);
+
+currentEditor=selectedEditor;
+currentItem=it;
+fileinfoelement.innerText=it.name||it.desc||"Item "+itemIndex;
 
 if(typeof PackContents!=='undefined'&&PackContents.selectItem){
 PackContents.selectItem(packIndex,itemIndex);
-}else {
-updateInventory();
 }
+
 updateItemButtons(false);
 return true;
+}
+
+
+closeEditor();
+if(typeof PackContents!=='undefined'){
+PackContents.selectItem(packIndex,itemIndex);
+}
+updateItemButtons(false);
+return false;
 }
 
 
@@ -2028,6 +2247,31 @@ return it.type>=0&&it.type!==255;
 });
 
 if(toDelete.length===0)return;
+
+
+var headerData=pack.items[0].data;
+var isBootable=(headerData&&(headerData[0]&0x10)===0);
+var bootAddr=isBootable?(headerData[6]<<8)+headerData[7]:-1;
+var clearBootable=false;
+
+if(isBootable){
+toDelete.forEach(function (it){
+var idx=pack.items.indexOf(it);
+if(idx>0){
+var addr1=getItemAddres(pack,idx);
+if(bootAddr>=addr1&&bootAddr<addr1+it.getLength()){
+clearBootable=true;
+}
+}
+});
+}
+
+if(clearBootable){
+headerData[0]|=0x10;
+headerData[6]=0;
+headerData[7]=0;
+pack.unsaved=true;
+}
 
 
 if(isRecycle){
@@ -2388,7 +2632,54 @@ return id;
 function createItemFromFileData(filedata,name){
 
 
-if(filedata[0]==79&&filedata[1]==82&&filedata[2]==71&&filedata[5]>=0x82&&filedata[5]<=0x8f){
+if(filedata[0]==79&&filedata[1]==82&&filedata[2]==71){
+
+var isBlockFile=false;
+var isSystemBoot=false;
+
+var lnBlock=(filedata[3]<<8)|filedata[4];
+if(filedata.length>=6+lnBlock&&filedata[5]>=0x82&&filedata[5]<=0x8f){
+isBlockFile=true;
+}
+
+var lnBoot=(filedata[3]<<16)|(filedata[4]<<8)|filedata[5];
+var bootOffset=-1;
+
+
+if(filedata.length>=6+lnBoot&&lnBoot>=10){
+var hdrByte=filedata[6];
+
+if(hdrByte===0x7A||hdrByte===0x6A||hdrByte===0x7E||hdrByte===0x6E){
+var bootAddr=(filedata[12]<<8)|filedata[13];
+bootOffset=6+bootAddr;
+if(bootOffset>=16&&bootOffset+1<filedata.length){
+
+if(filedata[bootOffset]===0x02&&filedata[bootOffset+1]===0x80){
+isSystemBoot=true;
+}
+}
+}
+}
+
+if(isSystemBoot){
+var ln2=(filedata[bootOffset+2]<<8)|filedata[bootOffset+3];
+if(filedata.length<bootOffset+4 + ln2){
+alert("The file "+name+" seems to be truncated at the data block!");
+return false;
+}
+var blkhdr=new Uint8Array(4);
+blkhdr[0]=2;blkhdr[1]=0x80;blkhdr[2]=filedata[bootOffset+2];blkhdr[3]=filedata[bootOffset+3];
+var dataitem=new PackItem(filedata,bootOffset+4,ln2);
+var blkhdritem=new PackItem(blkhdr,0,4);
+blkhdritem.child=dataitem;
+blkhdritem.setDescription();
+addItemToPack(blkhdritem);
+updateInventory();
+var idx=packs[currentPackIndex].items.indexOf(blkhdritem);
+if(idx!==-1&&typeof selectItem==='function')selectItem(currentPackIndex,idx);
+
+
+}else if(isBlockFile){
 var type=filedata[5]-0x80;
 var ln=(filedata[3]<<8)+filedata[4];
 if(filedata.length<6+ln){
@@ -2407,7 +2698,10 @@ addItemToPack(hdritem);
 updateInventory();
 var idx=packs[currentPackIndex].items.indexOf(hdritem);
 if(idx!==-1&&typeof selectItem==='function')selectItem(currentPackIndex,idx);
-}else if(filedata[0]==79&&filedata[1]==82&&filedata[2]==71&&filedata[5]==0xFF){
+return true;
+}else {
+
+if(filedata[5]==0xFF){
 var ln=(filedata[3]<<8)+filedata[4];
 if(filedata.length<6+ln||ln<0x1d){
 alert("The file "+name+" seems to be truncated!");
@@ -2432,6 +2726,10 @@ addItemToPack(blkhdritem);
 updateInventory();
 var idx=packs[currentPackIndex].items.indexOf(blkhdritem);
 if(idx!==-1&&typeof selectItem==='function')selectItem(currentPackIndex,idx);
+}else {
+return false;
+}
+}
 
 var pack=packs[currentPackIndex];
 
@@ -2440,29 +2738,29 @@ var pack=packs[currentPackIndex];
 
 var itemIdx=pack.items.indexOf(blkhdritem);
 if(pack&&itemIdx>0){
+var isBootable=(pack.items[0].data[0]&0x10)===0;
 var bootAddr=getItemAddres(pack,itemIdx);
 
 
 if(bootAddr<=0xFFFF){
 
+var onMakeBoot=function (targetIdx){
+if(targetIdx!==undefined&&targetIdx!==itemIdx){
+
+pack.items.splice(itemIdx,1);
+pack.items.splice(targetIdx,0,blkhdritem);
+itemIdx=targetIdx;
+
+bootAddr=getItemAddres(pack,itemIdx);
+}
 var targetBootAddr=bootAddr+4;
 
-
-
-var content=document.createElement('div');
-content.style.textAlign='center';
-content.innerHTML="<div>Do you want this to be used as boot code?</div>" +
-"<div style='font-weight:bold; margin:10px 0;'>Boot Address: 0x"+targetBootAddr.toString(16).toUpperCase().padStart(4,'0')+"</div>";
-
-var onYes=function (){
 var hdata=pack.items[0].data;
 hdata[2]=0;hdata[3]=filedata[9];hdata[4]=filedata[10];hdata[5]=filedata[11];
-
-
 hdata[6]=(targetBootAddr>>8)&0xff;
 hdata[7]=targetBootAddr&0xff;
-
 hdata[0]&=0xEF;
+
 var sum1=hdata[0]+hdata[2]+hdata[4]+hdata[6];
 var sum2=hdata[1]+hdata[3]+hdata[5]+hdata[7];
 sum1+=(sum2>>8);
@@ -2476,87 +2774,40 @@ hdata[8]=sum1&0xff;
 
 pack.unsaved=true;
 updateInventory();
+
+if(typeof selectItem==='function'){
+setTimeout(function (){selectItem(currentPackIndex,itemIdx);},50);
+}
 };
 
+if(!isBootable){
 
-
-var makeBoot=false;
-new ModalDialog(content,onYes,null,"Yes","No").start();
-
-
-if(makeBoot){
-var hdata=pack.items[0].data;
-hdata[2]=0;hdata[3]=filedata[9];hdata[4]=filedata[10];hdata[5]=filedata[11];
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-hdata[6]=(bootAddr>>8)&0xff;
-hdata[7]=bootAddr&0xff;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-hdata[2]=0;
-hdata[3]=filedata[9];
-hdata[4]=filedata[10];
-hdata[5]=filedata[11];
-
-hdata[0]&=0xEF;
-var sum1=hdata[0]+hdata[2]+hdata[4]+hdata[6];
-var sum2=hdata[1]+hdata[3]+hdata[5]+hdata[7];
-sum1+=(sum2>>8);
-hdata[9]=sum2&0xff;
-if((hdata[0]&0x40)==0){
-hdata[8]&=0x80;
-hdata[8]+=sum1&0x7f;
-}else {
-hdata[8]=sum1&0xff;
+var mainIdx=0;
+for(var i=1;i<pack.items.length;i++){
+if(pack.items[i].name==="MAIN"||
+(pack.items[i].child&&pack.items[i].child.name==="MAIN")){
+mainIdx=i;
+break;
 }
+}
+var headIdx=mainIdx>0?mainIdx+1:1;
 
-pack.unsaved=true;
+
+var content=document.createElement('div');
+content.style.textAlign='center';
+content.innerHTML="<div style='margin-bottom:10px;'>There is no existing bootable record in this pack.</div>" +
+"<div style='font-weight:bold;'>Do you want to place this record at the head of the pack (under MAIN) and set it as the bootable address?</div>";
+
+new ModalDialog(content,function (){onMakeBoot(headIdx);},null,"Yes","No").start();
+}else {
+
+var targetBootAddr=bootAddr+4;
+var content=document.createElement('div');
+content.style.textAlign='center';
+content.innerHTML="<div>Do you want this to be used as boot code?</div>" +
+"<div style='font-weight:bold; margin:10px 0;'>Boot Address: 0x"+targetBootAddr.toString(16).toUpperCase().padStart(4,'0')+"</div>";
+
+new ModalDialog(content,function (){onMakeBoot(itemIdx);},null,"Yes","No").start();
 }
 }
 }
@@ -2774,8 +3025,6 @@ updateInventory();
 var idx=packs[currentPackIndex].items.indexOf(hdritem);
 if(idx!==-1&&typeof selectItem==='function')selectItem(currentPackIndex,idx);
 }else if(name.substr(-4).toUpperCase()==".BIN"){
-
-
 var ln=filedata.length;
 
 
@@ -2787,8 +3036,73 @@ for(var i=0;i<ln;i++)rawBytes[i]=filedata.charCodeAt(i);
 rawBytes=filedata;
 }
 
+var hasORG=rawBytes.length>=6&&rawBytes[0]===79&&rawBytes[1]===82&&rawBytes[2]===71;
+var dataitem;
+var blkhdritem;
 
+var pack=packs[currentPackIndex];
+var packHasBoot=false;
+if(pack&&pack.items.length>0&&pack.items[0].data.length>=10){
+var currBoot=(pack.items[0].data[6]<<8)|pack.items[0].data[7];
+if(currBoot!==0xFFFF&&currBoot!==0x0000){
+packHasBoot=true;
+}
+}
 
+if(hasORG){
+var tempPack=new PackImage(rawBytes);
+var bootItem=null;
+
+if(tempPack.items.length>0&&tempPack.items[0].data.length>=10){
+var impBootAddr=(tempPack.items[0].data[6]<<8)|tempPack.items[0].data[7];
+if(impBootAddr!==0xFFFF&&impBootAddr!==0x0000){
+var tempOffset=0;
+for(var i=0;i<tempPack.items.length;i++){
+if(tempOffset<=impBootAddr&&tempOffset+tempPack.items[i].getLength()>impBootAddr){
+bootItem=tempPack.items[i];
+break;
+}
+tempOffset+=tempPack.items[i].getLength();
+}
+}
+}
+
+if(!bootItem){
+
+for(var i=1;i<tempPack.items.length;i++){
+
+if(tempPack.items[i].type===0||(tempPack.items[i].data&&tempPack.items[i].data[1]===0x80)){
+bootItem=tempPack.items[i];
+break;
+}
+}
+}
+
+if(!bootItem){
+alert("The imported Boot File does not contain any valid records.");
+return false;
+}
+
+if(packHasBoot){
+if(!confirm("This pack already has a boot record. The boot header from the imported file will be removed and the file will be imported as a standard long record. Continue?")){
+return false;
+}
+}
+
+var extractedBytes=bootItem.getFullData();
+var payloadLen=extractedBytes.length-4;
+var blkhdr=new Uint8Array([extractedBytes[0],extractedBytes[1],extractedBytes[2],extractedBytes[3]]);
+
+blkhdritem=new PackItem(blkhdr,0,4);
+dataitem=new PackItem(extractedBytes,4,payloadLen);
+}else if(rawBytes.length>=4&&rawBytes[0]===2&&rawBytes[1]===0x80){
+
+var payloadLen=rawBytes.length-4;
+var blkhdr=new Uint8Array([rawBytes[0],rawBytes[1],rawBytes[2],rawBytes[3]]);
+
+blkhdritem=new PackItem(blkhdr,0,4);
+dataitem=new PackItem(rawBytes,4,payloadLen);
+}else {
 
 var blkhdr=new Uint8Array(4);
 blkhdr[0]=2;
@@ -2796,8 +3110,9 @@ blkhdr[1]=0x80;
 blkhdr[2]=(ln>>8)&0xFF;
 blkhdr[3]=ln&0xFF;
 
-var blkhdritem=new PackItem(blkhdr,0,4);
-var dataitem=new PackItem(rawBytes,0,ln);
+blkhdritem=new PackItem(blkhdr,0,4);
+dataitem=new PackItem(rawBytes,0,ln);
+}
 
 blkhdritem.child=dataitem;
 blkhdritem.setDescription();
@@ -2807,57 +3122,45 @@ updateInventory();
 var idx=packs[currentPackIndex].items.indexOf(blkhdritem);
 if(idx!==-1&&typeof selectItem==='function')selectItem(currentPackIndex,idx);
 
-
-var pack=packs[currentPackIndex];
-
-
-
 var itemIdx=pack.items.indexOf(blkhdritem);
 
 if(pack&&itemIdx>0){
-
 var bootAddr=getItemAddres(pack,itemIdx);
 
-
 if(bootAddr<=0xFFFF){
-
 var targetBootAddr=bootAddr+4;
-
-
-var content=document.createElement('div');
-content.style.textAlign='center';
-content.innerHTML="<div>Do you want this to be used as boot code?</div>" +
-"<div style='font-weight:bold; margin:10px 0;'>Boot Address: 0x"+targetBootAddr.toString(16).toUpperCase().padStart(4,'0')+"</div>";
 
 var onYes=function (){
 var hdata=pack.items[0].data;
-
 hdata[6]=(targetBootAddr>>8)&0xff;
 hdata[7]=targetBootAddr&0xff;
 
-
 hdata[0]&=0xEF;
-
-
 var sum1=hdata[0]+hdata[2]+hdata[4]+hdata[6];
 var sum2=hdata[1]+hdata[3]+hdata[5]+hdata[7];
 sum1+=(sum2>>8);
-
-
+hdata[9]=sum2&0xff;
 if((hdata[0]&0x40)==0){
 hdata[8]&=0x80;
 hdata[8]+=sum1&0x7f;
 }else {
 hdata[8]=sum1&0xff;
 }
-hdata[9]=sum2&0xff;
 
 pack.unsaved=true;
 updateInventory();
 };
 
+if(hasORG&&!packHasBoot){
+onYes();
+}else if(!hasORG){
+var content=document.createElement('div');
+content.style.textAlign='center';
+content.innerHTML="<div>Do you want this to be used as boot code?</div>" +
+"<div style='font-weight:bold; margin:10px 0;'>Boot Address: 0x"+targetBootAddr.toString(16).toUpperCase().padStart(4,'0')+"</div>";
 
 new ModalDialog(content,onYes,null,"Yes","No").start();
+}
 }
 }
 
@@ -3253,10 +3556,33 @@ document.title="Graphic Character Editor";
 
 
 async function importFilesToPack(packIndex,files){
+
+var bldFile=null;
+var zipFile=null;
+var fileList=[];
+
+for(var i=0;i<files.length;i++){
+var fn=files[i].name.toLowerCase();
+if(fn.endsWith(".bld"))bldFile=files[i];
+if(fn.endsWith(".zip"))zipFile=files[i];
+fileList.push(files[i]);
+}
+
+
+if(zipFile){
+handleZIPImport(zipFile);
+return;
+}
+
+
+if(bldFile){
+handleBLDImport(bldFile,fileList);
+return;
+}
+
+
 var pack=packs[packIndex];
 if(!pack)return;
-
-
 
 var originalPackIndex=currentPackIndex;
 currentPackIndex=packIndex;
@@ -3266,22 +3592,19 @@ var fn=files[i].name;
 var success=false;
 try{
 if(fn.match(/\.((ODB)|(OPL)|(NTS))$/i)){
-
 if(typeof LoadLocalTextFileAsync==='function'){
 var result=await LoadLocalTextFileAsync(files[i]);
 success=createItemFromFileData(result.data,result.name);
 }else {
-
-alert("Loader error: Sync fallback not supported for batch.");
+alert("Loader error: Async helper missing.");
 break;
 }
 }else {
-
 if(typeof LoadLocalBinaryFileAsync==='function'){
 var result=await LoadLocalBinaryFileAsync(files[i]);
 success=createItemFromFileData(result.data,result.name);
 }else {
-alert("Loader error: Sync fallback not supported for batch.");
+alert("Loader error: Async helper missing.");
 break;
 }
 }
@@ -3290,15 +3613,172 @@ alert("Error importing file "+fn+": "+e);
 success=false;
 }
 
-if(!success){
+if(!success)break;
+}
 
+updateInventory();
+}
+
+function confirmDialog(message,note){
+return new Promise(function (resolve){
+var element=document.createElement('div');
+element.style.padding='10px';
+element.innerHTML="<h3>Confirm Import</h3>" +
+"<p>"+message+"</p>" +
+(note?"<p style='font-size: 11px; opacity: 0.7; border-top: 1px solid var(--border-color); padding-top: 5px;'><i class='fas fa-info-circle'></i> "+note+"</p>":"");
+
+var dialog=new ModalDialog(element,function (){resolve(true);},function (){resolve(false);},"Yes","No");
+dialog.start();
+});
+}
+
+async function handleBLDImport(bldFile,otherFiles){
+var result=await LoadLocalTextFileAsync(bldFile);
+var content=result.data;
+var lines=content.split(/\r?\n/);
+if(lines.length===0)return;
+
+
+var headerLine=lines[0].trim();
+if(!headerLine){
+alert("Invalid .BLD file: Header line missing.");
+return;
+}
+
+var parts=headerLine.split(/[\s,]+/);
+var packName=parts[0]||"ImportedPack";
+var sizeKB=parseInt(parts[1])||64;
+
+
+var newPackIndex=createAndSelectPack(packName,sizeKB);
+var pack=packs[newPackIndex];
+
+
+var hdata=pack.items[0].data;
+if(headerLine.toUpperCase().indexOf("NOCOPY")!==-1)hdata[0]|=0x08;
+if(headerLine.toUpperCase().indexOf("NOWRITE")!==-1)hdata[0]|=0x10;
+
+
+var importedCount=0;
+for(var i=1;i<lines.length;i++){
+var line=lines[i].trim();
+if(!line||line.startsWith("!"))continue;
+
+var itemParts=line.split(/\s+/);
+var itemName=itemParts[0];
+var itemExt=(itemParts[1]||"BIN").toUpperCase();
+
+
+if(itemName.toUpperCase()==="MAIN"){
+var confirmed=await confirmDialog("A 'MAIN' entry was identified in the import. Do you wish to import it?","Note: A new Data Pack contains a default 'MAIN' entry by default.");
+if(!confirmed)continue;
+}
+
+
+var match=null;
+var matchName=(itemName+"."+itemExt).toLowerCase();
+
+for(var j=0;j<otherFiles.length;j++){
+var fn=otherFiles[j].name.toLowerCase();
+if(fn===matchName||fn===itemName.toLowerCase()+"."+itemExt.toLowerCase()){
+match=otherFiles[j];
 break;
 }
 }
 
+if(match){
+var data;
+if(match.content){
+data=match.content;
+}else {
+var res=await LoadLocalBinaryFileAsync(match);
+data=res.data;
+}
 
+if(createItemFromFileData(data,match.name)){
+importedCount++;
+}
+}
+}
 
 updateInventory();
+alert("Import complete. Created new "+sizeKB+"KB Pack '"+packName+"' with "+importedCount+" items.");
+}
+
+async function handleZIPImport(zipFile){
+try{
+setStatus("Unzipping "+zipFile.name+"...");
+var extractedFiles=await ZipUtils.readZip(zipFile);
+if(extractedFiles.length===0){
+alert("ZIP file is empty or invalid.");
+return;
+}
+
+
+var bldFile=null;
+for(var i=0;i<extractedFiles.length;i++){
+if(extractedFiles[i].name.toLowerCase().endsWith(".bld")){
+bldFile=extractedFiles[i];
+
+bldFile.data=new TextDecoder().decode(bldFile.content);
+break;
+}
+}
+
+if(bldFile){
+
+
+var originalLoader=LoadLocalTextFileAsync;
+window.LoadLocalTextFileAsync=async function (){return bldFile;};
+await handleBLDImport(bldFile,extractedFiles);
+window.LoadLocalTextFileAsync=originalLoader;
+}else {
+
+var packName=zipFile.name.replace(/\.[^/.]+$/,"");
+var newPackIndex=createAndSelectPack(packName,64);
+
+var importedCount=0;
+for(var i=0;i<extractedFiles.length;i++){
+var file=extractedFiles[i];
+var baseName=file.name.replace(/\.[^/.]+$/,"").toUpperCase();
+
+
+if(baseName==="MAIN"){
+var confirmed=await confirmDialog("A 'MAIN' entry was identified in the ZIP. Do you wish to import it?","Note: A new Data Pack contains a default 'MAIN' entry by default.");
+if(!confirmed)continue;
+}
+
+if(createItemFromFileData(file.content,file.name)){
+importedCount++;
+}
+}
+updateInventory();
+alert("Import complete. Created new 64KB Pack '"+packName+"' from ZIP contents ("+importedCount+" items).");
+}
+}catch(e){
+alert("Error importing ZIP: "+e.message);
+}finally{
+setStatus("Ready");
+}
+}
+
+function createAndSelectPack(name,sizeKB){
+var sizeCode=Math.ceil(sizeKB/8);
+if(sizeCode<1)sizeCode=1;
+if(sizeCode>128)sizeCode=128;
+
+var newPack=new PackImage(null,sizeCode);
+newPack.filename=name.toLowerCase().endsWith(".opk")?name:name+".opk";
+
+packs.push(newPack);
+currentPack=newPack;
+currentPackIndex=packs.length-1;
+
+
+OptionsManager.setOption('lastPackSize',sizeCode);
+
+updateInventory();
+return currentPackIndex;
 }
 
 function LoadLocalBinaryFileAsync(file){
@@ -3326,4 +3806,105 @@ reject(e);
 };
 reader.readAsText(file);
 });
+}
+
+
+function openPackFromURL(){
+var element=document.createElement('div');
+element.style.padding='10px';
+element.innerHTML="<h3>Open from URL</h3>" +
+"<p>Enter the direct link to a <b>.opk</b> or <b>.hex</b> file:</p>" +
+"<input type='text' id='import-url' placeholder='https://example.com/pack.opk' style='width: 100%; padding: 8px; background: var(--input-bg); color: var(--text-color); border: 1px solid var(--border-color); margin-bottom: 10px;'>" +
+"<div style='margin: 10px 0;'>" +
+"<label style='display: flex; align-items: center; cursor: pointer;'>" +
+"<input type='checkbox' id='use-proxy' checked style='margin-right: 8px;'> Use CORS Proxy (Recommended for external links)" +
+"</label>" +
+"</div>" +
+"<p style='font-size: 11px; opacity: 0.7;'><i class='fas fa-info-circle'></i> Use the proxy if you encounter a 'CORS restriction' error. This routes the request through <i>allorigins.win</i> to bypass security blocks.</p>";
+
+var dialog=new ModalDialog(element,async function (){
+var url=element.querySelector('#import-url').value.trim();
+var useProxy=element.querySelector('#use-proxy').checked;
+if(!url)return;
+
+var finalUrl=url;
+if(useProxy){
+
+finalUrl="https://api.allorigins.win/raw?url="+encodeURIComponent(url);
+}
+
+setStatus("Fetching "+(useProxy?"via proxy... ":"")+url);
+console.log("Fetching from:",finalUrl);
+
+try{
+const response=await fetch(finalUrl);
+if(!response.ok)throw new Error("Server returned "+response.status+": "+response.statusText);
+
+const buffer=await response.arrayBuffer();
+const data=new Uint8Array(buffer);
+
+
+var filename=url.split('/').pop().split('?')[0]||"downloaded.opk";
+
+
+var isHex=filename.toLowerCase().endsWith(".hex")||filename.toLowerCase().endsWith(".ihx");
+var finalData;
+
+if(isHex){
+var text=new TextDecoder().decode(data);
+finalData=parseIntelHexToBinary(text);
+}else {
+
+if(data.length>=3&&data[0]===0x4F&&data[1]===0x50&&data[2]===0x4B){
+finalData=data;
+}else {
+
+finalData=new Uint8Array(data.length+6);
+finalData.set ([0x4F,0x50,0x4B,(data.length>>16)&0xFF,(data.length>>8)&0xFF,data.length&0xFF]);
+finalData.set (data,6);
+}
+}
+
+var newPack=new PackImage(finalData);
+newPack.filename=filename.replace(/\.[^/.]+$/,"")+".opk";
+
+packs.push(newPack);
+currentPackIndex=packs.length-1;
+selectedPackIndex=packs.length-1;
+
+updateInventory();
+setStatus("Imported "+filename);
+saveSession();
+
+}catch(e){
+alert("Failed to import from URL:\n"+e.message+"\n\nReason: Likely a CORS restriction or network error.");
+setStatus("Import failed.");
+}
+},null,"Open","Cancel");
+
+dialog.start();
+setTimeout(()=>element.querySelector('#import-url').focus(),100);
+}
+
+function openBootableWizard(){
+if(typeof packs==='undefined'||packs.length===0){
+createNewPackImmediately(1);
+}
+
+var activePack=packs[currentPackIndex];
+
+var wizard=new BootableWizard(activePack,function (){
+updateInventory();
+});
+wizard.show();
+}
+
+function createNewPackImmediately(sizeCode){
+var newPack=new PackImage(null,sizeCode);
+newPack.filename="Pack"+(packs.length+1)+".opk";
+packs.push(newPack);
+currentPack=newPack;
+currentPackIndex=packs.length-1;
+updateInventory();
+setStatus("New 8KB pack created automatically");
 }

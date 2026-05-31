@@ -264,26 +264,35 @@ if(codeBlock.length>0x14&&codeBlock[0x14]===0x24){
 isLZ=true;
 }
 
-if(codeBlock[0]===0x09&&(codeBlock[1]===0x83||codeBlock[1]===0x09||codeBlock[1]===0x03)){
+
+if(codeBlock.length>4&&codeBlock[0]===0x00&&codeBlock[2]===0x00&&codeBlock[3]===0x01){
+offset=4;
+}
+
+const firstByte=codeBlock[offset];
+const secondByte=codeBlock[offset+1];
+
+if((secondByte===0x83||secondByte===0x09||secondByte===0x03)){
 
 
 const rLen=readByte();
-log(0,getHexBytes(0,1),"Length Byte",rLen.toString(),"Length of header");
+log(offset-1,getHexBytes(offset-1,1),"Length Byte",rLen.toString(),"Length of header");
 
 const rType=readByte();
-log(1,getHexBytes(1,1),"Record Type",`0x${rType.toString(16).toUpperCase()}`,"OPL Procedure Record");
+log(offset-1,getHexBytes(offset-1,1),"Record Type",`0x${rType.toString(16).toUpperCase()}`,"OPL Procedure Record");
 
 
-const nameBytes=codeBlock.slice(2,10);
+const nameBytes=codeBlock.slice(offset,offset+8);
 let extractedNameStr="";
 for(let i=0;i<8;i++)extractedNameStr+=String.fromCharCode(nameBytes[i]);
 offset+=8;
 extractedName=extractedNameStr.trim();
-log(2,getHexBytes(2,8),"File Name",extractedName,"Procedure Name");
+log(offset-8,getHexBytes(offset-8,8),"File Name",extractedName,"Procedure Name");
 
+if(rLen<=10){
 
 const term=readByte();
-log(10,getHexBytes(10,1),"Terminator",`0x${term.toString(16).toUpperCase()}`,"Unused/Terminator");
+log(offset-1,getHexBytes(offset-1,1),"Terminator",`0x${term.toString(16).toUpperCase()}`,"Unused/Terminator");
 
 
 this.oplBase=offset;
@@ -299,10 +308,19 @@ log(offset-2,getHexBytes(offset-2,2),"LongRec Len",longRecLen.toString(),"Length
 
 qcodeTotalLen=readWordBE();
 log(offset-2,getHexBytes(offset-2,2),"Total Len",qcodeTotalLen.toString(),"Total Object Size");
+if(qcodeTotalLen===0){
+qcodeTotalLen=longRecLen;
+}
+
+}else {
 
 this.oplBase=offset;
+const magic=readWordBE();
+log(this.oplBase,getHexBytes(this.oplBase,2),"OPL Magic",magic.toString(),"Embedded OPL Magic");
+qcodeTotalLen=rLen-9 - 2;
+}
 
-}else if(codeBlock[0]===0x02&&codeBlock[1]===0x80){
+}else if(codeBlock[offset]===0x02&&codeBlock[offset+1]===0x80){
 
 sync=readByte();
 log(0,getHexBytes(0,1),"Sync Byte",`0x${sync.toString(16).toUpperCase()}`,"Long Record Sync");
@@ -315,6 +333,9 @@ log(2,getHexBytes(2,2),"LongRec Len",longRecLen.toString(),"Length of Data Block
 
 qcodeTotalLen=readWordBE();
 log(4,getHexBytes(4,2),"Total Len",qcodeTotalLen.toString(),"Total Object Size");
+if(qcodeTotalLen===0){
+qcodeTotalLen=longRecLen;
+}
 
 this.oplBase=offset;
 
@@ -338,13 +359,45 @@ options.logCallback({pc:null,bytes:"",opName:"-------------------",args:"",comme
 }
 
 
+let is11ByteLZ=false;
+if(offset+10<codeBlock.length&&
+codeBlock[offset]===0x00&&codeBlock[offset+1]===0x00&&
+codeBlock[offset+10]===0x24){
+is11ByteLZ=true;
+isLZ=true;
+}
+
+let qcodeOffset=0;
+let sourceOffset=0;
+let fixupOffset=0;
+let flag=0;
+
+if(is11ByteLZ){
+const magic=readWordBE();
+vSpace=readWordLE();
+qcodeOffset=readWordLE();
+sourceOffset=readWordLE();
+fixupOffset=readWordLE();
+flag=readByte();
+nParams=readByte();
+
+log(this.oplBase,getHexBytes(this.oplBase,2),"OPL Magic",magic.toString(),"OPL Magic");
+log(this.oplBase+2,getHexBytes(this.oplBase+2,2),"VarSpace",vSpace.toString(),"Variable Space Size");
+log(this.oplBase+4,getHexBytes(this.oplBase+4,2),"QCodeOff",qcodeOffset.toString(),"Offset to QCode");
+log(this.oplBase+6,getHexBytes(this.oplBase+6,2),"SourceOff",sourceOffset.toString(),"Offset to Source");
+log(this.oplBase+8,getHexBytes(this.oplBase+8,2),"FixupOff",fixupOffset.toString(),"Offset to Fixups");
+log(this.oplBase+10,getHexBytes(this.oplBase+10,1),"Flag",flag.toString(),"LZ Flag");
+log(this.oplBase+11,getHexBytes(this.oplBase+11,1),"NumParams",nParams.toString(),`NPC:${nParams}`);
+}else {
+const metaPC=offset;
 vSpace=readWordBE();
 qSize=readWordBE();
 nParams=readByte();
 
-log(this.oplBase,getHexBytes(this.oplBase,2),"VarSpace",vSpace.toString(),"Variable Space Size");
-log(this.oplBase+2,getHexBytes(this.oplBase+2,2),"QCodeSize",qSize.toString(),"Active QCode area");
-log(this.oplBase+4,getHexBytes(this.oplBase+4,1),"NumParams",nParams.toString(),`NPC:${nParams}`);
+log(metaPC,getHexBytes(metaPC,2),"VarSpace",vSpace.toString(),"Variable Space Size");
+log(metaPC+2,getHexBytes(metaPC+2,2),"QCodeSize",qSize.toString(),"Active QCode area");
+log(metaPC+4,getHexBytes(metaPC+4,1),"NumParams",nParams.toString(),`NPC:${nParams}`);
+}
 
 const paramTypes=[];
 for(let i=0;i<nParams;i++){
@@ -356,7 +409,10 @@ log(poff,getHexBytes(poff,1),`ParamType`,typeLabel,"");
 }
 
 
-const qcodeInstructionStart=(this.oplBase+qcodeTotalLen)-qSize;
+let qcodeInstructionStart=0;
+if(!is11ByteLZ){
+qcodeInstructionStart=(this.oplBase+qcodeTotalLen)-qSize;
+}
 
 const hMeta={
 extractedName,
@@ -419,6 +475,10 @@ hMeta.externals=externals;
 const stringFixups=[];
 const arrayFixups={};
 
+if(is11ByteLZ&&fixupOffset!==undefined){
+offset=this.oplBase+fixupOffset;
+}
+
 if(offset<codeBlock.length){
 const strFixSize=readWordBE();
 log(offset-2,getHexBytes(offset-2,2),"StrFixTblSize",strFixSize.toString(),"String fixup table length");
@@ -438,6 +498,20 @@ log(sOff,getHexBytes(sOff,3),`StrFixup Addr:${toEvenHex(addr, 2).replace('0x', '
 
 
 if(offset<codeBlock.length){
+if(is11ByteLZ){
+const arrFixSize=readByte();
+log(offset-1,getHexBytes(offset-1,1),"ArrFixTblSize",arrFixSize.toString(),"Array fixup table length");
+
+const arrFixEnd=offset+arrFixSize;
+while(offset<arrFixEnd&&offset+3<codeBlock.length){
+const aOff=offset;
+const addr=readWordBE();
+const len=readWordBE();
+arrayFixups[addr]=len;
+log(aOff,getHexBytes(aOff,4),`ArrFixup Addr:${toEvenHex(addr, 2).replace('0x', '')}`,`Len:${len}`);
+}
+qcodeInstructionStart=offset;
+}else {
 
 const gap=qcodeInstructionStart-offset;
 
@@ -464,6 +538,7 @@ log(aOff,getHexBytes(aOff,4),`ArrFixup Addr:${toEvenHex(addr, 2).replace('0x', '
 offset=qcodeInstructionStart;
 }else {
 offset=qcodeInstructionStart;
+}
 }
 }
 
@@ -495,6 +570,10 @@ const adjQCodeStart=isLZSig?finalQCodeActual+2:finalQCodeActual;
 let calcSize=hMeta.qcodeSize!==undefined?hMeta.qcodeSize:(sourceActual>qcodeActual?sourceActual-qcodeActual:codeBlock.length-qcodeActual);
 if(isLZSig)calcSize-=2;
 
+if(is11ByteLZ){
+calcSize=codeBlock.length-adjQCodeStart;
+}
+
 return {
 varSpaceSize:hMeta.varSpaceSize,
 qcodeSize:calcSize,
@@ -506,6 +585,7 @@ stringFixups,
 arrayFixups,
 qcodeStart:adjQCodeStart,
 actualQCodeStart:adjQCodeStart,
+qcodeInstructionStart:adjQCodeStart,
 isLZ:(hMeta.isLZ===true)||isLZSig,
 isCMXP:!!hMeta.isCMXP,
 extractedName:hMeta.extractedName,

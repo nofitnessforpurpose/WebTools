@@ -9,12 +9,28 @@ BlockFileEditor.prototype=Object.create(FileEditor.prototype);
 BlockFileEditor.prototype.initialise=function (item,extraelement){
 if(!this.myelement){
 var newelement=document.createElement('div');
-newelement.className='legacy-editor-container';
+newelement.className='record-header-wrapper';
 newelement.innerHTML=
-"<form action='#'><fieldset><legend>Header</legend>" +
-"<div>File name: <input type='text' id='filename'></div>" +
-"<div><input type='checkbox' id='deleted'><label for='deleted'>Deleted</label></div>" +
-"</fieldset></form>";
+"<div class='native-section-title' data-target='record-header-content'>Record Header</div>" +
+"<div id='record-header-content' class='collapsible-content legacy-editor-container'>" +
+"<form action='#'><div class='record-header-fieldset'>" +
+"<div class='record-header-fields'>" +
+"<span>File name: <input type='text' id='filename' size='10'></span>" +
+"<span class='deleted-checkbox-wrapper'><input type='checkbox' id='deleted'><label for='deleted'>Deleted</label></span>" +
+"</div>" +
+"</div></form>" +
+"</div>";
+
+
+var title=newelement.querySelector('.native-section-title');
+title.addEventListener('click',function (){
+var content=this.nextElementSibling;
+if(content&&content.classList.contains('collapsible-content')){
+this.classList.toggle('collapsed');
+content.classList.toggle('collapsed');
+}
+});
+
 if(extraelement){
 var el=document.createElement('div');
 el.appendChild(newelement);

@@ -6,6 +6,7 @@ function ProcedureFileEditor(editorelement,codeEditorContainer,callback){
 BlockFileEditor.call(this,editorelement,callback,[2,3],codeEditorContainer);
 }
 ProcedureFileEditor.prototype=Object.create(BlockFileEditor.prototype);
+ProcedureFileEditor.prototype.constructor=ProcedureFileEditor;
 ProcedureFileEditor.prototype.initialise=function (item){
 var self=this;
 var extraelement=null;
@@ -14,7 +15,7 @@ if(!this.myelement){
 
 extraelement=document.createElement('div');
 extraelement.innerHTML=
-"<form action='#'><fieldset><legend>Procedure</legend>" +
+"<form action='#'><fieldset><legend>Procedure Info</legend>" +
 "<div>Size of Object Code: <span id='objectcode'></span> bytes</div>" +
 "<div>Note: Editing source code here will not change the object code</div>" +
 "<div class='opl-editor-container' id='opl-legacy-container'>" +

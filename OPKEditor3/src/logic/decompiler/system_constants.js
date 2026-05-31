@@ -103,11 +103,20 @@ const SYSTEM_CONSTANTS={
 
 0x2070:"DPT_TLIN",
 0x2080:"DPT_BLIN",
-0x2090:"DPT_SAVE",
+0x2090:"DPT_SCRN - Address of screen butter",
+0x2092:"DPB_NLIN - No of screen lines in use",
+0x2093:"DPB_WIDE - Screen width, 16 or 20",
+0x2095:"DPB_CLOK - Left character position of clock",
+0x2096:"DPB_CRED - Clock ready flag, times colon flash",
 
-0x2099:"Border character round 2-line mode procedure.",
+0x2099:"DPB_BORD - Border character round 2-line mode procedure.",
 
+0x209C:"MNB_CPTZ - Menu capitalisation mode 0=None, 1=Forced",
+
+0x20A6:"TMB_24F  - B7 Dayloght saveing, B0 24 Hr Mode",
 0x20A7:"Sets bits for workday alarms. Default $1F - Monday to Friday",
+0x20A9:"DIB_1SLT - Diary slot control",
+0x20AC:"DIB_AP   - Diary alarm promts 0=None, Non Zero enabled",
 
 0x20B0:"KBT_BUFF",
 0x20C0:"KBB_CLIK - Length of key click. 0 is silent",
@@ -127,12 +136,17 @@ const SYSTEM_CONSTANTS={
 
 0x20CF:"UTT_TBUF",
 
+0x20A7:"AMB_WRKD - Working days of the week",
+
 0x20D6:"PKB_IMSK",
 0x20D7:"PKT_ID",
 0x20FF:"RTT_NUMB",
 0x214F:"DVT_SPAR",
 
 0x2177:"Hardware (Printer)",
+0x1284:"DPB_MODE - 0=2 line, 1 = 4 line mode",
+0x2185:"KBB_SPEC - Flags for special keys",
+0x2186:"BTB_LANG - Value corresponding to the default language.",
 0x2187:"RTB_BL",
 0x2188:"RTT_BF",
 0x2288:"AMT_NOW",
@@ -143,7 +157,6 @@ const SYSTEM_CONSTANTS={
 
 0x22F9:"AMT_TAB",
 0x2329:"DVA_BOT",
-0x232B:"DVA_TOP",
 
 
 0x2324:"reserved to PSION",
@@ -156,6 +169,7 @@ const SYSTEM_CONSTANTS={
 
 0x232C:"reserved to PSION",
 0x232D:"reserved to PSION",
+0x232E:"XTB_COLD - B7 disable language selection menu.",
 
 0x2335:"AMB_EI",
 0x2336:"AMT_T0",
@@ -196,8 +210,13 @@ const SYSTEM_CONSTANTS={
 
 0x228E:"AMT_WEEK",
 
+0x7FEA:"NTB_FLGS - Notepad Flags",
+0x7FEB:"NTB_PSSW - Notepad Password, 0=None 1=Set",
+0x7FFD:"NTW_CLIN - Notepad current line number",
+0x7FFF:"NTB_CPOS - Notepad current cursor position",
+
 0xFFE8:"Machine type",
-0xFFE7:"Modrl variant",
+0xFFE7:"Model variant",
 0xFFCB:"Software rev. level no."
 };
 

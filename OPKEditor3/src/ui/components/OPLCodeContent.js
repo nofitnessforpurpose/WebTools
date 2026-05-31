@@ -507,6 +507,63 @@ code:
   A%(2)=$3900
   REM Call the machine code
   USR(ADDR(A%()), pos%)`
+},
+{
+name:"Auto Off Routine",
+description:"Change power off timeout period",
+code:
+`AUTOFFF:
+  REM Adapted From PSION News
+  REM Issue 5 - Diary UPDATE
+  REM Pretty Print by NFfP - 16 May 2026
+
+  REM Minimum 15 Seconds
+  LOCAL sec%
+  PRINT "Power Off Delay?"
+  INPUT sec%
+  POKEW $20CD, sec%
+  `
+},
+{
+name:"Format RAM Pack",
+description:"Force format of a classic RAM PACK",
+code:
+
+`FMTRAM:
+  REM Prog to format
+  REM a 32K RAM pack
+  REM Adapted from
+  REM Psion News 
+  REM Issue 7 
+  REM
+  REM NoFitnessForPurpose 2025
+  REM 
+  LOCAL A%(11), A, G%
+  TOP::
+  CLS : AT 1,1 : PRINT "1=PAK B  2=PAK C"
+  AT 1,2 :INPUT A
+  IF A<>1 AND A<>2 : GOTO TOP:: :ENDIF
+  T::
+  CLS :PRINT "MUST be a RAMPAK": PRINT "FORMAT Y/N"
+  G%=GET 
+  IF G%<>%N AND G%<>%Y 
+    GOTO T::
+  ELSEIF G%=%N :STOP
+  ELSEIF G%=%Y :ENDIF
+
+  A%(1)=$4F37
+  A%(2)=$3F62
+  A%(3)=$3225
+  A%(4)=$0D36
+  A%(5)=$4F36
+  A%(6)=$30C6
+  A%(7)=$013F
+  A%(8)=$6131
+  A%(9)=$334F
+  A%(10)=$3F62
+  A%(11)=$3900
+  USR(ADDR(a%()),A)
+  `
 }
 ]
 },

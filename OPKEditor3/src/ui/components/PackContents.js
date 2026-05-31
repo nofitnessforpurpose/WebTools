@@ -579,29 +579,32 @@ var itemDesc=document.createElement('span');
 itemDesc.className='item-desc';
 itemDesc.innerText=descText;
 
-if(item.type===3&&(descText==="OPL Procedure"||descText==="OPL Object"||descText==="OPL Text")){
+var isOPL=(item.type===3&&(descText==="OPL Procedure"||descText==="OPL Object"||descText==="OPL Text"));
+var isLongRecord=(item.type===0);
+var isDataRecord=(item.type>=16&&item.type<=126);
+
+if(isOPL||isLongRecord||isDataRecord){
 itemDesc.classList.add('clickable');
 itemDesc.style.textDecoration="none";
-itemDesc.title="Click to view Translated Q-Code (Hex)";
+itemDesc.title="Click to view raw Hex data";
 
 itemDesc.addEventListener('click',function (e){
 if(!OptionsManager.getOption('enableHexView'))return;
 e.stopPropagation();
-if(item.getFullData){
-var data=item.getFullData();
-if(data&&data.length>0){
-if(typeof HexViewer!=='undefined')HexViewer.show(data,descText+" Record: "+item.name);
-}else {
-alert("No Data found.");
-}
-}else if(item.child&&item.child.child&&item.child.child.data){
 
-var data=item.child.child.data;
+var data=null;
+var title=descText+" Record: "+item.name;
+
+if(item.getFullData){
+data=item.getFullData();
+}else if(item.data){
+data=item.data;
+}
+
 if(data&&data.length>0){
-if(typeof HexViewer!=='undefined')HexViewer.show(data,descText+" Record: "+item.name);
+if(typeof HexViewer!=='undefined')HexViewer.show(data,title);
 }else {
 alert("No Data found.");
-}
 }
 });
 }
@@ -885,8 +888,8 @@ else row.classList.remove('selected');
 
 var target=this.container.querySelector('.pack-item-row[data-pack-idx="'+packIndex+'"][data-item-idx="'+itemIndex+'"]');
 if(target){
-target.focus();
-target.scrollIntoView({behavior:'auto',block:'nearest'});
+target.focus({preventScroll:true});
+target.scrollIntoView({behavior:'auto',block:'nearest',inline:'nearest'});
 }
 }
 

@@ -580,7 +580,7 @@ this.updateStatusBar();
 calculateFoldRanges:function (lines){
 var ranges=[];
 var stack=[];
-var regex = /\b(PROC|ENDP|DO|UNTIL|IF|ENDIF|WHILE|ENDWH)\b/i;
+var regex = /\b(PROC|ENDP|DO|UNTIL|IF|ENDIF|WHILE|ENDWH)\b/gi;
 var matchTypes={
 'ENDP':'PROC',
 'UNTIL':'DO',
@@ -588,23 +588,57 @@ var matchTypes={
 'ENDWH':'WHILE'
 };
 for(var i=0;i<lines.length;i++){
-var match=lines[i].match(regex);
-if(match){
+var line=lines[i];
+var cleaned="";
+var j=0;
+while(j<line.length){
+var char=line[j];
+if(char==='\''||(line.substr(j,3).toUpperCase()==="REM"&&(j===0|| /[\s:]/.test(line[j-1]))&&(j+3>=line.length|| /[^A-Za-z0-9%$]/.test(line[j+3])))){
+cleaned+=" ".repeat(line.length-j);
+break;
+}
+if(char==='"'){
+var start=j;
+var end=j+1;
+while(end<line.length){
+if(line[end]==='"'){
+if(end+1<line.length&&line[end+1]==='"'){
+end+=2;
+continue;
+}else {
+end++;
+break;
+}
+}
+end++;
+}
+cleaned+=" ".repeat(end-start);
+j=end;
+continue;
+}
+cleaned+=char;
+j++;
+}
+var match;
+regex.lastIndex=0;
+while((match=regex.exec(cleaned))!==null){
 var kw=match[1].toUpperCase();
 if(kw==='PROC'||kw==='DO'||kw==='IF'||kw==='WHILE'){
 stack.push({start:i,type:kw});
 }else if(matchTypes[kw]){
 var expectedType=matchTypes[kw];
 var matchIndex=-1;
-for(var j=stack.length-1;j>=0;j--){
-if(stack[j].type===expectedType){
-matchIndex=j;
+for(var k=stack.length-1;k>=0;k--){
+if(stack[k].type===expectedType){
+matchIndex=k;
 break;
 }
 }
 if(matchIndex>=0){
-var start=stack[matchIndex];
-ranges.push({start:start.start,end:i});
+var startInfo=stack[matchIndex];
+if(startInfo.start!==i){
+ranges.push({start:startInfo.start,end:i});
+}
 stack.length=matchIndex;
 }
 }

@@ -56,6 +56,10 @@ themeDefinitions:{
 '--syntax-bracket-1':'#DA70D6',
 '--syntax-bracket-2':'#1E90FF',
 
+'--asm-vector':'#ffd700',
+'--asm-subroutine':'#4ec9b0',
+'--asm-branch':'#569cd6',
+
 '--mm-color-header':'#808080',
 '--mm-color-procedure':'#d33682',
 '--mm-color-datafile':'#268bd2',
@@ -106,6 +110,10 @@ themeDefinitions:{
 '--syntax-bracket-1':'#800080',
 '--syntax-bracket-2':'#008000',
 
+'--asm-vector':'#795e26',
+'--asm-subroutine':'#008000',
+'--asm-branch':'#0000FF',
+
 '--mm-color-header':'#999999',
 '--mm-color-procedure':'#d33682',
 '--mm-color-datafile':'#268bd2',
@@ -155,6 +163,10 @@ themeDefinitions:{
 '--syntax-bracket-0':'#ff00ff',
 '--syntax-bracket-1':'#00ffff',
 '--syntax-bracket-2':'#ffff00',
+
+'--asm-vector':'#ffff00',
+'--asm-subroutine':'#00ff00',
+'--asm-branch':'#00ffff',
 
 '--mm-color-header':'#555555',
 '--mm-color-procedure':'#ff00ff',
