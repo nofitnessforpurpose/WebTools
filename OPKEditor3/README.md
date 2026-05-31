@@ -39,6 +39,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 5.  **Import Items**: Click "Import Item" to load .opl, .odb, or binary files.
 6.  **Save**: Click "Save" to download the modified .opk file.
 7.  **Options**: Click "Options" to configure the editor (Theme, Line Numbers, Code Folding).
+8.  **Bootable Pack Wizard**: Click to create custom "Bootable" data packs.
 
 ## Technical Details
 
