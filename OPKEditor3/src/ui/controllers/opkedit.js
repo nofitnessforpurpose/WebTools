@@ -3948,11 +3948,23 @@ async function loadPackFromURLHelper(url, useProxy) {
       async function tryUrls(urls) {
          for (var i = 0; i < urls.length; i++) {
             console.log("Attempting fetch from: " + urls[i].name);
+            setStatus("Loading: trying " + urls[i].name + "...");
             
             var fetchResult = await new Promise((resolve) => {
                var xhr = new XMLHttpRequest();
                xhr.open("GET", urls[i].url, true);
                xhr.responseType = "arraybuffer";
+               
+               xhr.onprogress = function(event) {
+                  if (event.lengthComputable) {
+                     var percent = Math.round((event.loaded / event.total) * 100);
+                     setStatus("Loading (" + urls[i].name + "): " + percent + "%");
+                  } else {
+                     var kb = Math.round(event.loaded / 1024);
+                     setStatus("Loading (" + urls[i].name + "): " + kb + " KB");
+                  }
+               };
+
                xhr.onload = function() {
                   if (xhr.status >= 200 && xhr.status < 300) {
                      resolve({
