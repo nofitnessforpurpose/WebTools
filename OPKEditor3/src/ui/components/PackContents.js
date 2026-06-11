@@ -579,7 +579,7 @@ var itemDesc=document.createElement('span');
 itemDesc.className='item-desc';
 itemDesc.innerText=descText;
 
-var isOPL=(item.type===3&&(descText==="OPL Procedure"||descText==="OPL Object"||descText==="OPL Text"));
+var isOPL=(item.type===3&&(descText.startsWith("OPL Procedure")||descText==="OPL Object"||descText==="OPL Text"));
 var isLongRecord=(item.type===0);
 var isDataRecord=(item.type>=16&&item.type<=126);
 
@@ -756,9 +756,19 @@ else totals.text++;
 }
 });
 
+var totalSize=0;
+if(pack.items&&pack.items.length>0&&pack.items[0].data&&pack.items[0].data.length>1){
+var sizeMultiplier=pack.items[0].data[1];
+totalSize=8192*sizeMultiplier;
+}
+var consumedSize=pack.getLength();
+var percent=totalSize>0?Math.round((consumedSize/totalSize)*100):0;
+
 var html="<h4>"+(pack.filename||"Untitled Pack")+"</h4>";
 html+="<div class='tooltip-row'><span class='tooltip-label'>Total Items:</span><span class='tooltip-value'>"+pack.items.length+"</span></div>";
-html+="<div class='tooltip-row'><span class='tooltip-label'>Size:</span><span class='tooltip-value'>"+pack.getLength()+" bytes</span></div>";
+html+="<div class='tooltip-row'><span class='tooltip-label'>Selected Size:</span><span class='tooltip-value'>"+totalSize+" bytes</span></div>";
+html+="<div class='tooltip-row'><span class='tooltip-label'>Size:</span><span class='tooltip-value'>"+consumedSize+" bytes</span></div>";
+html+="<div class='tooltip-row'><span class='tooltip-label'>Consumed:</span><span class='tooltip-value'>"+percent+"%</span></div>";
 html+="<hr class='tooltip-divider'>";
 
 if(totals.dataFiles>0)html+="<div class='tooltip-row'><span class='tooltip-label'>Data Files:</span><span class='tooltip-value'>"+totals.dataFiles+"</span></div>";
@@ -774,6 +784,65 @@ var html="<h4>"+(item.name||"Item")+"</h4>";
 html+="<div class='tooltip-row'><span class='tooltip-label'>Type:</span><span class='tooltip-value'>"+getItemDescription(item)+" ("+item.type+")</span></div>";
 html+="<div class='tooltip-row'><span class='tooltip-label'>Address:</span><span class='tooltip-value'>0x"+address.toString(16).toUpperCase()+"</span></div>";
 html+="<div class='tooltip-row'><span class='tooltip-label'>Length:</span><span class='tooltip-value'>"+item.getLength()+" bytes</span></div>";
+
+
+if(item.type===3){
+var qcodeLength=0;
+var oplTextLength=0;
+var data=null;
+if(item.child){
+if(item.child.child&&item.child.child.data){
+data=item.child.child.data;
+}else if(item.child.data){
+data=item.child.data;
+}
+}
+if(data){
+var offset=0;
+while(offset<data.length&&data[offset]===0)offset++;
+
+var sync=-1;
+if(item.child&&!item.child.child){
+for(var i=offset;i<data.length-1;i++){
+if(data[i]===0x02&&data[i+1]===0x80){sync=i;break;}
+}
+}
+
+var lncode=0;
+var base=0;
+
+if(sync===-1){
+if(data.length>=2){
+lncode=(data[0]<<8)|data[1];
+base=0;
+}
+}else {
+if(sync+5<data.length){
+lncode=(data[sync+4]<<8)|data[sync+5];
+base=sync+4;
+}
+}
+
+qcodeLength=lncode;
+
+var lnsrc=0;
+if(base+2<=data.length){
+var lnsrcOffset=base+2 + lncode;
+if(lnsrcOffset+1<data.length){
+lnsrc=(data[lnsrcOffset]<<8)|data[lnsrcOffset+1];
+}
+}
+oplTextLength=lnsrc;
+}
+
+var totalLength=item.getLength();
+var qcodePercent=totalLength>0?Math.floor((qcodeLength/totalLength)*100):0;
+var oplTextPercent=totalLength>0?Math.floor((oplTextLength/totalLength)*100):0;
+
+html+="<div class='tooltip-row'><span class='tooltip-label'>QCode:</span><span class='tooltip-value'>"+qcodeLength+" bytes (~"+qcodePercent+"%)</span></div>";
+html+="<div class='tooltip-row'><span class='tooltip-label'>OPL Text:</span><span class='tooltip-value'>"+oplTextLength+" bytes (~"+oplTextPercent+"%)</span></div>";
+}
+
 
 if(item.type===1&&childCount!==undefined){
 html+="<div class='tooltip-row'><span class='tooltip-label'>Records:</span><span class='tooltip-value'>"+childCount+"</span></div>";

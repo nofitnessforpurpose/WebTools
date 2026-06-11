@@ -24,12 +24,15 @@ usedSize+=pack.items[i].getLength();
 var renderTotalSize=Math.max(totalSize,usedSize);
 
 
-var titleText="Memory Map (Set: "+(totalSize/1024)+" KB";
+var totalKB=totalSize/1024;
+var usedKB=Math.round(usedSize/1024);
+var percent=totalSize>0?Math.round((usedSize/totalSize)*100):0;
+
+var titleText="Memory Map (Set: "+totalKB+" KB, Used "+usedKB+"KB - ~"+percent+"%";
 if(usedSize>totalSize){
-titleText+=", Used: "+(Math.round(usedSize/1024*10)/10)+" KB [OVERFLOW]";
-}else {
-titleText+=")";
+titleText+=" [OVERFLOW]";
 }
+titleText+=")";
 
 var title=document.createElement('div');
 title.className='memory-map-title';
@@ -515,6 +518,65 @@ html="<h4>"+itemName+"</h4>";
 html+="<div class='tooltip-row'><span class='tooltip-label'>Type:</span><span class='tooltip-value'>"+typeDesc+" ("+r.item.type+")</span></div>";
 html+="<div class='tooltip-row'><span class='tooltip-label'>Offset:</span><span class='tooltip-value'>0x"+r.offset.toString(16).toUpperCase()+"</span></div>";
 html+="<div class='tooltip-row'><span class='tooltip-label'>Length:</span><span class='tooltip-value'>"+r.len+" bytes</span></div>";
+
+
+if(r.item.type===3){
+var qcodeLength=0;
+var oplTextLength=0;
+var data=null;
+if(r.item.child){
+if(r.item.child.child&&r.item.child.child.data){
+data=r.item.child.child.data;
+}else if(r.item.child.data){
+data=r.item.child.data;
+}
+}
+if(data){
+var offset=0;
+while(offset<data.length&&data[offset]===0)offset++;
+
+var sync=-1;
+if(r.item.child&&!r.item.child.child){
+for(var i=offset;i<data.length-1;i++){
+if(data[i]===0x02&&data[i+1]===0x80){sync=i;break;}
+}
+}
+
+var lncode=0;
+var base=0;
+
+if(sync===-1){
+if(data.length>=2){
+lncode=(data[0]<<8)|data[1];
+base=0;
+}
+}else {
+if(sync+5<data.length){
+lncode=(data[sync+4]<<8)|data[sync+5];
+base=sync+4;
+}
+}
+
+qcodeLength=lncode;
+
+var lnsrc=0;
+if(base+2<=data.length){
+var lnsrcOffset=base+2 + lncode;
+if(lnsrcOffset+1<data.length){
+lnsrc=(data[lnsrcOffset]<<8)|data[lnsrcOffset+1];
+}
+}
+oplTextLength=lnsrc;
+}
+
+var totalLength=r.item.getLength();
+var qcodePercent=totalLength>0?Math.floor((qcodeLength/totalLength)*100):0;
+var oplTextPercent=totalLength>0?Math.floor((oplTextLength/totalLength)*100):0;
+
+html+="<div class='tooltip-row'><span class='tooltip-label'>QCode:</span><span class='tooltip-value'>"+qcodeLength+" bytes (~"+qcodePercent+"%)</span></div>";
+html+="<div class='tooltip-row'><span class='tooltip-label'>OPL Text:</span><span class='tooltip-value'>"+oplTextLength+" bytes (~"+oplTextPercent+"%)</span></div>";
+}
+
 if(childCount!==undefined){
 html+="<div class='tooltip-row'><span class='tooltip-label'>Records:</span><span class='tooltip-value'>"+childCount+"</span></div>";
 }
@@ -529,7 +591,8 @@ html+="<div class='tooltip-row'><span class='tooltip-label'>CRC32:</span><span c
 }else {
 html="<h4>Free Space</h4>";
 html+="<div class='tooltip-row'><span class='tooltip-label'>Offset:</span><span class='tooltip-value'>0x"+r.offset.toString(16).toUpperCase()+"</span></div>";
-html+="<div class='tooltip-row'><span class='tooltip-label'>Length:</span><span class='tooltip-value'>"+r.len+" bytes</span></div>";
+var freePercent=totalSize>0?Math.floor((r.len/totalSize)*100):0;
+html+="<div class='tooltip-row'><span class='tooltip-label'>Length:</span><span class='tooltip-value'>"+r.len+" bytes (~"+freePercent+"%)</span></div>";
 }
 
 if(typeof TooltipManager!=='undefined'){

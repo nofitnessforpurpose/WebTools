@@ -40,7 +40,7 @@ source+=`${procName}:`;
 if(params.length>0)source+=`(${params.join(', ')})`;
 source+="\n";
 
-const date=new Date().toISOString().replace(/T/,' ').replace(/\..+/,'');
+const date=new Date().toISOString().replace(/\..+/,'')+"Z";
 source+=`  REM Decompiled Source - OPK - Editor ${typeof APP_VERSION !== 'undefined' ? APP_VERSION : '3.0.3'} \n`;
 source+=`  REM ${date} \n`;
 

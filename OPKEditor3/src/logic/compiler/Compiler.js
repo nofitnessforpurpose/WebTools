@@ -11,11 +11,11 @@ var KEYWORDS_SHARED=[
 'POKEB','POKEW','RANDOMIZE','CURSOR','ESCAPE',
 'APPEND','CLOSE','COPY','CREATE','DELETE','ERASE',
 'FIRST','LAST','NEXT','BACK','OPEN','POSITION','RENAME','UPDATE','USE','EDIT',
-'ON','OFF',
-'RAISE','EXT','DISP','COPYW','DELETEW','INPUT','KSTAT','VIEW','MENU'
+'ON',
+'RAISE','EXT','DIRW$','DISP','INPUT','KSTAT','VIEW','MENU'
 ];
 var KEYWORDS_LZ=[
-'UDG','MENU','CLOCK'
+'ACOS','ASIN','CLOCK','COPYW','DAYS','DAYNAME$','DELETEW','DOW','FINDW','MAX','MEAN','MENU','MENUN','MIN','MONTH$','OFF','STD','SUM','VAR','UDG','WEEK'
 ];
 var QCODE_BY_NAME={};
 function init(){
@@ -575,6 +575,9 @@ if(dim.length>0){
 if(type===0)type=3;
 else if(type===1)type=4;
 else if(type===2&&dim.length>1)type=5;
+}
+if(type===2&&dim.length===0&&!isExt){
+throw new Error("Error on line "+varNameTok.line+": String variable '"+storedName+"' must specify a length.");
 }
 declList.push({name:storedName,type:type,dims:dim});
 }else {
@@ -2116,12 +2119,12 @@ if(isAssign){
 var targetName=t.value.toUpperCase();
 if (/^M[0-9]$/.test(targetName)){
 if(peek()&&peek().value==='(')throw new Error("Error on line "+t.line+": Calculator memory '"+targetName+"' cannot have indices.");
-next();
-var rhsType=parseExpression();
-if(rhsType===0)emit(0x86);
 var memIdx=parseInt(targetName.substring(1),10);
 emit(0x13);
 emitWord(memIdx*8);
+next();
+var rhsType=parseExpression();
+if(rhsType===0)emit(0x86);
 emit(0x80);
 continue;
 }

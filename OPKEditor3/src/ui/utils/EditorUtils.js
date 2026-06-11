@@ -94,7 +94,17 @@ if(item.child&&item.child.child&&item.child.child.data){
 var data=item.child.child.data;
 if(data.length>=4){
 var obLen=(data[0]<<8)|data[1];
-if(obLen>0)return "OPL Procedure";
+if(obLen>0){
+
+var isLZ=false;
+for(var i=11;i<data.length-1;i++){
+if(data[i]===0x59&&data[i+1]===0xB2){
+isLZ=true;
+break;
+}
+}
+return isLZ?"OPL Procedure (LZ)":"OPL Procedure";
+}
 }
 }
 return "OPL Text";
@@ -128,4 +138,16 @@ html+="<div class='tooltip-row'><span class='tooltip-label'>Sum:</span><span cla
 html+="<div class='tooltip-row'><span class='tooltip-label'>CRC32:</span><span class='tooltip-value'>0x"+pack.checksums.crc32.toString(16).toUpperCase()+"</span></div>";
 }
 return html;
+}
+
+if(typeof module!=='undefined'&&module.exports){
+module.exports={
+arraysAreEqual,
+initialiseForm,
+createOptions,
+getItemIcon,
+getLogicalFileLabel,
+getItemDescription,
+generatePackTooltip
+};
 }

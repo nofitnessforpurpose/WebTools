@@ -257,6 +257,7 @@ const readByte=()=>(offset<codeBlock.length)?codeBlock[offset++]:0;
 let extractedName=null;
 let sync=0,type=0,vSpace=0,qSize=0,nParams=0;
 let qcodeTotalLen=0;
+let metadataStart=0;
 let isProcedure=true;
 let isLZ=false;
 
@@ -311,6 +312,7 @@ log(offset-2,getHexBytes(offset-2,2),"Total Len",qcodeTotalLen.toString(),"Total
 if(qcodeTotalLen===0){
 qcodeTotalLen=longRecLen;
 }
+metadataStart=offset;
 
 }else {
 
@@ -318,6 +320,7 @@ this.oplBase=offset;
 const magic=readWordBE();
 log(this.oplBase,getHexBytes(this.oplBase,2),"OPL Magic",magic.toString(),"Embedded OPL Magic");
 qcodeTotalLen=rLen-9 - 2;
+metadataStart=offset;
 }
 
 }else if(codeBlock[offset]===0x02&&codeBlock[offset+1]===0x80){
@@ -338,6 +341,7 @@ qcodeTotalLen=longRecLen;
 }
 
 this.oplBase=offset;
+metadataStart=offset;
 
 }else if(codeBlock.length>=5&&codeBlock[4]<32){
 
@@ -345,12 +349,14 @@ this.oplBase=offset;
 this.oplBase=0;
 offset=0;
 qcodeTotalLen=codeBlock.length;
+metadataStart=0;
 }else {
 
 log(0,getHexBytes(0,Math.min(codeBlock.length,8)),"Block File Header","Unknown Format","Assuming start of OPL metadata");
 this.oplBase=0;
 offset=0;
 qcodeTotalLen=codeBlock.length;
+metadataStart=0;
 }
 
 
@@ -411,7 +417,7 @@ log(poff,getHexBytes(poff,1),`ParamType`,typeLabel,"");
 
 let qcodeInstructionStart=0;
 if(!is11ByteLZ){
-qcodeInstructionStart=(this.oplBase+qcodeTotalLen)-qSize;
+qcodeInstructionStart=(metadataStart+qcodeTotalLen)-qSize;
 }
 
 const hMeta={
@@ -672,8 +678,6 @@ if(pc+size>qcodeStart+qcodeSize)break;
 
 let addr=null;
 if(def.args.includes('v')||def.args.includes('V')){
-addr=(codeBlock[pc+1]<<8)|codeBlock[pc+2];
-}else if(def.args.includes('W')){
 addr=(codeBlock[pc+1]<<8)|codeBlock[pc+2];
 }
 

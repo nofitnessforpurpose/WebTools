@@ -327,6 +327,7 @@ highlightedLine+='<span class="bracket-'+(bracketLevel%3)+'">'+escapeHtml(char)+
 bracketLevel++;
 j++;
 expectingOperator=false;
+isCommandPosition=false;
 continue;
 }
 if(char===')'){

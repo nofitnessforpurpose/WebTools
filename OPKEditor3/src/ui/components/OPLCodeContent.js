@@ -432,17 +432,16 @@ name:"UDG Loader",
 description:"Classic routine to load User Defined Graphics (Characters 0-7).",
 code:
 `UDG:(c%,a1%,a2%,a3%,a4%,a5%,a6%,a7%,a8%)
-  LOCAL a%
-  REM Base address for UDG 0 is $2187
-  a% = $2187 + c% * 8
-  POKEB a%, a1%
-  POKEB a% + 1, a2%
-  POKEB a% + 2, a3%
-  POKEB a% + 3, a4%
-  POKEB a% + 4, a5%
-  POKEB a% + 5, a6%
-  POKEB a% + 6, a7%
-  POKEB a% + 7, a8%`
+REM Define UDG x% character
+POKEB $180,64+x%*8
+POKEB $181,a%
+POKEB $181,b%
+POKEB $181,c%
+POKEB $181,d%
+POKEB $181,e%
+POKEB $181,f%
+POKEB $181,g%
+POKEB $181,h%`
 },
 {
 name:"Center Text",
