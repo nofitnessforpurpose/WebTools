@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Printer Graphics RLE Compressor</title>
+    <meta name="description" content="A premium retro developer utility to convert images into optimized, Run-Length-Encoded (RLE) bit streams and generate executable OPL code for the Psion Organiser Printer II.">
+    <!-- Google Fonts & Font Awesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-logo">
+                <span class="retro-badge">PSION II</span>
+                <h1>Printer Graphics RLE Compressor</h1>
+            </div>
+            <p class="subtitle">Convert & compress images into 1-bit OPL print sequences</p>
+        </header>
+
+        <!-- Main Workspace -->
+        <div class="workspace-grid">
+            <!-- Left Panel: Controls & Input -->
+            <section class="panel panel-controls">
+                <div class="panel-header">
+                    <i class="fa-solid fa-sliders"></i>
+                    <h2>Image Input & Settings</h2>
+                </div>
+                
+                <div class="panel-body">
+                    <!-- Drop Zone -->
+                    <div id="dropBox" class="drop-zone">
+                        <div class="drop-zone-content">
+                            <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+                            <p class="drop-text-primary">Drag & drop image here</p>
+                            <p class="drop-text-secondary">or click to browse local files</p>
+                        </div>
+                        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                    </div>
+
+                    <!-- Presets / Quick Samples -->
+                    <div class="control-group">
+                        <label class="control-label">Load Retro Presets:</label>
+                        <div class="preset-buttons">
+                            <button class="btn btn-preset" id="presetLogo">
+                                <i class="fa-solid fa-microchip"></i> Psion Logo
+                            </button>
+                            <button class="btn btn-preset" id="presetTest">
+                                <i class="fa-solid fa-border-all"></i> Test Grid
+                            </button>
+                            <button class="btn btn-preset" id="presetRose">
+                                <i class="fa-solid fa-leaf"></i> Retro Rose
+                            </button>
+                            <button class="btn btn-preset" id="presetNffp">
+                                <i class="fa-solid fa-stamp"></i> NFfP Stamp
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr class="divider">
+
+                    <!-- Scaling Options -->
+                    <div class="control-group">
+                        <label class="control-label">Image Scaling:</label>
+                        <div class="segmented-control">
+                            <input type="radio" id="scaleFit" name="scaleMode" value="fit">
+                            <label for="scaleFit" class="segmented-item">Fit (256px)</label>
+                            
+                            <input type="radio" id="scaleNative" name="scaleMode" value="native" checked>
+                            <label for="scaleNative" class="segmented-item">Native Size</label>
+                        </div>
+                    </div>
+
+                    <hr class="divider">
+
+                    <!-- Processing Options -->
+                    <div class="control-group">
+                        <label class="control-label">B&W Conversion Mode:</label>
+                        <div class="segmented-control">
+                            <input type="radio" id="modeDither" name="monoMode" value="dither" checked>
+                            <label for="modeDither" class="segmented-item">Floyd-Steinberg Dither</label>
+                            
+                            <input type="radio" id="modeThreshold" name="monoMode" value="threshold">
+                            <label for="modeThreshold" class="segmented-item">Threshold Cutoff</label>
+                        </div>
+                    </div>
+
+                    <!-- Threshold Slider (Conditional) -->
+                    <div class="control-group" id="thresholdGroup" style="display: none;">
+                        <div class="slider-header">
+                            <label for="thresholdRange" class="control-label">B&W Threshold:</label>
+                            <span id="thresholdVal" class="badge">128</span>
+                        </div>
+                        <input type="range" id="thresholdRange" min="0" max="255" value="128" class="slider">
+                    </div>
+
+                    <!-- Rotation Selector -->
+                    <div class="control-group">
+                        <label class="control-label">Rotate Image:</label>
+                        <div class="rotation-control">
+                            <input type="radio" id="rot0" name="rotation" value="0" checked>
+                            <label for="rot0" class="rot-item" title="0 degrees">0°</label>
+                            
+                            <input type="radio" id="rot90" name="rotation" value="90">
+                            <label for="rot90" class="rot-item" title="90 degrees">90°</label>
+                            
+                            <input type="radio" id="rot180" name="rotation" value="180">
+                            <label for="rot180" class="rot-item" title="180 degrees">180°</label>
+                            
+                            <input type="radio" id="rot270" name="rotation" value="270">
+                            <label for="rot270" class="rot-item" title="270 degrees">270°</label>
+                        </div>
+                    </div>
+
+                    <!-- Invert Colors -->
+                    <div class="control-group checkbox-group">
+                        <input type="checkbox" id="invertColors" class="checkbox-input">
+                        <label for="invertColors" class="checkbox-label">
+                            <span class="custom-checkbox"></span>
+                            Invert Output Colors (Black &harr; White)
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Center Panel: Real-time Printer Preview -->
+            <section class="panel panel-preview">
+                <div class="panel-header">
+                    <i class="fa-solid fa-print"></i>
+                    <h2>Print Out Simulator</h2>
+                    <button class="btn btn-primary btn-sm" id="btnPrintSim" disabled>
+                        <i class="fa-solid fa-play"></i> Print Sim
+                    </button>
+                </div>
+                
+                <div class="panel-body preview-body">
+                    <!-- Physical Printer Mockup -->
+                    <div class="printer-device">
+                        <div class="printer-feed-slot"></div>
+                        <div class="receipt-paper-wrapper">
+                            <div class="receipt-header">
+                                <div class="receipt-dashed-line"></div>
+                                <p class="receipt-title">PSION ORGANISER II</p>
+                                <p class="receipt-subtitle">PRINTER II SIMULATION</p>
+                                <div class="receipt-dashed-line"></div>
+                            </div>
+                            
+                            <div id="receiptPaper" class="receipt-paper">
+                                <canvas id="previewCanvas" width="256" height="8"></canvas>
+                            </div>
+                            
+                            <div class="receipt-footer">
+                                <div class="receipt-dashed-line"></div>
+                                <p id="receiptMeta">No image compiled</p>
+                                <div class="receipt-dashed-line"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Output & Stats -->
+            <section class="panel panel-output">
+                <div class="panel-header">
+                    <i class="fa-solid fa-code"></i>
+                    <h2>Generated OPL Code</h2>
+                </div>
+                
+                <div class="panel-body output-body">
+                    <!-- Statistics Dashboard -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-label">Dimensions</span>
+                            <span id="statDimensions" class="stat-value">-- x --</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">Raw Size</span>
+                            <span id="statRawSize" class="stat-value">-- bytes</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">RLE Compressed</span>
+                            <span id="statCompSize" class="stat-value">-- bytes</span>
+                        </div>
+                        <div class="stat-card highlight">
+                            <span class="stat-label">Savings</span>
+                            <span id="statSavings" class="stat-value">--%</span>
+                        </div>
+                    </div>
+
+                    <!-- Generated COMPRUN -->
+                    <div class="code-section-header">
+                        <h3 class="section-title"><i class="fa-solid fa-code-branch"></i> Print Script (COMPRUN)</h3>
+                        <div class="action-buttons-mini">
+                            <button class="btn btn-action btn-sm" id="btnCopy" title="Copy COMPRUN to clipboard">
+                                <i class="fa-solid fa-copy"></i> Copy Script
+                            </button>
+                            <button class="btn btn-action btn-sm" id="btnDownload" title="Download COMPRUN.OPL">
+                                <i class="fa-solid fa-download"></i> Download .OPL
+                            </button>
+                        </div>
+                    </div>
+                    <div class="code-container comprun-container">
+                        <div class="code-header">
+                            <span class="code-lang">COMPRUN.OPL (DYNAMIC SCRIPT)</span>
+                            <span class="code-dots">
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                            </span>
+                        </div>
+                        <textarea id="oplOutput" readonly placeholder="OPL compiler output will render here once an image is loaded..."></textarea>
+                    </div>
+
+                    <!-- Static PRRLE -->
+                    <div class="code-section-header">
+                        <h3 class="section-title"><i class="fa-solid fa-gears"></i> Static Decoder (PRRLE)</h3>
+                        <div class="action-buttons-mini">
+                            <button class="btn btn-action btn-sm" id="btnCopyDecoder" title="Copy PRRLE to clipboard">
+                                <i class="fa-solid fa-copy"></i> Copy Decoder
+                            </button>
+                        </div>
+                    </div>
+                    <div class="code-container decoder-container">
+                        <div class="code-header">
+                            <span class="code-lang">PRRLE.OPL (STATIC ENGINE - COMPILE ONCE)</span>
+                            <span class="code-dots">
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                            </span>
+                        </div>
+                        <textarea id="decoderOutput" readonly placeholder="Decoder source code..."></textarea>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Reference Guide Footer -->
+        <footer class="app-footer-guide">
+            <h3><i class="fa-solid fa-circle-info"></i> How it Works & Psion Organiser II Deployment</h3>
+            <div class="guide-grid">
+                <div class="guide-card">
+                    <h4><i class="fa-solid fa-microchip"></i> Hardware Mapping</h4>
+                    <p>The Psion Printer II uses a thermal printhead. It prints in slices of 8 vertical pixels per byte. The layout maps the top-most pixel of the 8-pixel strip to the Most Significant Bit (MSB = 128) and the bottom-most pixel to the Least Significant Bit (LSB = 1).</p>
+                </div>
+                <div class="guide-card">
+                    <h4><i class="fa-solid fa-compress"></i> RLE Optimization</h4>
+                    <p>To reduce transmission overhead and pack storage footprint, bytes are compressed into RLE byte-pairs: <code>[Count, Value]</code>. The main <code>COMPRUN</code> procedure streams chunks of Base64 strings, passing them to the <code>PRRLE</code> decoder subprocedure.</p>
+                </div>
+                <div class="guide-card">
+                    <h4><i class="fa-solid fa-terminal"></i> Transferring to Organiser</h4>
+                    <p>1. Copy or download the compiled code as <code>COMPRUN.OPL</code>.<br>
+                       2. Use an OPK Editor or Link tool to copy the OPL file to your Datapack image.<br>
+                       3. Compile the procedure on the device. Make sure the <code>PRRLE</code> procedure is also compiled as it is called by <code>COMPRUN</code>.</p>
+                </div>
+            </div>
+            <p class="copyright">&copy; 2026 NFfP</p>
+        </footer>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
