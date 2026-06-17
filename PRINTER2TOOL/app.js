@@ -660,6 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Static OPL Decoder Engine (PRRLE) - accepts single RLE string, fully self-contained
     const prrleCode = `PRRLE:(b64$)
+    REM by NFfP 2026
   LOCAL s$(255)
   LOCAL bLen%,i%,c1%,c2%,c3%,c4%,a%,addr%
   LOCAL b1%,b2%,b3%,vB%,p%,limit%,k%,b%,temp%
