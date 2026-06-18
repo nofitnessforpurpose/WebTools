@@ -17,6 +17,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const scaleFit = document.getElementById('scaleFit');
     const scaleNative = document.getElementById('scaleNative');
     
+    // Print Scale & Justification
+    const scaleRange = document.getElementById('scaleRange');
+    const scaleVal = document.getElementById('scaleVal');
+    const alignLeft = document.getElementById('alignLeft');
+    const alignCentre = document.getElementById('alignCentre');
+    const alignRight = document.getElementById('alignRight');
+    
     // Rotations
     const rotations = document.getElementsByName('rotation');
     
@@ -100,6 +107,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (loadedImage) processImage();
     });
     scaleNative.addEventListener('change', () => {
+        if (loadedImage) processImage();
+    });
+
+    scaleRange.addEventListener('input', (e) => {
+        scaleVal.textContent = e.target.value + '%';
+        if (loadedImage) processImage();
+    });
+
+    alignLeft.addEventListener('change', () => {
+        if (loadedImage) processImage();
+    });
+    alignCentre.addEventListener('change', () => {
+        if (loadedImage) processImage();
+    });
+    alignRight.addEventListener('change', () => {
         if (loadedImage) processImage();
     });
 
@@ -302,58 +324,57 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function simplifyRow(rowBytes, maxRuns) {
-        let runs = getRuns(rowBytes);
-        if (runs.length <= maxRuns) {
+        let list = getRuns(rowBytes);
+        if (list.length <= maxRuns) {
             return rowBytes;
         }
 
-        // Deep copy runs to avoid modifying original array
-        let list = [];
-        for (let i = 0; i < runs.length; i++) {
-            list.push({ value: runs[i].value, length: runs[i].length });
-        }
-        
-        for (let pass = 1; pass <= 4; pass++) {
-            if (list.length <= maxRuns) break;
-            
-            let newList = [];
-            let i = 0;
-            while (i < list.length) {
-                let run = list[i];
-                if (run.length <= pass) {
-                    if (newList.length > 0) {
-                        // Merge into previous run
-                        newList[newList.length - 1].length += run.length;
-                    } else if (i + 1 < list.length) {
-                        // Merge into next run
-                        list[i + 1].length += run.length;
-                    } else {
-                        // Nowhere to merge, keep it
-                        newList.push(run);
-                    }
-                } else {
-                    newList.push(run);
+        // Keep merging the shortest runs until we are under the limit
+        while (list.length > maxRuns) {
+            // Find the run with the minimum length
+            let minIdx = 0;
+            let minLength = list[0].length;
+            for (let i = 1; i < list.length; i++) {
+                if (list[i].length < minLength) {
+                    minLength = list[i].length;
+                    minIdx = i;
                 }
-                i++;
             }
+
+            // Determine which neighbor to merge with
+            let targetIdx;
+            if (minIdx === 0) {
+                targetIdx = 1;
+            } else if (minIdx === list.length - 1) {
+                targetIdx = list.length - 2;
+            } else {
+                // Merge with the shorter neighbor to keep run lengths balanced
+                const leftLen = list[minIdx - 1].length;
+                const rightLen = list[minIdx + 1].length;
+                targetIdx = (leftLen < rightLen) ? (minIdx - 1) : (minIdx + 1);
+            }
+
+            // Merge minIdx into targetIdx
+            list[targetIdx].length += list[minIdx].length;
             
-            // Compact adjacent runs with same value
+            // Remove the merged run
+            list.splice(minIdx, 1);
+
+            // Compact adjacent runs of the same value
             let compacted = [];
-            if (newList.length > 0) {
-                let cur = { value: newList[0].value, length: newList[0].length };
-                for (let j = 1; j < newList.length; j++) {
-                    if (newList[j].value === cur.value) {
-                        cur.length += newList[j].length;
-                    } else {
-                        compacted.push(cur);
-                        cur = { value: newList[j].value, length: newList[j].length };
-                    }
+            let cur = { value: list[0].value, length: list[0].length };
+            for (let j = 1; j < list.length; j++) {
+                if (list[j].value === cur.value) {
+                    cur.length += list[j].length;
+                } else {
+                    compacted.push(cur);
+                    cur = { value: list[j].value, length: list[j].length };
                 }
-                compacted.push(cur);
             }
+            compacted.push(cur);
             list = compacted;
         }
-        
+
         // Reconstruct bytes
         let bytes = [];
         for (let i = 0; i < list.length; i++) {
@@ -361,19 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 bytes.push(list[i].value);
             }
         }
-        
-        // Force chunking on bytes if still above maxRuns
-        let chunkFactor = 2;
-        while (getRuns(bytes).length > maxRuns) {
-            for (let j = 0; j < bytes.length; j += chunkFactor) {
-                const val = bytes[j];
-                for (let k = 1; k < chunkFactor && (j + k) < bytes.length; k++) {
-                    bytes[j + k] = val;
-                }
-            }
-            chunkFactor++;
-        }
-        
+
         return bytes;
     }
 
@@ -399,22 +408,27 @@ document.addEventListener('DOMContentLoaded', () => {
         rotCtx.drawImage(loadedImage, -loadedImage.width / 2, -loadedImage.height / 2);
 
         // 2. Determine scaling target dimensions
-        let targetWidth;
-        let targetHeight;
+        let baseWidth;
+        let baseHeight;
 
         if (scaleNative.checked) {
             // Keep native size (clamp width to maximum 256px to fit the printhead)
-            targetWidth = Math.min(256, rotCanvas.width);
+            baseWidth = Math.min(256, rotCanvas.width);
             if (rotCanvas.width > 256) {
-                targetHeight = Math.round(rotCanvas.height * (256 / rotCanvas.width));
+                baseHeight = Math.round(rotCanvas.height * (256 / rotCanvas.width));
             } else {
-                targetHeight = rotCanvas.height;
+                baseHeight = rotCanvas.height;
             }
         } else {
             // Fit to exactly 256px wide
-            targetWidth = 256;
-            targetHeight = Math.round(rotCanvas.height * (targetWidth / rotCanvas.width));
+            baseWidth = 256;
+            baseHeight = Math.round(rotCanvas.height * (baseWidth / rotCanvas.width));
         }
+
+        // Apply custom print scale factor from slider
+        const scaleFactor = parseInt(scaleRange.value, 10) / 100;
+        let targetWidth = Math.max(8, Math.round(baseWidth * scaleFactor));
+        let targetHeight = Math.max(8, Math.round(baseHeight * scaleFactor));
 
         // Round height up to nearest multiple of 8, minimum 8 (since vertical slices are 8px tall)
         targetHeight = Math.max(8, Math.ceil(targetHeight / 8) * 8);
@@ -423,6 +437,18 @@ document.addEventListener('DOMContentLoaded', () => {
         previewCanvas.width = targetWidth; 
         previewCanvas.height = targetHeight;
         previewCanvas.style.width = (targetWidth / 256 * 100) + '%';
+
+        // Apply page justification (margin styles)
+        if (alignLeft.checked) {
+            previewCanvas.style.marginLeft = '0';
+            previewCanvas.style.marginRight = 'auto';
+        } else if (alignCentre.checked) {
+            previewCanvas.style.marginLeft = 'auto';
+            previewCanvas.style.marginRight = 'auto';
+        } else if (alignRight.checked) {
+            previewCanvas.style.marginLeft = 'auto';
+            previewCanvas.style.marginRight = '0';
+        }
         
         // Render scaled rotated image
         ctx.drawImage(rotCanvas, 0, 0, targetWidth, targetHeight);
@@ -525,8 +551,22 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalRawBytes = 0;
         let totalCompBytes = 0;
 
+        // Compute horizontal alignment padding (left margins)
+        let paddingLeft = 0;
+        if (alignCentre.checked) {
+            paddingLeft = Math.floor((256 - targetWidth) / 2);
+        } else if (alignRight.checked) {
+            paddingLeft = 256 - targetWidth;
+        }
+
         for (let blockY = 0; blockY < targetHeight; blockY += 8) {
             const rowBytes = [];
+            
+            // Add left margin padding bytes (blank spaces)
+            for (let p = 0; p < paddingLeft; p++) {
+                rowBytes.push(0);
+            }
+
             for (let x = 0; x < targetWidth; x++) {
                 let byteVal = 0;
                 // Top pixel (blockY+0) = MSB (128) -> Bottom pixel (blockY+7) = LSB (1)
@@ -660,7 +700,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Static OPL Decoder Engine (PRRLE) - accepts single RLE string, fully self-contained
     const prrleCode = `PRRLE:(b64$)
-    REM by NFfP 2026
+  REM By NFfP Rev 0.2
   LOCAL s$(255)
   LOCAL bLen%,i%,c1%,c2%,c3%,c4%,a%,addr%
   LOCAL b1%,b2%,b3%,vB%,p%,limit%,k%,b%,temp%

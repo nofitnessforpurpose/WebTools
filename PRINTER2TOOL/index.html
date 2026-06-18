@@ -66,13 +66,37 @@
 
                     <!-- Scaling Options -->
                     <div class="control-group">
-                        <label class="control-label">Image Scaling:</label>
+                        <label class="control-label">Image Scaling Mode:</label>
                         <div class="segmented-control">
                             <input type="radio" id="scaleFit" name="scaleMode" value="fit">
                             <label for="scaleFit" class="segmented-item">Fit (256px)</label>
                             
                             <input type="radio" id="scaleNative" name="scaleMode" value="native" checked>
                             <label for="scaleNative" class="segmented-item">Native Size</label>
+                        </div>
+                    </div>
+
+                    <!-- Scale on Page Slider -->
+                    <div class="control-group">
+                        <div class="slider-header">
+                            <label for="scaleRange" class="control-label">Scale on Page:</label>
+                            <span id="scaleVal" class="badge">100%</span>
+                        </div>
+                        <input type="range" id="scaleRange" min="10" max="100" value="100" class="slider">
+                    </div>
+
+                    <!-- Justification Options -->
+                    <div class="control-group">
+                        <label class="control-label">Justify on Page:</label>
+                        <div class="segmented-control">
+                            <input type="radio" id="alignLeft" name="alignMode" value="left" checked>
+                            <label for="alignLeft" class="segmented-item">Left</label>
+                            
+                            <input type="radio" id="alignCentre" name="alignMode" value="centre">
+                            <label for="alignCentre" class="segmented-item">Centre</label>
+                            
+                            <input type="radio" id="alignRight" name="alignMode" value="right">
+                            <label for="alignRight" class="segmented-item">Right</label>
                         </div>
                     </div>
 
