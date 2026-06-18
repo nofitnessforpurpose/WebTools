@@ -332,9 +332,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Keep merging the shortest runs until we are under the limit
         while (list.length > maxRuns) {
             // Find the run with the minimum length
-            let minIdx = 0;
-            let minLength = list[0].length;
-            for (let i = 1; i < list.length; i++) {
+            // We exclude index 0 and list.length - 1 to protect the left/right margins from being swallowed
+            let minIdx = 1;
+            let minLength = list[1].length;
+            for (let i = 2; i < list.length - 1; i++) {
                 if (list[i].length < minLength) {
                     minLength = list[i].length;
                     minIdx = i;
@@ -342,17 +343,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Determine which neighbor to merge with
-            let targetIdx;
-            if (minIdx === 0) {
-                targetIdx = 1;
-            } else if (minIdx === list.length - 1) {
-                targetIdx = list.length - 2;
-            } else {
-                // Merge with the shorter neighbor to keep run lengths balanced
-                const leftLen = list[minIdx - 1].length;
-                const rightLen = list[minIdx + 1].length;
-                targetIdx = (leftLen < rightLen) ? (minIdx - 1) : (minIdx + 1);
-            }
+            // Merge with the shorter neighbor to keep run lengths balanced
+            const leftLen = list[minIdx - 1].length;
+            const rightLen = list[minIdx + 1].length;
+            const targetIdx = (leftLen < rightLen) ? (minIdx - 1) : (minIdx + 1);
 
             // Merge minIdx into targetIdx
             list[targetIdx].length += list[minIdx].length;
@@ -700,7 +694,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Static OPL Decoder Engine (PRRLE) - accepts single RLE string, fully self-contained
     const prrleCode = `PRRLE:(b64$)
-  REM By NFfP Rev 0.2
+  REM By NFfP Rev 0.3
   LOCAL s$(255)
   LOCAL bLen%,i%,c1%,c2%,c3%,c4%,a%,addr%
   LOCAL b1%,b2%,b3%,vB%,p%,limit%,k%,b%,temp%
@@ -741,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
       c2%=63
     ENDIF
 
-    b1%=c1%*4+c2%/16
+    b1%=c1%*4+INT(c2%/16)
 
     limit%=3
     IF PEEKB(addr%+i%+2)=61
@@ -760,7 +754,7 @@ document.addEventListener('DOMContentLoaded', () => {
       ELSE
         c3%=63
       ENDIF
-      temp%=c2%*16+c3%/4
+      temp%=c2%*16+INT(c3%/4)
       b2%=temp%-INT(temp%/256)*256
     ELSE
       a%=PEEKB(addr%+i%+2)
@@ -789,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
         c4%=63
       ENDIF
 
-      temp%=c2%*16+c3%/4
+      temp%=c2%*16+INT(c3%/4)
       b2%=temp%-INT(temp%/256)*256
       temp%=c3%*64+c4%
       b3%=temp%-INT(temp%/256)*256
