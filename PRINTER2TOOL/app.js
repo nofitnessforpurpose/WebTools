@@ -72,18 +72,82 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Drag & Drop
+    let dragCounter = 0;
+
     dropBox.addEventListener('click', () => fileInput.click());
+    
+    dropBox.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        dragCounter++;
+        dropBox.classList.add('hover');
+    });
+    
     dropBox.addEventListener('dragover', (e) => { 
         e.preventDefault(); 
         dropBox.classList.add('hover'); 
     });
-    dropBox.addEventListener('dragleave', () => dropBox.classList.remove('hover'));
+    
+    dropBox.addEventListener('dragleave', () => {
+        dragCounter--;
+        if (dragCounter === 0) {
+            dropBox.classList.remove('hover');
+        }
+    });
+    
     dropBox.addEventListener('drop', (e) => {
         e.preventDefault(); 
+        dragCounter = 0;
         dropBox.classList.remove('hover');
-        if (e.dataTransfer.files && e.dataTransfer.files.length) {
-            handleFile(e.dataTransfer.files[0]);
+        
+        // Accumulate files from both e.dataTransfer.items and e.dataTransfer.files
+        const filesList = [];
+        if (e.dataTransfer.items) {
+            for (let i = 0; i < e.dataTransfer.items.length; i++) {
+                if (e.dataTransfer.items[i].kind === 'file') {
+                    const file = e.dataTransfer.items[i].getAsFile();
+                    if (file) filesList.push(file);
+                }
+            }
         }
+        
+        // Fallback to files if items check yielded nothing
+        if (filesList.length === 0 && e.dataTransfer.files) {
+            for (let i = 0; i < e.dataTransfer.files.length; i++) {
+                filesList.push(e.dataTransfer.files[i]);
+            }
+        }
+        
+        if (filesList.length > 0) {
+            handleFile(filesList[0]);
+        } else {
+            // Check if a URL was dropped (e.g. from another tab or web page)
+            const url = e.dataTransfer.getData('URL') || e.dataTransfer.getData('text/uri-list');
+            if (url) {
+                const img = new Image();
+                img.crossOrigin = 'anonymous'; // Request CORS permissions to allow canvas read-back
+                img.onload = function() {
+                    loadedImage = img;
+                    document.querySelectorAll('.btn-preset').forEach(b => b.classList.remove('active'));
+                    processImage();
+                    showToast('Image loaded from URL!', 'fa-image');
+                };
+                img.onerror = function() {
+                    showToast('CORS block. Please download and drag the local file.', 'fa-exclamation-triangle');
+                };
+                img.src = url;
+            } else {
+                const dataTypes = e.dataTransfer.types ? Array.from(e.dataTransfer.types).join(', ') : 'none';
+                showToast('No file/URL found. Types: ' + dataTypes, 'fa-exclamation-triangle');
+            }
+        }
+    });
+    
+    // Prevent browser from opening files dragged outside the drop box
+    window.addEventListener('dragover', (e) => {
+        e.preventDefault();
+    });
+    window.addEventListener('drop', (e) => {
+        e.preventDefault();
     });
     
     fileInput.addEventListener('change', (e) => {
@@ -573,6 +637,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (monoGrid[blockY + 6] && monoGrid[blockY + 6][x]) byteVal |= 2;
                 if (monoGrid[blockY + 7] && monoGrid[blockY + 7][x]) byteVal |= 1;
                 rowBytes.push(byteVal);
+            }
+            
+            // Explicitly pad the row on the right to exactly 256 columns
+            while (rowBytes.length < 256) {
+                rowBytes.push(0);
             }
             
             totalRawBytes += rowBytes.length;
