@@ -528,8 +528,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 lumaGrid[y] = [];
                 for (let x = 0; x < targetWidth; x++) {
                     const idx = (y * targetWidth + x) * 4;
-                    // Luma formula
-                    lumaGrid[y][x] = 0.2126 * pixels[idx] + 0.7152 * pixels[idx+1] + 0.0722 * pixels[idx+2];
+                    // Alpha blend against a white background (255, 255, 255)
+                    const alpha = pixels[idx+3] / 255;
+                    const r = pixels[idx] * alpha + 255 * (1 - alpha);
+                    const g = pixels[idx+1] * alpha + 255 * (1 - alpha);
+                    const b = pixels[idx+2] * alpha + 255 * (1 - alpha);
+                    lumaGrid[y][x] = 0.2126 * r + 0.7152 * g + 0.0722 * b;
                 }
             }
 
@@ -566,7 +570,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 monoGrid[y] = [];
                 for (let x = 0; x < targetWidth; x++) {
                     const idx = (y * targetWidth + x) * 4;
-                    const luma = 0.2126 * pixels[idx] + 0.7152 * pixels[idx+1] + 0.0722 * pixels[idx+2];
+                    const alpha = pixels[idx+3] / 255;
+                    const r = pixels[idx] * alpha + 255 * (1 - alpha);
+                    const g = pixels[idx+1] * alpha + 255 * (1 - alpha);
+                    const b = pixels[idx+2] * alpha + 255 * (1 - alpha);
+                    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
                     
                     let isPrinted = (luma < threshold) ? 1 : 0;
                     if (isInvert) isPrinted = 1 - isPrinted;
@@ -639,15 +647,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 rowBytes.push(byteVal);
             }
             
-            // Explicitly pad the row on the right to exactly 256 columns
-            while (rowBytes.length < 256) {
-                rowBytes.push(0);
+            // Explicitly pad or trim the row to exactly 256 columns
+            if (rowBytes.length > 256) {
+                rowBytes.length = 256;
+            } else {
+                while (rowBytes.length < 256) {
+                    rowBytes.push(0);
+                }
             }
             
             totalRawBytes += rowBytes.length;
 
-            // Simplify row RLE if runs > 85 to ensure Base64 string is <= 255 chars
-            const optimizedRowBytes = simplifyRow(rowBytes, 85);
+            // Simplify row RLE if runs > 240 to ensure pixel-perfect dither
+            let optimizedRowBytes = simplifyRow(rowBytes, 240);
+            
+            // Double-check and force optimizedRowBytes to be exactly 256 elements
+            if (optimizedRowBytes.length > 256) {
+                optimizedRowBytes = optimizedRowBytes.slice(0, 256);
+            } else {
+                while (optimizedRowBytes.length < 256) {
+                    optimizedRowBytes.push(0);
+                }
+            }
 
             // Compress to RLE
             const rowRleBytes = [];
@@ -669,7 +690,19 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let k = 0; k < rowRleBytes.length; k++) {
                 rowBinaryString += String.fromCharCode(rowRleBytes[k]);
             }
-            rowBase64Strings.push(btoa(rowBinaryString));
+            const fullBase64 = btoa(rowBinaryString);
+
+            // Split into up to 3 chunks of exactly 220 characters
+            const chunks = [];
+            let chunkOffset = 0;
+            while (chunkOffset < fullBase64.length) {
+                chunks.push(fullBase64.slice(chunkOffset, chunkOffset + 220));
+                chunkOffset += 220;
+            }
+            while (chunks.length < 3) {
+                chunks.push("");
+            }
+            rowBase64Strings.push(chunks);
         }
 
         // Generate compiled OPL procedure block using the row-by-row array
@@ -689,11 +722,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Build the OPL Procedure
     function generateCleanOpl(rowBase64Strings) {
         let opl = "COMPRUN:\n";
+        opl += "  LOCAL a$(220),b$(220),c$(220)\n";
         opl += "  ONERR errLab::\n";
         opl += "  PRINT \"Printing RLE...\"\n\n";
 
         for (let r = 0; r < rowBase64Strings.length; r++) {
-            opl += "  PRRLE:(\"" + rowBase64Strings[r] + "\")\n";
+            const chunks = rowBase64Strings[r];
+            opl += `  a$="${chunks[0]}"\n`;
+            opl += `  b$="${chunks[1]}"\n`;
+            opl += `  c$="${chunks[2]}"\n`;
+            opl += `  PRRLE:(a$,b$,c$)\n`;
         }
         
         opl += "\n  PRINT \"Done.\"\n";
@@ -762,134 +800,166 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Static OPL Decoder Engine (PRRLE) - accepts single RLE string, fully self-contained
-    const prrleCode = `PRRLE:(b64$)
-  REM By NFfP Rev 0.3
-  LOCAL s$(255)
-  LOCAL bLen%,i%,c1%,c2%,c3%,c4%,a%,addr%
+    const prrleCode = `PRRLE:(s1$, s2$, s3$)
+  REM By NFfP Rev 1.2 Optimized
+  LOCAL s$(255),dec$(80)
+  LOCAL bLen%,c1%,c2%,c3%,c4%,a%,addr%
   LOCAL b1%,b2%,b3%,vB%,p%,limit%,k%,b%,temp%
-  LOCAL gSt%,gCnt%,oIdx%,out%(128),outAddr%
-  s$=b64$
-  addr%=ADDR(s$)
-  bLen%=PEEKB(addr%)
+  LOCAL gSt%,gCnt%,oIdx%,out%(128),outAddr%,pStr%,pOut%
+  LOCAL decAddr%,valAddr%,idx%,pEnd%
+  LOCAL pass%
   outAddr%=ADDR(out%())
+  pOut%=outAddr%
   oIdx%=0
   gSt%=0
   gCnt%=0
-  i%=1
 
-  WHILE i%<=bLen%
-    a%=PEEKB(addr%+i%)
-    IF a%>=65 AND a%<=90
-      c1%=a%-65
-    ELSEIF a%>=97 AND a%<=122
-      c1%=a%-71
-    ELSEIF a%>=48 AND a%<=57
-      c1%=a%+4
-    ELSEIF a%=43
-      c1%=62
-    ELSE
-      c1%=63
+  dec$="n000odefghijklm00000000123456789:;<=>?@ABCDEFGHI000000JKLMNOPQRSTUVWXYZ[\\\]^_\`abc"
+  decAddr%=ADDR(dec$)
+  IF decAddr%=32767 : decAddr%=-32768 : ELSE : decAddr%=decAddr%+1 : ENDIF
+
+  pass%=1
+  WHILE pass%<=3
+    IF pass%=1 : s$=s1$
+    ELSEIF pass%=2 : s$=s2$
+    ELSE : s$=s3$
     ENDIF
 
-    a%=PEEKB(addr%+i%+1)
-    IF a%>=65 AND a%<=90
-      c2%=a%-65
-    ELSEIF a%>=97 AND a%<=122
-      c2%=a%-71
-    ELSEIF a%>=48 AND a%<=57
-      c2%=a%+4
-    ELSEIF a%=43
-      c2%=62
-    ELSE
-      c2%=63
+    bLen%=LEN(s$)
+    IF bLen%=0
+      GOTO nextPass::
     ENDIF
 
-    b1%=c1%*4+INT(c2%/16)
+    addr%=ADDR(s$)
+    pStr%=addr%
+    IF pStr%=32767 : pStr%=-32768 : ELSE : pStr%=pStr%+1 : ENDIF
 
-    limit%=3
-    IF PEEKB(addr%+i%+2)=61
-      limit%=1
-    ELSEIF PEEKB(addr%+i%+3)=61
-      limit%=2
-      a%=PEEKB(addr%+i%+2)
-      IF a%>=65 AND a%<=90
-        c3%=a%-65
-      ELSEIF a%>=97 AND a%<=122
-        c3%=a%-71
-      ELSEIF a%>=48 AND a%<=57
-        c3%=a%+4
-      ELSEIF a%=43
-        c3%=62
-      ELSE
-        c3%=63
-      ENDIF
-      temp%=c2%*16+INT(c3%/4)
-      b2%=temp%-INT(temp%/256)*256
+    temp%=32767-pStr%
+    IF temp%<bLen%
+      pEnd%=-32768+(bLen%-temp%-1)
     ELSE
-      a%=PEEKB(addr%+i%+2)
-      IF a%>=65 AND a%<=90
-        c3%=a%-65
-      ELSEIF a%>=97 AND a%<=122
-        c3%=a%-71
-      ELSEIF a%>=48 AND a%<=57
-        c3%=a%+4
-      ELSEIF a%=43
-        c3%=62
-      ELSE
-        c3%=63
-      ENDIF
-
-      a%=PEEKB(addr%+i%+3)
-      IF a%>=65 AND a%<=90
-        c4%=a%-65
-      ELSEIF a%>=97 AND a%<=122
-        c4%=a%-71
-      ELSEIF a%>=48 AND a%<=57
-        c4%=a%+4
-      ELSEIF a%=43
-        c4%=62
-      ELSE
-        c4%=63
-      ENDIF
-
-      temp%=c2%*16+INT(c3%/4)
-      b2%=temp%-INT(temp%/256)*256
-      temp%=c3%*64+c4%
-      b3%=temp%-INT(temp%/256)*256
+      pEnd%=pStr%+bLen%
     ENDIF
 
-    k%=1
-    WHILE k%<=limit%
-      IF k%=1
-        b%=b1%
-      ELSEIF k%=2
-        b%=b2%
+    WHILE pStr%<>pEnd%
+      a%=PEEKB(pStr%)
+      IF pStr%=32767 : pStr%=-32768 : ELSE : pStr%=pStr%+1 : ENDIF
+
+      idx%=a%-43
+      temp%=32767-decAddr%
+      IF temp%<idx%
+        valAddr%=-32768+(idx%-temp%-1)
       ELSE
-        b%=b3%
+        valAddr%=decAddr%+idx%
+      ENDIF
+      c1%=PEEKB(valAddr%)-48
+
+      a%=PEEKB(pStr%)
+      IF pStr%=32767 : pStr%=-32768 : ELSE : pStr%=pStr%+1 : ENDIF
+
+      idx%=a%-43
+      temp%=32767-decAddr%
+      IF temp%<idx%
+        valAddr%=-32768+(idx%-temp%-1)
+      ELSE
+        valAddr%=decAddr%+idx%
+      ENDIF
+      c2%=PEEKB(valAddr%)-48
+
+      b1%=c1%*4
+      temp%=c2%
+      WHILE temp%>=16
+        temp%=temp%-16
+        b1%=b1%+1
+      ENDWH
+
+      a%=PEEKB(pStr%)
+      IF pStr%=32767 : pStr%=-32768 : ELSE : pStr%=pStr%+1 : ENDIF
+
+      IF a%=61
+        limit%=1
+        a%=PEEKB(pStr%)
+        IF pStr%=32767 : pStr%=-32768 : ELSE : pStr%=pStr%+1 : ENDIF
+      ELSE
+        idx%=a%-43
+        temp%=32767-decAddr%
+        IF temp%<idx%
+          valAddr%=-32768+(idx%-temp%-1)
+        ELSE
+          valAddr%=decAddr%+idx%
+        ENDIF
+        c3%=PEEKB(valAddr%)-48
+
+        a%=PEEKB(pStr%)
+        IF pStr%=32767 : pStr%=-32768 : ELSE : pStr%=pStr%+1 : ENDIF
+
+        IF a%=61
+          limit%=2
+          temp%=c3%
+          k%=0
+          WHILE temp%>=4
+            temp%=temp%-4
+            k%=k%+1
+          ENDWH
+          b2%=(c2% AND 15)*16+k%
+        ELSE
+          idx%=a%-43
+          temp%=32767-decAddr%
+          IF temp%<idx%
+            valAddr%=-32768+(idx%-temp%-1)
+          ELSE
+            valAddr%=decAddr%+idx%
+          ENDIF
+          c4%=PEEKB(valAddr%)-48
+          limit%=3
+
+          temp%=c3%
+          k%=0
+          WHILE temp%>=4
+            temp%=temp%-4
+            k%=k%+1
+          ENDWH
+          b2%=(c2% AND 15)*16+k%
+          b3%=(c3% AND 3)*64+c4%
+        ENDIF
       ENDIF
 
-      IF gSt%=0
-        gCnt%=b%
-        gSt%=1
-      ELSE
-        vB%=b%
-        gSt%=0
-        p%=1
-        WHILE p%<=gCnt%
-          POKEB outAddr%+oIdx%,vB%
-          oIdx%=oIdx%+1
-          p%=p%+1
-        ENDWH
-      ENDIF
-      k%=k%+1
+      k%=1
+      WHILE k%<=limit%
+        IF k%=1
+          b%=b1%
+        ELSEIF k%=2
+          b%=b2%
+        ELSE
+          b%=b3%
+        ENDIF
+
+        IF gSt%=0
+          gCnt%=b%
+          gSt%=1
+        ELSE
+          vB%=b%
+          gSt%=0
+          p%=1
+          WHILE p%<=gCnt% AND oIdx%<256
+            POKEB pOut%,vB%
+            IF pOut%=32767 : pOut%=-32768 : ELSE : pOut%=pOut%+1 : ENDIF
+            oIdx%=oIdx%+1
+            p%=p%+1
+          ENDWH
+        ENDIF
+        k%=k%+1
+      ENDWH
     ENDWH
-    i%=i%+4
+
+  nextPass::
+    pass%=pass%+1
   ENDWH
 
-  IF oIdx%>0
-    GPRINT:(oIdx%,outAddr%)
-    KEY
-  ENDIF`;
+  endDec::
+    IF oIdx%>0
+      GPRINT:(oIdx%,outAddr%)
+    ENDIF`;
 
     // Populate static decoder field on load
     decoderOutput.value = prrleCode;
