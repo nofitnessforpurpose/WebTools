@@ -19,14 +19,9 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 [![Maintenance](https://img.shields.io/badge/maintained%3F-yes-green.svg?style=flat-square)](https://github.com/nofitnessforpurpose/WebTools/OPKEDITOR3/graphs/commit-activity)
 [![Static Badge](https://img.shields.io/badge/format-CODE-blue?style=flat-square)](https://en.wikipedia.org/)
 
-## Background  
-This tool permits drag and drop creation of optimised code to generate sophisticated graphical printouts.  
-
-The Psion Printer II uses a thermal printhead. It prints in slices of 8 vertical pixels per byte. The layout maps the top-most pixel of the 8-pixel strip to the Most Significant Bit (MSB = 128) and the bottom-most pixel to the Least Significant Bit (LSB = 1). 
-
 
 ## Image Handling  
-Images can be uploaded or drag and dropeed into the image manipulation tool which supports:  
+Images can be uploaded or drag and dropped into the image manipulation tool which supports:  
 - Scaling  
 - Rendering method selection  
 - Rotation  
@@ -35,9 +30,18 @@ Images can be uploaded or drag and dropeed into the image manipulation tool whic
 
 Hints
 Select the rendering based on the type of image:  
- - Photographs render best using Floyd-Stienberg dithering.  
+ - Photographs render best using Floyd-Steinberg dithering.  
  - High contrast images, such as B&W Icons / Logos or custom Fonts, render best with Threshold Cutoff rendering.  
 
+
+## Background  
+
+The Psion Printer II uses an 8 pixel high thermal printhead and moving carriage to print over the pages width. It prints in slices of 8 vertical pixels per byte. The layout maps the top-most pixel of the 8-pixel strip to the Most Significant Bit (MSB = 128) and the bottom-most pixel to the Least Significant Bit (LSB = 1). The width of a line is 256 pixels over the printable area which gives a resolution of approximately 65 DPI.
+
+Additional Print SpecificationsPrint Mechanism:  
+ - Epson 1221.
+ - Print Method: Thermal 5 x 9 dot matrix.  
+ - Vertical Step (Line Spacing): 4.2 mm per 12 dot feed (giving a vertical resolution of roughly 2.86 dots per mm).
 
 
 ## RLE Optimization  
