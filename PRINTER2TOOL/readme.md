@@ -72,9 +72,11 @@ Graphics Mode:
 <BR>
 
 ## RLE Optimization  
-To reduce transmission overhead and pack storage footprint, bytes are compressed into RLE byte-pairs: [Count, Value]. The main COMPRUN procedure streams chunks of Base64 strings, passing them to the PRRLE: decoder sub procedure.  
+To reduce transmission overhead and pack storage footprint, bytes are compressed into <a href="https://en.wikipedia.org/wiki/Run-length_encoding">RLE</a> byte-pairs: [Count, Value]. The main COMPRUN procedure streams chunks of Base64 strings, passing them to the PRRLE: decoder sub procedure.  
 
 The procedure PRRLE: takes the compressed bit stream held in the Base64 encoded strings and expands the compressed data to be passed to the GPRINT: command supported by the PRINTER II's onboard firmware.
+
+Regardless of image width to be printed the GPRINT:(w, memory_address) command receives 256 bytes from the RLE encoded data. As the GPRINT command commences on the left and forces a carriage return and line feed. This imposes minimal overhead on the data foot print due to the RLE encoding scheme.
 
 <BR>
 
