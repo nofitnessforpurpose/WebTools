@@ -1,6 +1,6 @@
-# PRINTER2TOOL
+# PRINTER2TOOL  
 
-A modern, web-based editor support tool for Psion Organiser II Printer II printers.  
+A modern, web-based image editor support tool for Psion Organiser II Printer II printers.  
 
 This repository is intended to be accessed at https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/  
 
@@ -10,17 +10,32 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 [![Maintenance](https://img.shields.io/badge/maintained%3F-yes-green.svg?style=flat-square)](https://github.com/nofitnessforpurpose/WebTools/OPKEDITOR3/graphs/commit-activity)
 [![Static Badge](https://img.shields.io/badge/format-CODE-blue?style=flat-square)](https://en.wikipedia.org/)
 
-## Background
+## Background  
 This tool permits drag and drop creation of optimised code to generate sophisticated graphical printouts.  
 
 The Psion Printer II uses a thermal printhead. It prints in slices of 8 vertical pixels per byte. The layout maps the top-most pixel of the 8-pixel strip to the Most Significant Bit (MSB = 128) and the bottom-most pixel to the Least Significant Bit (LSB = 1). 
 
 
-## RLE Optimization  
+## Image Handling  
+Images can be uploaded or drag and dropeed into the image manipulation tool which supports:  
+- Scaling  
+- Rendering method selection  
+- Rotation  
+- Justification  
+- Negative mode
 
+Hints
+Select the rendering based on the type of image:  
+ - Photographs render best using Floyd-Stienberg dithering.  
+ - High contrast images, such as B&W Icons / Logos or custom Fonts, render best with Threshold Cutoff rendering.  
+
+
+
+## RLE Optimization  
 To reduce transmission overhead and pack storage footprint, bytes are compressed into RLE byte-pairs: [Count, Value]. The main COMPRUN procedure streams chunks of Base64 strings, passing them to the PRRLE decoder subprocedure.  
 
-** Transferring to Organiser
+
+## Transferring to Organiser
 1. Copy or download the PRRLE.OPL routine
 2. Copy or download the COMPRUN.OPL routine
 3.   or use an OPK Editor and Link tool to create a pack with your COMPRUN: and the PRRLE: routines
@@ -35,7 +50,7 @@ To reduce transmission overhead and pack storage footprint, bytes are compressed
 ## NOTE - BETA Software 
 
 *   Implemented by **Antigravity**
-*   Re-imagined by NFfP
+*   Imagined by NFfP
 
 <BR>
 
