@@ -4,6 +4,15 @@ A modern, web-based image editor support tool for Psion Organiser II Printer II 
 
 This repository is intended to be accessed at https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/  
 
+<BR>
+<div align="center">
+  <div style="display: flex; align-items: flex-start;">
+  <img src="https://github.com/nofitnessforpurpose/WebTools/blob/main/PRINTER2TOOL/images/PGRLEC-01.png" width="200px" alt="PSION Organiser II Top Slot Basci I/O Interface. Image copyright (c) 10 November 2024 nofitnessforpurpose All Rights Reserved">
+  </div>
+</div>
+<BR>
+
+
 [![Organiser](https://img.shields.io/badge/gadget-Organiser_II-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Psion_Organiser)
 [![Organiser](https://img.shields.io/badge/gadget-Organiser_II_Printer_II-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Psion_Organiser)
 [![Static Badge](https://img.shields.io/badge/license-CC_BY_NC_SA_4.0-brightgreen/nofitnessforpurpose/WebTools/OPKEDITOR3?style=flat-square)](https://github.com/vitorsr/cc/blob/master/CC-BY-NC-4.0.md)
