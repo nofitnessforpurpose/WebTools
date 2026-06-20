@@ -82,7 +82,9 @@
                         <!-- Paper Roll Area -->
                         <div class="paper-roll-container" id="paperRollContainer">
                             <div class="paper-roll" id="paperRoll">
+                                <div id="paperTopSpacer" style="flex-shrink: 0;"></div>
                                 <!-- Print canvases will be appended here dynamically -->
+                                <div id="paperBottomSpacer" style="flex-shrink: 0;"></div>
                             </div>
                         </div>
 
@@ -167,7 +169,7 @@
 
                     <hr class="divider">
 
-                    <!-- Mode Info -->
+                    <!-- Mode Info & Controls -->
                     <div class="control-group font-status-card">
                         <label class="control-label">Active Printer Settings</label>
                         <table class="status-table">
@@ -177,17 +179,37 @@
                             </tr>
                             <tr>
                                 <td>Text Columns</td>
-                                <td id="statusColumns">40 Columns</td>
+                                <td>
+                                    <select id="selectColumns" class="setting-select">
+                                        <option value="20">20 Columns</option>
+                                        <option value="40">40 Columns</option>
+                                        <option value="60">60 Columns</option>
+                                        <option value="80">80 Columns</option>
+                                    </select>
+                                </td>
                             </tr>
                             <tr>
                                 <td>Font Style</td>
-                                <td id="statusStyle">Normal (5x7)</td>
+                                <td>
+                                    <select id="selectStyle" class="setting-select">
+                                        <option value="normal">Normal (5x7)</option>
+                                        <option value="double-height">Double Height</option>
+                                    </select>
+                                </td>
                             </tr>
                             <tr>
                                 <td>Underline</td>
-                                <td id="statusUnderline">Disabled</td>
+                                <td>
+                                    <select id="selectUnderline" class="setting-select">
+                                        <option value="disabled">Disabled</option>
+                                        <option value="enabled">Enabled</option>
+                                    </select>
+                                </td>
                             </tr>
                         </table>
+                        <button class="btn btn-action" id="btnResetSettings" style="margin-top: 10px; font-size: 0.8rem; padding: 6px 12px; width: 100%;">
+                            <i class="fa-solid fa-arrow-rotate-left"></i> Reset to Defaults
+                        </button>
                     </div>
                 </div>
         </div>

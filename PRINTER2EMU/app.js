@@ -123,9 +123,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const printStats = document.getElementById('printStats');
     const btnReturnBottom = document.getElementById('btnReturnBottom');
     
-    const statusColumns = document.getElementById('statusColumns');
-    const statusStyle = document.getElementById('statusStyle');
-    const statusUnderline = document.getElementById('statusUnderline');
+    const selectColumns = document.getElementById('selectColumns');
+    const selectStyle = document.getElementById('selectStyle');
+    const selectUnderline = document.getElementById('selectUnderline');
+    const btnResetSettings = document.getElementById('btnResetSettings');
     
     const toastContainer = document.getElementById('toastContainer');
     const chkFilterHandshake = document.getElementById('chkFilterHandshake');
@@ -135,6 +136,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let reader = null;
     let keepReading = false;
     let isLockedToBottom = true;
+    let isProgrammaticScroll = false;
+    let programmaticScrollTimeout = null;
     
     let activeStyles = {
         doubleWidth: false,
@@ -213,30 +216,74 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Update the Sidebar Settings Table
+    // Update the Sidebar Settings Dropdowns
     function updateActiveStyleUI() {
-        let cols = 40;
-        let styleName = 'Normal';
-        
-        if (activeStyles.narrowMode === 'very-narrow') {
-            cols = 80;
-            styleName = 'Very Narrow (Double Density)';
-        } else if (activeStyles.narrowMode === 'narrow') {
-            cols = 60;
-            styleName = 'Narrow (Double Density)';
-        } else if (activeStyles.doubleWidth) {
-            cols = 20;
-            styleName = 'Double Width';
+        if (selectColumns) {
+            if (activeStyles.doubleWidth) {
+                selectColumns.value = '20';
+            } else if (activeStyles.narrowMode === 'very-narrow') {
+                selectColumns.value = '80';
+            } else if (activeStyles.narrowMode === 'narrow') {
+                selectColumns.value = '60';
+            } else {
+                selectColumns.value = '40';
+            }
         }
         
-        if (activeStyles.doubleHeight) {
-            styleName += ' + Double Height';
+        if (selectStyle) {
+            selectStyle.value = activeStyles.doubleHeight ? 'double-height' : 'normal';
         }
         
-        statusColumns.textContent = `${cols} Columns`;
-        statusStyle.textContent = styleName;
-        statusUnderline.textContent = activeStyles.underline ? 'Enabled' : 'Disabled';
+        if (selectUnderline) {
+            selectUnderline.value = activeStyles.underline ? 'enabled' : 'disabled';
+        }
     }
+
+    // Listen for manual settings changes
+    selectColumns.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === '20') {
+            activeStyles.doubleWidth = true;
+            activeStyles.narrowMode = 'normal';
+        } else if (val === '40') {
+            activeStyles.doubleWidth = false;
+            activeStyles.narrowMode = 'normal';
+        } else if (val === '60') {
+            activeStyles.doubleWidth = false;
+            activeStyles.narrowMode = 'narrow';
+        } else if (val === '80') {
+            activeStyles.doubleWidth = false;
+            activeStyles.narrowMode = 'very-narrow';
+        }
+        updateActiveStyleUI();
+        showToast(`Text columns changed manually to ${val}`, 'fa-sliders');
+    });
+
+    selectStyle.addEventListener('change', (e) => {
+        const val = e.target.value;
+        activeStyles.doubleHeight = (val === 'double-height');
+        updateActiveStyleUI();
+        showToast(`Font style changed manually to ${val === 'double-height' ? 'Double Height' : 'Normal'}`, 'fa-sliders');
+    });
+
+    selectUnderline.addEventListener('change', (e) => {
+        const val = e.target.value;
+        activeStyles.underline = (val === 'enabled');
+        updateActiveStyleUI();
+        showToast(`Underline changed manually to ${activeStyles.underline ? 'Enabled' : 'Disabled'}`, 'fa-sliders');
+    });
+
+    // Reset settings button handler
+    btnResetSettings.addEventListener('click', () => {
+        Object.assign(activeStyles, {
+            doubleWidth: false,
+            doubleHeight: false,
+            underline: false,
+            narrowMode: 'normal'
+        });
+        updateActiveStyleUI();
+        showToast('Settings reset to defaults', 'fa-arrow-rotate-left');
+    });
 
     // 3-second Timeout Timer
     function resetTimeoutTimer() {
@@ -651,16 +698,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Helper to append canvas and scroll view
     function appendCanvasToPaper(canvas) {
-        paperRoll.appendChild(canvas);
+        const bottomSpacer = document.getElementById('paperBottomSpacer');
+        if (bottomSpacer) {
+            paperRoll.insertBefore(canvas, bottomSpacer);
+        } else {
+            paperRoll.appendChild(canvas);
+        }
         
         // Dynamically update padding on every print to handle layout shifts/initial 0-height client heights
         updatePaperPadding();
         
         // Scroll paper container to bottom if locked
         if (isLockedToBottom) {
-            setTimeout(() => {
-                paperRollContainer.scrollTop = paperRollContainer.scrollHeight;
-            }, 10);
+            const oldScroll = paperRollContainer.scrollTop;
+            paperRollContainer.scrollTop = paperRollContainer.scrollHeight;
+            const newScroll = paperRollContainer.scrollTop;
+            
+            if (newScroll !== oldScroll) {
+                isProgrammaticScroll = true;
+                if (programmaticScrollTimeout) clearTimeout(programmaticScrollTimeout);
+                programmaticScrollTimeout = setTimeout(() => {
+                    isProgrammaticScroll = false;
+                    programmaticScrollTimeout = null;
+                }, 150);
+            } else {
+                isProgrammaticScroll = false;
+            }
         }
     }
 
@@ -690,7 +753,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Clear Roll
     function clearPaperRoll() {
-        paperRoll.innerHTML = '';
+        // Clear only canvas elements, keeping spacers intact
+        const canvases = Array.from(paperRoll.getElementsByTagName('canvas'));
+        canvases.forEach(c => c.remove());
         currentLineText = [];
         Object.assign(activeStyles, {
             doubleWidth: false,
@@ -700,6 +765,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         updateActiveStyleUI();
         updateBufferLed();
+        
+        // Reset scroll position and auto-scroll lock
+        isLockedToBottom = true;
+        btnReturnBottom.classList.remove('show');
+        isProgrammaticScroll = true;
+        
+        if (programmaticScrollTimeout) clearTimeout(programmaticScrollTimeout);
+        programmaticScrollTimeout = setTimeout(() => {
+            isProgrammaticScroll = false;
+            programmaticScrollTimeout = null;
+        }, 150);
+        
+        paperRollContainer.scrollTop = 0;
+        
         showToast('Paper roll cleared & styles reset', 'fa-trash-can');
     }
     btnClearRoll.addEventListener('click', clearPaperRoll);
@@ -834,6 +913,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Scroll monitoring for live view lock
     paperRollContainer.addEventListener('scroll', () => {
+        if (isProgrammaticScroll) {
+            const target = paperRollContainer.scrollHeight - paperRollContainer.clientHeight;
+            if (Math.abs(paperRollContainer.scrollTop - target) <= 2) {
+                isProgrammaticScroll = false;
+                if (programmaticScrollTimeout) {
+                    clearTimeout(programmaticScrollTimeout);
+                    programmaticScrollTimeout = null;
+                }
+            }
+            return;
+        }
+        
         const threshold = 30; // px threshold
         const currentScroll = paperRollContainer.scrollTop + paperRollContainer.clientHeight;
         const maxScroll = paperRollContainer.scrollHeight;
@@ -847,11 +938,19 @@ document.addEventListener('DOMContentLoaded', () => {
             btnReturnBottom.classList.remove('show');
         }
     });
-
+ 
     // Return to bottom click handler
     btnReturnBottom.addEventListener('click', () => {
         isLockedToBottom = true;
         btnReturnBottom.classList.remove('show');
+        isProgrammaticScroll = true;
+        
+        if (programmaticScrollTimeout) clearTimeout(programmaticScrollTimeout);
+        programmaticScrollTimeout = setTimeout(() => {
+            isProgrammaticScroll = false;
+            programmaticScrollTimeout = null;
+        }, 800); // Wait for smooth scroll animation to finish
+        
         paperRollContainer.scrollTo({
             top: paperRollContainer.scrollHeight,
             behavior: 'smooth'
@@ -859,10 +958,24 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Locked to bottom (Live View)', 'fa-arrow-down');
     });
 
-    // Dynamic paper padding to keep active print line centered (halfway down)
+    // Dynamic paper padding to keep active print line positioned at the cover
     function updatePaperPadding() {
-        const halfHeight = Math.floor(paperRollContainer.clientHeight / 2);
-        paperRoll.style.paddingBottom = `${halfHeight}px`;
+        const clientHeight = paperRollContainer.clientHeight;
+        const coverHeight = 120; // height of the smoky cover (5 lines of 24px)
+        const printHeadOffset = 96; // 4 lines under print head (bottom spacer height)
+        
+        // padding-top ensures that on a new page, the top of the paper starts at the print head
+        const paddingTop = Math.max(0, clientHeight - printHeadOffset);
+        
+        const topSpacer = document.getElementById('paperTopSpacer');
+        const bottomSpacer = document.getElementById('paperBottomSpacer');
+        
+        if (topSpacer) topSpacer.style.height = `${paddingTop}px`;
+        if (bottomSpacer) bottomSpacer.style.height = `${printHeadOffset}px`;
+        
+        // Reset legacy inline paddings
+        paperRoll.style.paddingTop = '0px';
+        paperRoll.style.paddingBottom = '0px';
     }
     window.addEventListener('resize', updatePaperPadding);
 

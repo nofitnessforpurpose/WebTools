@@ -469,6 +469,33 @@ h1 {
     padding: 12px;
 }
 
+/* Active Settings Controls */
+.setting-select {
+    background: rgba(10, 15, 26, 0.6);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 2px 6px;
+    color: #fff;
+    font-size: 0.8rem;
+    font-family: var(--font-sans);
+    outline: none;
+    cursor: pointer;
+    text-align: right;
+    direction: ltr;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.setting-select:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 6px rgba(0, 242, 254, 0.25);
+}
+
+.setting-select option {
+    background: var(--bg-panel-solid);
+    color: #fff;
+    text-align: left;
+}
+
 /* Center Column: Printer emulation viewport */
 .printer-viewport {
     background: #111827;
@@ -508,7 +535,7 @@ h1 {
     width: 100%;
     background: linear-gradient(to bottom, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0) 100%);
     position: absolute;
-    bottom: 58px; /* Positioned just below the tear bar */
+    bottom: 104px; /* Positioned just below the tear bar */
     left: 0;
     z-index: 11;
     pointer-events: none;
@@ -519,7 +546,7 @@ h1 {
     width: 100%;
     background: repeating-linear-gradient(45deg, #1f2937, #1f2937 4px, #4b5563 4px, #4b5563 8px);
     position: absolute;
-    bottom: 74px; /* Sits exactly on top of the smoky cover */
+    bottom: 120px; /* Sits exactly on top of the smoky cover */
     left: 0;
     z-index: 12;
     box-shadow: 0 2px 3px rgba(0, 0, 0, 0.5), 0 -1px 1px rgba(255, 255, 255, 0.1);
@@ -531,7 +558,7 @@ h1 {
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 74px;
+    height: 120px;
     background: rgba(15, 23, 42, 0.65); /* Smoky grey tinted transparent */
     border-top: 1px solid rgba(255, 255, 255, 0.15); /* Highlight top edge */
     box-shadow: 
@@ -545,7 +572,7 @@ h1 {
 .paper-roll-container {
     flex-grow: 1;
     overflow-y: auto;
-    padding: 20px 0 20px 0;
+    padding: 0;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -572,12 +599,26 @@ h1 {
     display: flex;
     flex-direction: column;
     min-height: 100%;
-    padding-bottom: 250px; /* Fallback padding to keep printed line clear of the cover */
+    padding-bottom: 0; /* Handled by bottom spacer element */
     position: relative;
     border-left: 1px dashed rgba(0, 0, 0, 0.05);
     border-right: 1px dashed rgba(0, 0, 0, 0.05);
     transform-origin: top center;
     transition: min-height 0.2s ease;
+}
+
+#paperTopSpacer {
+    width: 100%;
+    height: calc(100% - 96px);
+    background-color: var(--paper-bg);
+    flex-shrink: 0;
+}
+
+#paperBottomSpacer {
+    width: 100%;
+    height: 96px; /* 4 lines of 24px */
+    background-color: var(--paper-bg);
+    flex-shrink: 0;
 }
 
 /* Individual canvas print lines */
