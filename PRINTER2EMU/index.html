@@ -26,14 +26,19 @@
         <!-- Main Workspace -->
         <div class="workspace-grid">
             
-            <!-- Left Column: Guidance & OPL Stubs -->
+            <!-- Left Column: Guidance & OPL Stub -->
             <section class="panel panel-left">
                 <div class="panel-header">
                     <i class="fa-solid fa-book-open"></i>
-                    <h2>Guide & OPL Stubs</h2>
+                    <h2>Guide & OPL Stub</h2>
                 </div>
                 
                 <div class="panel-body">
+                    <div class="guide-text note-box">
+                        <i class="fa-solid fa-info-circle"></i>
+                        <span>For text printing no COMMS Link software extensions or ttubs are needed. The COMMS link directs LPRINT commands to the serial interface link. <br><br>Check the baud rate settings are set to the default values (9600,N,8,1,XON,NONE)</span>
+                    </div>
+
                     <div class="guide-text">
                         <p>If graphics print support is needed, use the helper stub routine below to allow the emulator to handle graphics printing (since the physical Printer II hardware's internal <code>GPRINT</code> routine is not available). The <code>GPRINT</code> routine is small and can be located on your internal <b>A:</b> storage location.</p>
                     </div>
@@ -47,20 +52,16 @@
                             </button>
                         </div>
                         <textarea class="code-area" id="gprintCode" readonly>GPRINT:(w%, addr%)
+  REM GPRINT stub code
   REM By NFfP Rev 1.2
   LOCAL i%
-  LPRINT CHR$(27);CHR$(71);CHR$(w%/256);CHR$(w% AND 255);
+  LPRINT CHR$(27);CHR$(71);
+  LPRINT CHR$(w%/256);CHR$(w% AND 255);
   i%=0
   WHILE i%<w%
     LPRINT CHR$(PEEKB(addr%+i%));
     i%=i%+1
-  ENDWH
-</textarea>
-                    </div>
-
-                    <div class="guide-text note-box">
-                        <i class="fa-solid fa-info-circle"></i>
-                        <span>No Comms Link software extensions are needed. Standard OPL <code>LPRINT</code> sends data directly to the printer interface.</span>
+  ENDWH</textarea>
                     </div>
                 </div>
             </section>
@@ -220,11 +221,11 @@
             <div class="guide-grid">
                 <div class="guide-card">
                     <h4><i class="fa-solid fa-play"></i> How to Use</h4>
-                    <p>Connect the emulator using the <b>Connect Serial</b> button on the right panel. Configure your Psion's printer settings to route printer output through the Comms Link serial port. Standard OPL <code>LPRINT</code> commands will output directly to the scrolling thermal roll. Use the custom <code>GPRINT</code> stub to draw raw column graphics.</p>
+                    <p>Ensure all connections and serial settings are correct. Connect the emulator using the Connect Serial button on the right panel. The virtual printer is now ready to receive print commands over the COMMS link. Standard OPL <code>LPRINT</code> commands will output directly to the scrolling thermal print roll. Use the custom <code>GPRINT</code> stub for graphics mode (i.e. to draw raw column graphics - see the Printer II companion app - Printer Graphics RLE Compressor)</p>
                 </div>
                 <div class="guide-card">
                     <h4><i class="fa-solid fa-plug"></i> Hardware & Conflict Warnings</h4>
-                    <p>Connect your Organiser's Comms Link to a USB-to-Serial converter. Configure the serial settings on the PC to match 9600 Baud, 8 Data Bits, No Parity, and 1 Stop Bit. <br><strong>Important:</strong> Ensure no other software (like Org-Link, terminal programs, or OPK Editor transfers) is holding the serial port open, as standard OS ports can only be accessed by one app at a time.</p>
+                    <p>Connect your Organiser's COMMS Link to a serial port or Serial-to-USB convertor on the host computer. Web Serial will try to set the default baud rate settings. You may need to set your host computers serial port settings to match 9600 Baud, 8 Data Bits, No Parity, and 1 Stop Bit. <br><strong>Important:</strong> Ensure no other software (like Org-Link, terminal programs, or OPK Editor transfers) is holding the serial port open, as standard OS ports can only be accessed by one app at a time.</p>
                 </div>
                 <div class="guide-card">
                     <h4><i class="fa-solid fa-code"></i> Printer Control Codes</h4>
