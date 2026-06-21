@@ -36,9 +36,11 @@ If graphics print support is needed, use the helper stub routine below to allow 
 ### `GPRINT` Stub
 ```opl
 GPRINT:(w%, addr%)
+  REM GPRINT stub code
   REM By NFfP Rev 1.2
   LOCAL i%
-  LPRINT CHR$(27);CHR$(71);CHR$(w%/256);CHR$(w% AND 255);
+  LPRINT CHR$(27);CHR$(71);
+  LPRINT CHR$(w%/256);CHR$(w% AND 255);
   i%=0
   WHILE i%<w%
     LPRINT CHR$(PEEKB(addr%+i%));
