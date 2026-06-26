@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HP 9872C Multi-Color Plotter Emulator</title>
+    <meta name="description" content="A premium real-time emulator of the Hewlett Packard 9872C flatbed pen plotter. Receives HPGL commands over Web Serial and animates carriages and pen swaps.">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Left Side Slide-out Panel Trigger Tab (HPGL Debugger) -->
+        <button class="sidebar-tab-trigger-left" id="debug-trigger" title="Open HPGL Debugger">
+            <i class="fa-solid fa-chevron-right" id="debug-trigger-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-bug"></i> DEBUGGER</span>
+        </button>
+
+        <!-- Slide-out Debugger Sidebar Panel -->
+        <aside class="sidebar-panel-left" id="debug-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-bug"></i> HPGL Debugger</h2>
+                <button class="btn-close-sidebar" id="btn-close-debug" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-body">
+                <!-- Pen Status & Alignment Scope Card -->
+                <div class="settings-group collapsed" id="card-pen-status">
+                    <h3 class="settings-title"><i class="fa-solid fa-pen-fancy"></i> Carriage Status & Scope <i class="fa-solid fa-chevron-down toggle-icon"></i></h3>
+                    <div class="settings-group-content">
+                        <div class="debug-status-row">
+                            <span class="status-label">Coordinates:</span>
+                            <span class="status-value" id="debug-coords">X: 0, Y: 0</span>
+                        </div>
+                        <div class="debug-status-row">
+                            <span class="status-label">Pen State:</span>
+                            <span class="status-value" id="debug-pen-state">UP</span>
+                        </div>
+                        <div class="debug-status-row">
+                            <span class="status-label">Active Pen:</span>
+                            <span class="status-value" id="debug-active-pen">None</span>
+                        </div>
+                        <div class="debug-status-row" style="margin-bottom: 12px;">
+                            <span class="status-label">Chart Hold:</span>
+                            <span class="status-value" id="debug-chart-hold">ON</span>
+                        </div>
+                        <div class="debug-scope-wrapper">
+                            <div class="debug-scope-lens">
+                                <canvas id="debug-magnifier-canvas"></canvas>
+                                <div class="debug-scope-crosshair"></div>
+                            </div>
+                            <span class="scope-caption">2X Magnified Alignment Scope</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual Command Input -->
+                <div class="settings-group collapsed">
+                    <h3 class="settings-title"><i class="fa-solid fa-keyboard"></i> HPGL Command Input <i class="fa-solid fa-chevron-down toggle-icon"></i></h3>
+                    <div class="settings-group-content">
+                        <div class="debug-input-container" id="debug-input-container">
+                            <textarea id="debug-input" class="debug-textarea" placeholder=" "></textarea>
+                            <div class="debug-drag-placeholder" id="debug-drag-placeholder">
+                                <i class="fa-solid fa-cloud-arrow-up drag-icon"></i>
+                                <span class="drag-title">Enter commands</span>
+                                <span class="drag-subtitle">Drag & drop or <span class="btn-select-file-link" id="btn-select-file-link">click to select files</span></span>
+                            </div>
+                            <input type="file" id="debug-file-input" style="display: none;" accept=".plt,.hpgl,.txt,.hpg,.gl">
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 8px;">
+                            <button class="btn btn-primary" id="btn-debug-run-all" style="flex: 1;"><i class="fa-solid fa-play"></i> Run All</button>
+                            <button class="btn btn-action" id="btn-debug-load" style="flex: 1;"><i class="fa-solid fa-arrow-down-long"></i> Load Step</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stepping Controls -->
+                <div class="settings-group collapsed">
+                    <h3 class="settings-title"><i class="fa-solid fa-bug"></i> Stepper Controls <i class="fa-solid fa-chevron-down toggle-icon"></i></h3>
+                    <div class="settings-group-content">
+                        <div class="debug-status-container">
+                            <span class="control-label">Status:</span>
+                            <span class="status-indicator offline" id="debug-status">Idle</span>
+                        </div>
+                        <div class="debug-btn-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+                            <button class="btn btn-action" id="btn-debug-step" disabled><i class="fa-solid fa-step-forward"></i> Step</button>
+                            <button class="btn btn-action" id="btn-debug-resume" disabled><i class="fa-solid fa-play"></i> Resume</button>
+                            <button class="btn btn-action" id="btn-debug-pause" disabled><i class="fa-solid fa-pause"></i> Pause</button>
+                            <button class="btn btn-danger" id="btn-debug-reset" disabled style="margin:0;"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Debug Queue Listing -->
+                <div class="settings-group collapsed">
+                    <h3 class="settings-title"><i class="fa-solid fa-list-ol"></i> Decoded Commands Queue <i class="fa-solid fa-chevron-down toggle-icon"></i></h3>
+                    <div class="settings-group-content">
+                        <div class="log-container" style="padding: 4px;">
+                            <div class="log-viewport" id="debug-viewport" style="height: 250px;">
+                                <span class="log-empty-msg">No commands loaded...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <p>&copy; 2026 HP 9872C Debug View</p>
+            </div>
+        </aside>
+
+        <!-- Main Plotter Frame -->
+        <main class="plotter-chassis" id="plotter">
+            <!-- Top Frame with Silver Badge -->
+            <header class="plotter-top-frame">
+                <div class="silver-badge">
+                    <span class="badge-model">9872C PLOTTER</span>
+                    <span class="badge-type">MULTI - COLOR</span>
+                </div>
+                <!-- Mechanical Status LEDs -->
+                <div class="chassis-power-indicator">
+                    <span class="power-label">LINE ON</span>
+                    <div class="led led-power" id="led-power"></div>
+                </div>
+            </header>
+
+            <!-- Plotter Bed Recess (Drawing Area + Guide Tracks) -->
+            <div class="plotter-bed">
+                <!-- X-Axis Rails (Top and Bottom Guide Shadows) -->
+                <div class="x-rail-shadow top"></div>
+                <div class="x-rail-shadow bottom"></div>
+
+                <!-- Magnifier Lens alignment scope -->
+                <div class="magnifier-lens" id="magnifier-lens">
+                    <canvas id="magnifier-canvas"></canvas>
+                    <div class="magnifier-crosshair"></div>
+                </div>
+
+                <!-- Paper Sheet Bed -->
+                <div class="paper-bed-container">
+                    <canvas id="plotter-bed-canvas"></canvas>
+                    <div class="paper-sheet" id="paper-sheet">
+                        <!-- Clamps at corners -->
+                        <div class="paper-clamp top-left"></div>
+                        <div class="paper-clamp top-right"></div>
+                        <div class="paper-clamp bottom-left"></div>
+                        <div class="paper-clamp bottom-right"></div>
+                        
+                        <!-- Background Canvas for templates and grids -->
+                        <canvas id="plotter-bg-canvas"></canvas>
+                        <!-- Foreground Drawing Canvas -->
+                        <canvas id="plotter-canvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Animated X-Carriage Bar (slides left/right) -->
+                <div class="x-carriage" id="x-carriage" style="transform: translateX(0px);">
+                    <!-- Metal tracks inside carriage -->
+                    <div class="x-carriage-track"></div>
+                    <!-- Animated Y-Carriage Block (slides up/down along X-carriage) -->
+                    <div class="y-carriage" id="y-carriage" style="transform: translateY(0px);">
+                        <!-- Pen Holder Assembly -->
+                        <div class="y-carriage-arm">
+                            <div class="pen-casing">
+                                <div class="pen-tip" id="carriage-pen-tip" style="background-color: transparent;"></div>
+                            </div>
+                        </div>
+                        <div class="y-carriage-shadow"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Console Area (Tactile Controls & Pen Stables) -->
+            <footer class="plotter-console">
+                <!-- Pen Stables Row (1-8 Slots) -->
+                <div class="pen-stables-container">
+                    <div class="pen-stables-label">PEN HOLDER STATIONS</div>
+                    <div class="pen-stables">
+                        <!-- Station 1 -->
+                        <div class="pen-station" id="station-1">
+                            <div class="pen-slot-hole"><div class="pen-body-in-slot" id="pen-body-1" style="background-color: var(--pen-1-color);"></div></div>
+                            <button class="btn-console btn-pen-select" data-pen="1">1</button>
+                        </div>
+                        <!-- Station 2 -->
+                        <div class="pen-station" id="station-2">
+                            <div class="pen-slot-hole"><div class="pen-body-in-slot" id="pen-body-2" style="background-color: var(--pen-2-color);"></div></div>
+                            <button class="btn-console btn-pen-select" data-pen="2">2</button>
+                        </div>
+                        <!-- Station 3 -->
+                        <div class="pen-station" id="station-3">
+                            <div class="pen-slot-hole"><div class="pen-body-in-slot" id="pen-body-3" style="background-color: var(--pen-3-color);"></div></div>
+                            <button class="btn-console btn-pen-select" data-pen="3">3</button>
+                        </div>
+                        <!-- Station 4 -->
+                        <div class="pen-station" id="station-4">
+                            <div class="pen-slot-hole"><div class="pen-body-in-slot" id="pen-body-4" style="background-color: var(--pen-4-color);"></div></div>
+                            <button class="btn-console btn-pen-select" data-pen="4">4</button>
+                        </div>
+                        <!-- Station 5 -->
+                        <div class="pen-station" id="station-5">
+                            <div class="pen-slot-hole"><div class="pen-body-in-slot" id="pen-body-5" style="background-color: var(--pen-5-color);"></div></div>
+                            <button class="btn-console btn-pen-select" data-pen="5">5</button>
+                        </div>
+                        <!-- Station 6 -->
+                        <div class="pen-station" id="station-6">
+                            <div class="pen-slot-hole"><div class="pen-body-in-slot" id="pen-body-6" style="background-color: var(--pen-6-color);"></div></div>
+                            <button class="btn-console btn-pen-select" data-pen="6">6</button>
+                        </div>
+                        <!-- Station 7 -->
+                        <div class="pen-station" id="station-7">
+                            <div class="pen-slot-hole"><div class="pen-body-in-slot" id="pen-body-7" style="background-color: var(--pen-7-color);"></div></div>
+                            <button class="btn-console btn-pen-select" data-pen="7">7</button>
+                        </div>
+                        <!-- Station 8 -->
+                        <div class="pen-station" id="station-8">
+                            <div class="pen-slot-hole"><div class="pen-body-in-slot" id="pen-body-8" style="background-color: var(--pen-8-color);"></div></div>
+                            <button class="btn-console btn-pen-select" data-pen="8">8</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lower Buttons Controls Row -->
+                <div class="console-lower-controls">
+                    <!-- Left Block: Jog D-Pad (Up, Down, Left, Right, FAST) -->
+                    <div class="control-block jog-block">
+                        <div class="dpad-container">
+                            <button class="btn-jog btn-jog-up" id="btn-jog-up" title="Jog Up"><i class="fa-solid fa-caret-up"></i></button>
+                            <button class="btn-jog btn-jog-left" id="btn-jog-left" title="Jog Left"><i class="fa-solid fa-caret-left"></i></button>
+                            <div class="btn-jog-fast" id="btn-jog-fast" title="Hold for Fast Jog">FAST</div>
+                            <button class="btn-jog btn-jog-right" id="btn-jog-right" title="Jog Right"><i class="fa-solid fa-caret-right"></i></button>
+                            <button class="btn-jog btn-jog-down" id="btn-jog-down" title="Jog Down"><i class="fa-solid fa-caret-down"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Center Block: Plotter Operations (Enter, Limit LED, P1, P2, Pen control, Error LED) -->
+                    <div class="control-block operations-block">
+                        <div class="op-button-group">
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                <button class="btn-console orange-btn" id="btn-enter" title="Register Point (Enter)">ENTER</button>
+                                <span class="btn-subtext">ENTER</span>
+                            </div>
+                            
+                            <div class="led-indicator-group">
+                                <div class="led led-console orange-led" id="led-limit"></div>
+                                <span class="led-label">OUT OF LIMIT</span>
+                            </div>
+                            
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                <button class="btn-console grey-btn" id="btn-p1" title="P1 Lower Left (Use SHIFT to set)">P1</button>
+                                <span class="btn-subtext">P1</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                <button class="btn-console grey-btn" id="btn-p2" title="Set P2 Upper Right (Use SHIFT to set)">P2</button>
+                                <span class="btn-subtext">P2</span>
+                            </div>
+                        </div>
+
+                        <div class="op-button-group">
+                            <div style="display: flex; gap: 8px;">
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                    <button class="btn-console grey-btn small-text" id="btn-pen-up">PEN<br>UP</button>
+                                    <span class="btn-subtext">UP</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                    <button class="btn-console grey-btn small-text" id="btn-pen-down">PEN<br>DOWN</button>
+                                    <span class="btn-subtext">DOWN</span>
+                                </div>
+                            </div>
+
+                            <div class="led-indicator-group">
+                                <div class="led led-console red-led" id="led-error"></div>
+                                <span class="led-label">ERROR</span>
+                            </div>
+
+                            <div style="display: flex; gap: 8px;">
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                    <button class="btn-console grey-btn small-text" id="btn-chart-load">CHART<br>LOAD</button>
+                                    <span class="btn-subtext">LOAD</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                                    <button class="btn-console grey-btn small-text" id="btn-chart-hold">CHART<br>HOLD</button>
+                                    <span class="btn-subtext">HOLD</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Block: Power Toggle Switch -->
+                    <div class="control-block power-block">
+                        <div class="power-switch-container">
+                            <span class="switch-label">ON</span>
+                            <div class="rocker-switch on" id="power-switch" title="Toggle Power Switch">
+                                <div class="rocker-bar"></div>
+                            </div>
+                            <span class="switch-label">OFF</span>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+        </main>
+
+        <!-- Right Side Help Tab Trigger (above Controls) -->
+        <button class="sidebar-tab-trigger" id="help-trigger" title="Open Help">
+            <i class="fa-solid fa-chevron-left" id="help-trigger-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-circle-info"></i> HELP</span>
+        </button>
+
+        <button class="sidebar-tab-trigger" id="sidebar-trigger" title="Open Settings &amp; Controls">
+            <i class="fa-solid fa-chevron-left" id="sidebar-trigger-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-sliders"></i> CONTROLS</span>
+        </button>
+
+        <!-- Slide-out Sidebar Panel -->
+        <aside class="sidebar-panel" id="sidebar-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-sliders"></i> Emulator settings</h2>
+                <button class="btn-close-sidebar" id="btn-close-sidebar" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-body">
+                <!-- Section 1: Web Serial -->
+                <div class="settings-group">
+                    <h3 class="settings-title"><i class="fa-solid fa-plug"></i> Web Serial Interface <i class="fa-solid fa-chevron-down toggle-icon"></i></h3>
+                    <div class="settings-group-content">
+                        <div class="serial-controls">
+                            <div class="serial-status-row">
+                                <span class="status-label">Port Connection:</span>
+                                <span class="status-indicator offline" id="serial-status">Offline</span>
+                            </div>
+                            <button class="btn btn-primary" id="btn-serial-connect">
+                                <i class="fa-solid fa-plug"></i> Connect Serial
+                            </button>
+                            <span class="unsupported-msg" id="serial-unsupported" style="display: none;">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Web Serial is not supported in this browser.
+                            </span>
+                        </div>
+                        
+                        <div class="control-item" style="margin-top: 12px;">
+                            <label class="control-label" for="select-baud">Baud Rate</label>
+                            <select id="select-baud" class="setting-select">
+                                <option value="2400">2400 bps</option>
+                                <option value="4800">4800 bps</option>
+                                <option value="9600" selected>9600 bps</option>
+                                <option value="19200">19200 bps</option>
+                            </select>
+                        </div>
+
+                        <div class="control-item-row">
+                            <input type="checkbox" id="chk-flow-control" checked>
+                            <label for="chk-flow-control">Send XON/XOFF Flow Control</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Speed / Velocity settings -->
+                <div class="settings-group collapsed">
+                    <h3 class="settings-title"><i class="fa-solid fa-sliders"></i> Plotter Config <i class="fa-solid fa-chevron-down toggle-icon"></i></h3>
+                    <div class="settings-group-content">
+                        <div class="control-item">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                <label class="control-label" for="slider-speed">Plotter Velocity</label>
+                                <span class="value-display" id="speed-display">36 cm/s</span>
+                            </div>
+                            <input type="range" id="slider-speed" min="5" max="100" step="1" value="36" class="setting-range">
+                            <div class="range-labels">
+                                <span>Slow (5)</span>
+                                <span>Max (100)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="control-item" style="margin-top: 10px; margin-bottom: 10px;">
+                            <label class="control-label" for="select-hpgl-level">Language Level</label>
+                            <select id="select-hpgl-level" class="setting-select">
+                                <option value="hpgl2" selected>HP-GL/2 (Default)</option>
+                                <option value="hpgl">HP-GL (Standard/Legacy)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="control-item-row" style="margin-top: 10px;">
+                            <input type="checkbox" id="chk-instant-draw">
+                            <label for="chk-instant-draw"><strong>Instant Render</strong> (Bypass animations)</label>
+                        </div>
+                        <div class="control-item-row">
+                            <input type="checkbox" id="chk-auto-scale">
+                            <label for="chk-auto-scale">Auto-Fit Coordinates to Bed</label>
+                        </div>
+                        <div class="control-item-row">
+                            <input type="checkbox" id="chk-sound-fx" checked>
+                            <label for="chk-sound-fx">Enable Retro Synth Motor Sound</label>
+                        </div>
+                        
+                        <!-- Centimeter Graticule Controls -->
+                        <div class="control-item-row" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px; margin-top: 8px;">
+                            <input type="checkbox" id="chk-grid-enable" checked>
+                            <label for="chk-grid-enable">Enable Centimeter Graticule</label>
+                        </div>
+                        <div class="control-item" style="margin-top: 4px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label class="control-label" for="picker-grid-color">Graticule Color</label>
+                                <input type="color" id="picker-grid-color" value="#0096ff" style="width: 32px; height: 18px; border: 1px solid #555; padding: 0; cursor: pointer; background: transparent; border-radius: 3px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Page Controls -->
+                <div class="settings-group">
+                    <h3 class="settings-title"><i class="fa-solid fa-file-lines"></i> Page Controls; <i class="fa-solid fa-chevron-down toggle-icon"></i></h3>
+                    <div class="settings-group-content">
+                        <!-- Paper Size Selector -->
+                        <div class="control-item" style="margin-bottom: 8px;">
+                            <label class="control-label" for="select-paper-size">Paper Size</label>
+                            <select id="select-paper-size" class="setting-select">
+                                <option value="A3" selected>A3 (Full Bed)</option>
+                                <option value="A4">A4 (70.7% Scale)</option>
+                                <option value="A5">A5 (50.0% Scale)</option>
+                                <option value="Letter">Letter (Proportional)</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Paper Orientation Selector -->
+                        <div class="control-item" style="margin-bottom: 8px;">
+                            <label class="control-label" for="select-paper-orientation">Orientation</label>
+                            <select id="select-paper-orientation" class="setting-select">
+                                <option value="landscape" selected>Landscape (Horizontal)</option>
+                                <option value="portrait">Portrait (Vertical)</option>
+                            </select>
+                        </div>
+
+                        <!-- Paper Color Selector -->
+                        <div class="control-item" style="margin-bottom: 8px;">
+                            <label class="control-label" for="select-paper-color">Paper Color</label>
+                            <select id="select-paper-color" class="setting-select">
+                                <option value="cream" selected>Cream (Classic)</option>
+                                <option value="white">Bright White</option>
+                                <option value="blueprint">Blueprint Blue</option>
+                                <option value="black">Slate Black</option>
+                                <option value="green">Engineering Green</option>
+                                <option value="paleblue">Pale Blue</option>
+                                <option value="paleyellow">Pale Yellow</option>
+                                <option value="palepink">Pale Pink</option>
+                                <option value="mattefilm">Matte Film (Mylar)</option>
+                                <option value="transparent">Transparent Film</option>
+                            </select>
+                        </div>
+
+                        <!-- Paper Template Selector -->
+                        <div class="control-item" style="margin-bottom: 12px;">
+                            <label class="control-label" for="select-paper-template">Paper Template</label>
+                            <select id="select-paper-template" class="setting-select">
+                                <option value="plain" selected>Plain Sheet</option>
+                                <option value="engineering">Engineering Sheet</option>
+                                <option value="grid">Centimeter Grid</option>
+                                <option value="loglog">Log-Log Grid (3x3)</option>
+                                <option value="semilog">Semi-Log Grid (3-Cycle Y)</option>
+                                <option value="semilogx">Semi-Log Grid (3-Cycle X)</option>
+                                <option value="smith">Smith Chart (RF)</option>
+                                <option value="polar">Polar Grid</option>
+                                <option value="isometric">Isometric Grid</option>
+                            </select>
+                        </div>
+
+                        <div class="demo-buttons" style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 8px;">
+                            <button class="btn btn-action" id="btn-draw-test">
+                                <i class="fa-solid fa-vial"></i> HPGL Emulation Test
+                            </button>
+                            <button class="btn btn-action" id="btn-draw-shuttle">
+                                <i class="fa-solid fa-space-shuttle"></i> Space Shuttle Demo
+                            </button>
+                            <button class="btn btn-action" id="btn-copy-canvas">
+                                <i class="fa-solid fa-copy"></i> Copy Plot to Clipboard
+                            </button>
+                            <button class="btn btn-danger" id="btn-clear-bed" style="margin-top: 4px;">
+                                <i class="fa-solid fa-trash-can"></i> Clear Paper Bed
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: Color Station Customization -->
+                <div class="settings-group collapsed">
+                    <h3 class="settings-title"><i class="fa-solid fa-palette"></i> Pen Carousel Configuration <i class="fa-solid fa-chevron-down toggle-icon"></i></h3>
+                    <div class="settings-group-content">
+                        <p class="section-desc">Click a pen color circle to customize the pen slot.</p>
+                        <table class="pen-editor-table">
+                            <thead>
+                                <tr>
+                                    <th>Slot</th>
+                                    <th>Color</th>
+                                    <th>Width (mm)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Generated via JS for 8 pens -->
+                                <tr id="pen-row-1">
+                                    <td>Pen 1: Black</td>
+                                    <td>
+                                        <div class="pen-color-preview" id="preview-color-1" style="background-color: var(--pen-1-color);"></div>
+                                        <input type="color" id="picker-color-1" value="#1c1917" class="hidden-color-picker">
+                                    </td>
+                                    <td><input type="number" id="width-pen-1" min="0.1" max="2.0" step="0.05" value="0.3" class="width-input"></td>
+                                </tr>
+                                <tr id="pen-row-2">
+                                    <td>Pen 2: Red</td>
+                                    <td>
+                                        <div class="pen-color-preview" id="preview-color-2" style="background-color: var(--pen-2-color);"></div>
+                                        <input type="color" id="picker-color-2" value="#dc2626" class="hidden-color-picker">
+                                    </td>
+                                    <td><input type="number" id="width-pen-2" min="0.1" max="2.0" step="0.05" value="0.3" class="width-input"></td>
+                                </tr>
+                                <tr id="pen-row-3">
+                                    <td>Pen 3: Green</td>
+                                    <td>
+                                        <div class="pen-color-preview" id="preview-color-3" style="background-color: var(--pen-3-color);"></div>
+                                        <input type="color" id="picker-color-3" value="#16a34a" class="hidden-color-picker">
+                                    </td>
+                                    <td><input type="number" id="width-pen-3" min="0.1" max="2.0" step="0.05" value="0.3" class="width-input"></td>
+                                </tr>
+                                <tr id="pen-row-4">
+                                    <td>Pen 4: Blue</td>
+                                    <td>
+                                        <div class="pen-color-preview" id="preview-color-4" style="background-color: var(--pen-4-color);"></div>
+                                        <input type="color" id="picker-color-4" value="#2563eb" class="hidden-color-picker">
+                                    </td>
+                                    <td><input type="number" id="width-pen-4" min="0.1" max="2.0" step="0.05" value="0.3" class="width-input"></td>
+                                </tr>
+                                <tr id="pen-row-5">
+                                    <td>Pen 5: Yellow</td>
+                                    <td>
+                                        <div class="pen-color-preview" id="preview-color-5" style="background-color: var(--pen-5-color);"></div>
+                                        <input type="color" id="picker-color-5" value="#eab308" class="hidden-color-picker">
+                                    </td>
+                                    <td><input type="number" id="width-pen-5" min="0.1" max="2.0" step="0.05" value="0.3" class="width-input"></td>
+                                </tr>
+                                <tr id="pen-row-6">
+                                    <td>Pen 6: Magenta</td>
+                                    <td>
+                                        <div class="pen-color-preview" id="preview-color-6" style="background-color: var(--pen-6-color);"></div>
+                                        <input type="color" id="picker-color-6" value="#d946ef" class="hidden-color-picker">
+                                    </td>
+                                    <td><input type="number" id="width-pen-6" min="0.1" max="2.0" step="0.05" value="0.3" class="width-input"></td>
+                                </tr>
+                                <tr id="pen-row-7">
+                                    <td>Pen 7: Cyan</td>
+                                    <td>
+                                        <div class="pen-color-preview" id="preview-color-7" style="background-color: var(--pen-7-color);"></div>
+                                        <input type="color" id="picker-color-7" value="#0891b2" class="hidden-color-picker">
+                                    </td>
+                                    <td><input type="number" id="width-pen-7" min="0.1" max="2.0" step="0.05" value="0.3" class="width-input"></td>
+                                </tr>
+                                <tr id="pen-row-8">
+                                    <td>Pen 8: Brown</td>
+                                    <td>
+                                        <div class="pen-color-preview" id="preview-color-8" style="background-color: var(--pen-8-color);"></div>
+                                        <input type="color" id="picker-color-8" value="#78350f" class="hidden-color-picker">
+                                    </td>
+                                    <td><input type="number" id="width-pen-8" min="0.1" max="2.0" step="0.05" value="0.3" class="width-input"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <button class="btn btn-danger" id="btn-reset-pens" style="margin-top: 10px; width: 100%;">
+                            <i class="fa-solid fa-rotate-left"></i> Reset Pen Settings
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section 5: Live Terminal Log -->
+                <div class="settings-group collapsed">
+                    <h3 class="settings-title">
+                        <i class="fa-solid fa-rectangle-list"></i> Command Queue Log
+                        <button class="btn btn-action btn-small" id="btn-copy-log" style="margin-left: auto; width: auto; padding: 2px 8px; font-size: 0.55rem; display: inline-flex; gap: 4px;" title="Copy log to clipboard"><i class="fa-solid fa-copy"></i> Copy</button>
+                        <i class="fa-solid fa-chevron-down toggle-icon" style="margin-left: 8px;"></i>
+                    </h3>
+                    <div class="settings-group-content">
+                        <div class="log-container">
+                            <div class="log-viewport" id="log-viewport">
+                                <span class="log-empty-msg">Waiting for HPGL commands...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                <p>&copy; NFfP - 2026 HP 9872C Web Emulator</p>
+            </div>
+        </aside>
+        <!-- Slide-out Sidebar Panel for Help (content injected by help-panel.js) -->
+        <aside class="sidebar-panel" id="help-panel">
+            <!-- Content is injected at runtime by help-panel.js -->
+        </aside>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="space-shuttle-data.js"></script>
+    <script src="help-panel.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
