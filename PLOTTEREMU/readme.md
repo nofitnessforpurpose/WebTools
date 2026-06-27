@@ -28,7 +28,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 - **Hardware Simulation**: Retro style status LEDs (Rx active, Buffer status, Connection state) and simulated paper.
 - **Export Capabilities**: Download the entire plot as a single high-quality PNG image on the background of your choice.
 - **Self-Test Mode**: Simulated test plot to verify the rendering engine locally.
-- **Demo Pack**: A demo pack is available <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PLOTTEREMU/PLOTPACK">here</a>.
+- **Demo Pack**: A PSION Organiser II demo pack is available <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PLOTTEREMU/PLOTPACK">here</a>.
 
 ## Physical Setup
 1. Connect your Psion Organiser II Comms Link port to your PC using a Comms Link cable connected to a USB-to-Serial converter.
