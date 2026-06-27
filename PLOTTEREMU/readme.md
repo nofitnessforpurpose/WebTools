@@ -21,6 +21,8 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 [![Maintenance](https://img.shields.io/badge/maintained%3F-yes-green.svg?style=flat-square)](https://github.com/nofitnessforpurpose/WebTools/OPKEDITOR3/graphs/commit-activity)
 [![Static Badge](https://img.shields.io/badge/format-CODE-blue?style=flat-square)](https://en.wikipedia.org/)
 
+<BR>
+
 ## Features
 - **Web Serial Interface**: Receives data directly at standard baud rates.
 - **HPGL**: Supports HPGL language for clasisc and Rev 2 commands.
@@ -30,12 +32,16 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 - **Self-Test Mode**: Simulated test plot to verify the rendering engine locally.
 - **Demo Pack**: A PSION Organiser II demo pack is available <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PLOTTEREMU/PLOTPACK">here</a>.
 
+<BR>
+
 ## Physical Setup
 1. Connect your Psion Organiser II Comms Link port to your PC using a Comms Link cable connected to a USB-to-Serial converter.
 2. In the browser, click the **Connect** button, choose the serial port of your USB-to-Serial converter, and select connect.
 3. Configure your Organiser Comms Link settings to 9600 Baud, No Parity, 8 Data Bits, 1 Stop Bit, and set the printer device to serial output (Standard OPL `LPRINT` statements will then automatically route through the Comms Link interface).
 
 ** NOTE: Any serial RS232 device can be used with the emualtor (Raspberyy PI, Arduino, PC, ESP32 etc.).
+
+<BR>
 
 ### Hints   
  - Take care with any RAM Packs - COMMS links don't play nicely with them
