@@ -249,6 +249,16 @@
                     </div>
 
                     <div class="tech-card">
+                        <div class="tech-card-title"><i class="fa-solid fa-palette fa-xs"></i> Technical &mdash; Ink Blending & Color Bleed</div>
+                        <p>
+                            The emulator simulates the transparent, dye-based inks of original HP plotter pens using the <strong>Translucent Blend</strong> mode (HTML5 Canvas <code>multiply</code> blending). When a light color is drawn over a dark color, the dark line underneath remains visible and slightly tinted. When a dark color is drawn over a light color, the dark color dominates completely.
+                        </p>
+                        <p>
+                            <strong>Best Practice Tip:</strong> To achieve clean plots, without destroying pens or ruining lines, the standard software plotting sequence should always be ordered from lightest to darkest colors (e.g., Yellow &rarr; Magenta &rarr; Cyan &rarr; Black), allowing ample drying time between pen changes.
+                        </p>
+                    </div>
+
+                    <div class="tech-card">
                         <div class="tech-card-title"><i class="fa-solid fa-ruler-combined fa-xs"></i> Technical &mdash; Coordinate System</div>
                         <p>
                             All positions are held internally in <strong>Plotter Units (PLUs)</strong>.

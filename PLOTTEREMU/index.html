@@ -116,7 +116,7 @@
             </div>
             
             <div class="sidebar-footer">
-                <p>&copy; 2026 HP 9872C Debug View</p>
+                <p>&copy; 2026 NFfP - Debug View</p>
             </div>
         </aside>
 
@@ -358,9 +358,16 @@
                             </select>
                         </div>
 
-                        <div class="control-item-row">
-                            <input type="checkbox" id="chk-flow-control" checked>
-                            <label for="chk-flow-control">Send XON/XOFF Flow Control</label>
+                        <div class="control-item" style="margin-top: 8px;">
+                            <label class="control-label" for="select-flow-control">Flow Control</label>
+                            <select id="select-flow-control" class="setting-select">
+                                <option value="none">None</option>
+                                <option value="xonxoff" selected>XON/XOFF (Software)</option>
+                                <option value="hardware">RTS/CTS (Hardware)</option>
+                            </select>
+                        </div>
+                        <div class="unsupported-msg" id="serial-connected-msg" style="display: none; color: #a3a3a3; font-style: italic;">
+                            <i class="fa-solid fa-lock"></i> Disconnect port to change settings.
                         </div>
                     </div>
                 </div>
@@ -389,6 +396,14 @@
                             </select>
                         </div>
                         
+                        <div class="control-item" style="margin-top: 10px; margin-bottom: 10px;">
+                            <label class="control-label" for="select-pen-blending">Ink Blending Mode</label>
+                            <select id="select-pen-blending" class="setting-select">
+                                <option value="blended" selected>Translucent Blend (Faithful)</option>
+                                <option value="opaque">Opaque Overlay (Drafting)</option>
+                            </select>
+                        </div>
+                        
                         <div class="control-item-row" style="margin-top: 10px;">
                             <input type="checkbox" id="chk-instant-draw">
                             <label for="chk-instant-draw"><strong>Instant Render</strong> (Bypass animations)</label>
@@ -400,6 +415,10 @@
                         <div class="control-item-row">
                             <input type="checkbox" id="chk-sound-fx" checked>
                             <label for="chk-sound-fx">Enable Retro Synth Motor Sound</label>
+                        </div>
+                        <div class="control-item-row">
+                            <input type="checkbox" id="chk-pen-swap-travel" checked>
+                            <label for="chk-pen-swap-travel">Simulate Physical Pen Swap Travel</label>
                         </div>
                         
                         <!-- Centimeter Graticule Controls -->
@@ -482,6 +501,9 @@
                             </button>
                             <button class="btn btn-action" id="btn-copy-canvas">
                                 <i class="fa-solid fa-copy"></i> Copy Plot to Clipboard
+                            </button>
+                            <button class="btn btn-action" id="btn-save-canvas">
+                                <i class="fa-solid fa-download"></i> Save Plot Image
                             </button>
                             <button class="btn btn-danger" id="btn-clear-bed" style="margin-top: 4px;">
                                 <i class="fa-solid fa-trash-can"></i> Clear Paper Bed
@@ -607,8 +629,11 @@
     <div id="toast-container" class="toast-container"></div>
 
     <!-- Scripts -->
+    <script src="HPGLMultiModeParser.js"></script>
+    <script src="HPGLMultiModeGenerator.js"></script>
     <script src="space-shuttle-data.js"></script>
     <script src="help-panel.js"></script>
+    <script src="vector-font.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

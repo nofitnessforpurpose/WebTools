@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Help tab elements
     const helpTrigger  = document.getElementById('help-trigger');
+    const helpTriggerIcon = document.getElementById('help-trigger-icon');
     const helpPanel    = document.getElementById('help-panel');
     const btnCloseHelp = document.getElementById('btn-close-help');
     
@@ -48,13 +49,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const serialStatus = document.getElementById('serial-status');
     const serialUnsupported = document.getElementById('serial-unsupported');
     const selectBaud = document.getElementById('select-baud');
-    const chkFlowControl = document.getElementById('chk-flow-control');
+    const selectFlowControl = document.getElementById('select-flow-control');
     
     const sliderSpeed = document.getElementById('slider-speed');
     const speedDisplay = document.getElementById('speed-display');
     const chkInstantDraw = document.getElementById('chk-instant-draw');
     const chkAutoScale = document.getElementById('chk-auto-scale');
     const chkSoundFx = document.getElementById('chk-sound-fx');
+    const chkPenSwapTravel = document.getElementById('chk-pen-swap-travel');
     
     // Background Canvas and Page Template Selectors
     const bgCanvas = document.getElementById('plotter-bg-canvas');
@@ -66,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectPaperColor = document.getElementById('select-paper-color');
     const selectPaperTemplate = document.getElementById('select-paper-template');
     const selectHpglLevel = document.getElementById('select-hpgl-level');
+    const selectPenBlending = document.getElementById('select-pen-blending');
     const bedCanvas = document.getElementById('plotter-bed-canvas');
     const bedCtx = bedCanvas ? bedCanvas.getContext('2d') : null;
     
@@ -140,8 +143,22 @@ document.addEventListener('DOMContentLoaded', () => {
     let slewSpeed = 36; // Slew speed for travel/swaps (physical maximum, e.g. 36 cm/s)
     let isInstantDraw = false;
     let soundFxEnabled = true;
+    let simulatePenSwapTravel = true;
     let autoScaleActive = false;
-    let flowControlEnabled = true;
+    let flowControlMode = 'xonxoff';
+    let parserMode = 'LEGACY_HPGL';
+    let hpglParser = new HPGLMultiModeParser({ initialMode: parserMode });
+    let hpglGenerator = new HPGLMultiModeGenerator();
+    let isFlowControlPaused = false;
+    let isHostFlowControlPaused = false;
+    let penBlendingMode = 'blended';
+    
+    // Digitizer state variables
+    let isDigitizingMode = false;
+    let isDigitizedPointReady = false;
+    let digitizedX = 0;
+    let digitizedY = 0;
+    let digitizedPenStatus = 0;
     
     // Scaling system parameters (HPGL IP/SC commands)
     let p1X = PAPER_MIN_X;
@@ -220,14 +237,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Horizontal positions of 8 pen stables (aligned with console slots)
     const penSlotsX = {
-        1: 2000,  // 12.5%
-        2: 3600,  // 22.5%
-        3: 5200,  // 32.5%
-        4: 6800,  // 42.5%
-        5: 8400,  // 52.5%
-        6: 10000, // 62.5%
-        7: 11600, // 72.5%
-        8: 13200  // 82.5%
+        1: 1400,  // 8.75%
+        2: 3160,  // 19.75%
+        3: 4920,  // 30.75%
+        4: 6680,  // 41.75%
+        5: 8440,  // 52.75%
+        6: 10200, // 63.75%
+        7: 11960, // 74.75%
+        8: 13720  // 85.75%
     };
 
     // Action Queue for sequential operations
@@ -274,6 +291,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         PAPER_WIDTH = PAPER_MAX_X - PAPER_MIN_X;
         PAPER_HEIGHT = PAPER_MAX_Y - PAPER_MIN_Y;
+
+        if (hpglParser) {
+            hpglParser.pictureFrameWidth = activePaperOrientation === 'portrait' ? 11400 : 16000;
+            hpglParser.pictureFrameHeight = activePaperOrientation === 'portrait' ? 16000 : 11400;
+        }
 
         // Dynamic, pixel-perfect aspect ratio scaling for the paper sheet bed
         const container = bed.querySelector('.paper-bed-container');
@@ -385,6 +407,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (station) {
                 const rect = station.getBoundingClientRect();
                 const slotX = (rect.left + rect.width / 2) - bedRect.left;
+                
+                // Dynamically align logical penSlotsX coordinates with HTML visual positions
+                const canvasLeftOffset = canvasRect.left - bedRect.left;
+                penSlotsX[i] = (slotX - canvasLeftOffset) / bedScale;
                 
                 const hole = station.querySelector('.pen-slot-hole');
                 let slotY = rect.top - bedRect.top;
@@ -579,7 +605,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Translate coords within the entire page bounds using bedScale
         const cx = clampedX * bedScale;
-        const cy = canvasRectCached.height - clampedY * bedScale;
+        
+        let cy;
+        if (hpglParser && (hpglParser.currentMode === 'HPGL2_STANDALONE' || hpglParser.currentMode === 'HPGL2_ANCHORED')) {
+            cy = clampedY * bedScale;
+        } else {
+            cy = canvasRectCached.height - clampedY * bedScale;
+        }
         
         return { x: cx, y: cy };
     }
@@ -605,31 +637,38 @@ document.addEventListener('DOMContentLoaded', () => {
         return { x: cx, y: cy };
     }
 
-    function plotterToPhysicalSlot(penIndex, py) {
+    function plotterToPhysicalSlot(penIndex, px, py) {
         const slot = slotCoordinates[penIndex];
         
-        // Logical baseline Y coordinate on the canvas (relative to bed)
-        const canvasPt = plotterToCanvas(0, 0);
+        const frameHeight = hpglParser ? hpglParser.pictureFrameHeight : 11400;
+        const baselineY = isYInverted() ? frameHeight : 0;
+        const depositY = isYInverted() ? (frameHeight - 600) : 600;
+        
+        // Logical clearance Y coordinate on the canvas (relative to bed edge)
+        const canvasPt = plotterToCanvas(0, depositY);
         const canvasY0 = canvasRectCached.top - bedRectCached.top + canvasPt.y;
         
         let slotX;
         let slotY;
         
+        const offsetPlu = px - (penSlotsX[penIndex] || 0);
+        const offsetPx = offsetPlu * bedScale;
+        
         if (slot && slot.x !== 0 && slot.y !== 0) {
-            slotX = slot.x;
+            slotX = slot.x + offsetPx;
             slotY = slot.y;
         } else {
-            // Fallback to logical slot position mapped to canvas coordinate space
-            const logicalPt = plotterToCanvas(penSlotsX[penIndex] || 0, 1200);
-            slotX = canvasRectCached.left - bedRectCached.left + logicalPt.x;
+            const logicalPt = plotterToCanvas(penSlotsX[penIndex] || 0, baselineY);
+            slotX = canvasRectCached.left - bedRectCached.left + logicalPt.x + offsetPx;
             slotY = canvasRectCached.top - bedRectCached.top + logicalPt.y;
         }
         
-        // py is logical Y from 0 (clearance/baseline) to 1200 (slot center/deposit)
-        const ratio = Math.max(0, Math.min(1200, py)) / 1200;
+        const range = Math.abs(depositY - baselineY) || 600;
+        const dist = Math.abs(py - baselineY);
+        const ratio = Math.max(0, Math.min(range, dist)) / range;
         
-        // Y goes from canvasY0 (when py = 0) to slotY (when py = 1200)
-        const cy = canvasY0 + ratio * (slotY - canvasY0);
+        // Y goes from slotY (at baselineY, ratio = 0) to canvasY0 (at depositY, ratio = 1)
+        const cy = slotY + ratio * (canvasY0 - slotY);
         
         return { x: slotX, y: cy };
     }
@@ -649,7 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let expectedX, expectedY;
         if (lastPenIndex !== undefined) {
-            const pt = plotterToPhysicalSlot(lastPenIndex, py);
+            const pt = plotterToPhysicalSlot(lastPenIndex, px, py);
             const canvasPt = plotterToCanvas(px, py);
             const canvasX = canvasRectCached.left - bedRectCached.left + canvasPt.x;
             const canvasY = canvasRectCached.top - bedRectCached.top + canvasPt.y;
@@ -658,20 +697,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const dist = Math.abs(px - targetSlotX);
             const blendRange = 1000;
             
-            if (dist >= blendRange) {
-                expectedX = canvasX;
-                if (!lastIsPhysical) {
-                    lastPenIndex = undefined; // clear tracking once we slide far away
-                }
-            } else {
-                const ratio = dist / blendRange;
-                const t = ratio * ratio * (3 - 2 * ratio);
-                expectedX = pt.x + t * (canvasX - pt.x);
-            }
-            
             if (lastIsPhysical) {
+                expectedX = pt.x;
                 expectedY = pt.y;
             } else {
+                if (dist >= blendRange) {
+                    expectedX = canvasX;
+                    lastPenIndex = undefined; // clear tracking once we slide far away
+                } else {
+                    const ratio = dist / blendRange;
+                    const t = ratio * ratio * (3 - 2 * ratio);
+                    expectedX = pt.x + t * (canvasX - pt.x);
+                }
                 expectedY = canvasY;
             }
         } else {
@@ -691,8 +728,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
         const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
         
-        const isOutOfHardLimits = px < 0 || px > limitX || py < 0 || py > limitY;
-        const isOutOfSoftLimits = px < Math.min(softLimitX1, softLimitX2) || px > Math.max(softLimitX1, softLimitX2) || py < Math.min(softLimitY1, softLimitY2) || py > Math.max(softLimitY1, softLimitY2);
+        const rx = Math.round(px);
+        const ry = Math.round(py);
+        const isOutOfHardLimits = rx < 0 || rx > limitX || ry < 0 || ry > limitY;
+        const isOutOfSoftLimits = rx < Math.min(softLimitX1, softLimitX2) || rx > Math.max(softLimitX1, softLimitX2) || ry < Math.min(softLimitY1, softLimitY2) || ry > Math.max(softLimitY1, softLimitY2);
         
         if (!isPhysical && (isOutOfHardLimits || isOutOfSoftLimits)) {
             ledLimit.classList.add('active');
@@ -804,7 +843,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const dt = (timestamp - lastTime) / 1000;
         lastTime = timestamp;
         
-        if (isPowerOn && !isInstantDraw && actionQueue.length > 0) {
+        let budgetDt = dt;
+        const maxSubSteps = 100; // Allow processing up to 100 tiny moves/states per frame
+        let substeps = 0;
+        
+        let lastPhysical = false;
+        let lastPenIndex = undefined;
+        let carriageMoved = false;
+        
+        while (isPowerOn && !isInstantDraw && actionQueue.length > 0 && budgetDt > 0 && substeps < maxSubSteps) {
+            substeps++;
             const currentAction = actionQueue[0];
             
             if (currentAction.type === 'move') {
@@ -812,14 +860,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 const dy = currentAction.y - currentY;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 
-                // Slewing velocity (pen-up and physical moves) runs at slewSpeed (physical maximum).
-                // Pen-down drawing movements are restricted to the selected writing speed.
-                const activeSpeed = (!currentAction.draw || currentAction.isPhysical) ? slewSpeed : velocityMultiplier;
-                const speedPlu = activeSpeed * 400;
-                const maxStep = speedPlu * dt;
+                if (dist === 0) {
+                    actionQueue.shift();
+                    continue;
+                }
                 
-                if (dist <= maxStep) {
-                    // Snap to target
+                // Normal slewing (pen-up) runs at slewSpeed and drawing (pen-down) runs at velocityMultiplier.
+                const activeSpeed = !currentAction.draw ? slewSpeed : velocityMultiplier;
+                const speedPlu = activeSpeed * 400; // PLU/second
+                const timeNeeded = dist / speedPlu;
+                
+                carriageMoved = true;
+                lastPhysical = !!currentAction.isPhysical;
+                lastPenIndex = currentAction.penIndex;
+                
+                if (budgetDt >= timeNeeded) {
+                    // Snap to target (completing this entire movement within our frame budget)
                     if (currentAction.draw && penState === 'down' && selectedPen > 0) {
                         drawLineSegment(currentX, currentY, currentAction.x, currentAction.y);
                     }
@@ -827,11 +883,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentY = currentAction.y;
                     
                     actionQueue.shift(); // complete move
+                    budgetDt -= timeNeeded;
                     updateMotorSound(0);
                 } else {
-                    // Interpolate step
-                    const stepX = (dx / dist) * maxStep;
-                    const stepY = (dy / dist) * maxStep;
+                    // Interpolate step (consuming the rest of our frame budget)
+                    const stepDist = speedPlu * budgetDt;
+                    const stepX = (dx / dist) * stepDist;
+                    const stepY = (dy / dist) * stepDist;
                     
                     const nextX = currentX + stepX;
                     const nextY = currentY + stepY;
@@ -842,16 +900,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     currentX = nextX;
                     currentY = nextY;
+                    budgetDt = 0; // budget fully consumed
                     
-                    // Velocity percentage for whine audio (uses active movement speed)
+                    // Velocity percentage for whine audio
                     const speedPct = activeSpeed / 100;
                     updateMotorSound(speedPct);
                 }
                 
-                updateCarriageDOM(currentX, currentY, currentAction.isPhysical, currentAction.penIndex);
-                
             } else if (currentAction.type === 'state') {
-                // Instantly update penState or physical components
+                // Instantly update penState or physical components (takes 0 physical budget time)
                 if (currentAction.key === 'penState') {
                     penState = currentAction.val;
                     if (penState === 'down') {
@@ -863,31 +920,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else if (currentAction.key === 'takePen') {
                     selectedPen = currentAction.val;
-                    // Carriage takes pen
                     carriagePenTip.style.backgroundColor = penColors[selectedPen];
-                    // Slot is empty
                     document.getElementById(`pen-body-${selectedPen}`).classList.add('empty');
                     playBeep(900, 0.12);
                     updateMagnifier(currentX, currentY);
                 } else if (currentAction.key === 'putPen') {
                     const pen = currentAction.val;
-                    // Slot is full
                     document.getElementById(`pen-body-${pen}`).classList.remove('empty');
-                    // Carriage is empty
                     selectedPen = 0;
                     carriagePenTip.style.backgroundColor = 'transparent';
                     playBeep(700, 0.12);
                     updateMagnifier(currentX, currentY);
                 } else if (currentAction.key === 'selectPen') {
-                    // Lightweight pen select used by fill — no carousel animation
                     selectedPen = currentAction.val;
                     if (selectedPen > 0) {
                         carriagePenTip.style.backgroundColor = penColors[selectedPen];
                     } else {
                         carriagePenTip.style.backgroundColor = 'transparent';
                     }
-                } else if (currentAction.key === 'char') {
-                    renderSingleChar(currentAction.val.char, currentAction.val.x, currentAction.val.y, currentAction.val.isSymbol, currentAction.val.slant, currentAction.val.fontKind || 48);
                 } else if (currentAction.key === 'softLimits') {
                     softLimitX1 = currentAction.val.x1;
                     softLimitY1 = currentAction.val.y1;
@@ -903,12 +953,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         currentAction.fillSpacing !== undefined ? currentAction.fillSpacing : 0,
                         currentAction.fillAngle !== undefined ? currentAction.fillAngle : 0
                     );
+                } else if (currentAction.key === 'clearPhysicalTrack') {
+                    lastPhysical = false;
+                    lastPenIndex = undefined;
                 }
                 
                 actionQueue.shift(); // complete state change
-                
             }
-        } else if (isPowerOn && isInstantDraw && actionQueue.length > 0) {
+        }
+        
+        if (carriageMoved) {
+            updateCarriageDOM(currentX, currentY, lastPhysical, lastPenIndex);
+        }
+        
+        if (isPowerOn && isInstantDraw && actionQueue.length > 0) {
             // Instant drawing mode (bypass carriage interpolation)
             updateMotorSound(0);
             let lastPhysical = false;
@@ -937,8 +995,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         document.getElementById(`pen-body-${pen}`).classList.remove('empty');
                         selectedPen = 0;
                         carriagePenTip.style.backgroundColor = 'transparent';
-                    } else if (currentAction.key === 'char') {
-                        renderSingleChar(currentAction.val.char, currentAction.val.x, currentAction.val.y, currentAction.val.isSymbol, currentAction.val.slant, currentAction.val.fontKind || 48);
+
                     } else if (currentAction.key === 'softLimits') {
                         softLimitX1 = currentAction.val.x1;
                         softLimitY1 = currentAction.val.y1;
@@ -1154,6 +1211,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function drawFillPolygon(pts, penIndex, type, spacing, angle) {
         if (pts.length < 3) return;
+        
+        ctx.globalCompositeOperation = penBlendingMode === 'blended' ? 'multiply' : 'source-over';
 
         // No pen selected = nothing draws (correct HP-GL behaviour)
         if (penIndex === 0) return;
@@ -1229,6 +1288,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function drawLineSegment(x1, y1, x2, y2) {
         if (x1 === x2 && y1 === y2) return;
         
+        ctx.globalCompositeOperation = penBlendingMode === 'blended' ? 'multiply' : 'source-over';
+        
         const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
         const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
         
@@ -1298,82 +1359,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Map HP-GL/2 typeface number (SD/AD kind 7) to a CSS font-family stack.
-    // Common HP-GL typeface numbers: 48=Stick/proportional, 5=Roman, 6=Roman Italic,
-    // 3=Simplex Roman, 4=Complex Roman, 31=Gothic English, 34=Script, 52=Proportional
-    function hpglFontKindToFace(kind) {
-        switch (kind) {
-            case 3:  // Simplex Roman (Stick)
-            case 48: // HP Stick (default proportional)
-                return '"Fira Code", Courier, monospace';
-            case 4:  // Complex Roman
-            case 5:  // Roman Simplex
-            case 52: // Proportional Helvetica-style
-                return '"Arial", "Helvetica", sans-serif';
-            case 6:  // Roman Italic
-                return 'italic "Arial", "Helvetica", sans-serif';
-            case 31: // Gothic English
-            case 34: // Script
-                return '"Courier New", Courier, monospace';
-            default:
-                return '"Fira Code", Courier, monospace';
+
+    
+    // Parse vector path from PlotterVectorFont and push move/state commands to actionQueue
+    function queueVectorChar(char, startX, startY, widthPlu, heightPlu, slant, angle) {
+        const path = PlotterVectorFont[char];
+        if (path === undefined) return; // Ignore unmapped characters
+        
+        // Parse the compact path: M = Move, L = Line
+        const regex = /([ML])\s*([-+]?[0-9]*\.?[0-9]+)\s*,\s*([-+]?[0-9]*\.?[0-9]+)/g;
+        let match;
+        
+        while ((match = regex.exec(path)) !== null) {
+            const cmd = match[1];
+            const cx = parseFloat(match[2]);
+            const cy = parseFloat(match[3]);
+            
+            // Map character grid coordinates (0..8, 0..12) to plotter units
+            let rx = (cx / 8) * widthPlu;
+            let ry = (cy / 12) * heightPlu;
+            
+            // Apply character slant (shear) transform
+            if (slant !== 0) {
+                rx = rx + ry * slant;
+            }
+            
+            // Apply rotation and translation
+            const rotX = rx * Math.cos(angle) - ry * Math.sin(angle);
+            const rotY = rx * Math.sin(angle) + ry * Math.cos(angle);
+            
+            const px = startX + rotX;
+            const py = isYInverted() ? (startY - rotY) : (startY + rotY);
+            
+            if (cmd === 'M') {
+                actionQueue.push({ type: 'state', key: 'penState', val: 'up' });
+                actionQueue.push({ type: 'move', x: px, y: py, draw: false });
+            } else if (cmd === 'L') {
+                actionQueue.push({ type: 'state', key: 'penState', val: 'down' });
+                actionQueue.push({ type: 'move', x: px, y: py, draw: true });
+            }
         }
+        
+        // Lift pen at the end of each character
+        actionQueue.push({ type: 'state', key: 'penState', val: 'up' });
     }
-    // Single Character Rendering (LB command character-by-character step)
-    function renderSingleChar(char, px, py, isSymbol = false, slant = 0, charFontKind = 48) {
-        if (selectedPen === 0) return;
-        
-        const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
-        const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
-        
-        const clipX1 = Math.max(0, Math.min(softLimitX1, softLimitX2));
-        const clipX2 = Math.min(limitX, Math.max(softLimitX1, softLimitX2));
-        const clipY1 = Math.max(0, Math.min(softLimitY1, softLimitY2));
-        const clipY2 = Math.min(limitY, Math.max(softLimitY1, softLimitY2));
-        
-        // Skip rendering if origin of character is outside the intersection of hard and soft limits
-        if (px < clipX1 || px > clipX2 || py < clipY1 || py > clipY2) {
-            return;
-        }
-        
-        const angle = Math.atan2(labelDirection.rise, labelDirection.run);
-        const charHeightPlu = labelCharSize.height * 400;
-        
-        // Canvas pixel scale mapping
-        const scaleX = canvasRectCached.width / PAPER_WIDTH;
-        const scaleY = canvasRectCached.height / PAPER_HEIGHT;
-        const canvasScale = Math.min(scaleX, scaleY);
-        const targetHeightPx = charHeightPlu * (autoScaleActive ? fitScale : 1) * canvasScale;
-        
-        // Enforce a minimum readable font size of 10px on screen
-        const minFontSizePx = 10;
-        const charHeightPx = Math.max(minFontSizePx, targetHeightPx);
-        
-        ctx.save();
-        const pt = plotterToCanvas(px, py);
-        ctx.translate(pt.x, pt.y);
-        ctx.rotate(-angle); // Rotate canvas context counter-clockwise (plotter-relative coords)
-        if (slant !== 0) {
-            ctx.transform(1, 0, -slant, 1, 0, 0); // Apply character slant (shear) transform
-        }
-        
-        ctx.fillStyle = penColors[selectedPen];
-        // Resolve canvas font from HP-GL character set (fontKind from queued char action)
-        const resolvedFont = hpglFontKindToFace(charFontKind || 48);
-        ctx.font = `${charHeightPx}px ${resolvedFont}`;
-        
-        if (isSymbol) {
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-        } else {
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'bottom';
-        }
-        
-        ctx.fillText(char, 0, 0);
-        
-        ctx.restore();
-    }
+
+
 
     function clearDrawingCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1910,77 +1941,110 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // 9. HPGL Parser State Machine
+    let serialWriteQueue = [];
+    let isSerialWriting = false;
+
+    async function writeToSerialPort(bytes) {
+        serialWriteQueue.push(bytes);
+        processSerialWriteQueue();
+    }
+
+    async function processSerialWriteQueue() {
+        if (isSerialWriting || !port || !port.writable) return;
+        isSerialWriting = true;
+        try {
+            while (serialWriteQueue.length > 0) {
+                const data = serialWriteQueue[0];
+                const writer = port.writable.getWriter();
+                try {
+                    await writer.write(data);
+                    serialWriteQueue.shift();
+                } catch (e) {
+                    console.error('Failed to write to serial port:', e);
+                    break;
+                } finally {
+                    writer.releaseLock();
+                }
+            }
+        } finally {
+            isSerialWriting = false;
+        }
+    }
+
+    async function sendSerialString(str) {
+        const encoder = new TextEncoder();
+        await writeToSerialPort(encoder.encode(str));
+    }
+
+    async function executeParsedToken(token) {
+        if (token.type === 'PCL_ESCAPE' || token.type === 'DCI_ESCAPE') {
+            const m = token.mnemonic;
+            if (m === 'Esc.R') {
+                resetSoftLimits();
+                if (hpglParser) hpglParser.reset();
+                showToast('Plotter Hard Reset via DCI', 'fa-rotate-left');
+            } else if (m === 'Esc.O') {
+                await sendSerialString('I\r');
+            } else if (m === 'Esc.(' || m === 'Esc.S' || m === 'Esc.I') {
+                if (token.params && token.params.length > 0) {
+                    showToast(`DCI Handshake Configured: ${token.params.join(',')}`, 'fa-gears');
+                }
+            } else if (m === 'EscE') {
+                resetSoftLimits();
+                showToast('Printer Reset (EscE)', 'fa-rotate-left');
+            }
+        } else if (token.type === 'HPGL_COMMAND') {
+            const m = token.mnemonic;
+            if (m === 'OI') {
+                await sendSerialString('9872C\r\n');
+            } else if (m === 'OE') {
+                await sendSerialString('0\r\n');
+            } else if (m === 'OS') {
+                await sendSerialString('24\r\n');
+            } else if (m === 'OP') {
+                await sendSerialString(`${p1X},${p1Y},${p2X},${p2Y}\r\n`);
+            } else if (m === 'OH') {
+                const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
+                const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
+                await sendSerialString(`0,0,${limitX},${limitY}\r\n`);
+            } else if (m === 'OD') {
+                let xVal = digitizedX;
+                let yVal = digitizedY;
+                let penStatus = digitizedPenStatus;
+                
+                if (!isDigitizedPointReady) {
+                    xVal = currentX;
+                    yVal = currentY;
+                    penStatus = (penState === 'down' ? 1 : 0);
+                }
+                
+                const outY = isYInverted() ? (hpglParser.pictureFrameHeight - yVal) : yVal;
+                await sendSerialString(`${Math.round(xVal)},${Math.round(outY)},${penStatus}\r\n`);
+                isDigitizedPointReady = false;
+            } else {
+                let paramStr = '';
+                if (token.raw && token.raw.length >= 2) {
+                    paramStr = token.raw.substring(2);
+                }
+                executeHPGLCommand(token.mnemonic, token.params, paramStr);
+            }
+        }
+    }
+
     function processIncomingHPGL(hpglText) {
         if (!isPowerOn) return;
         
         logCommand(hpglText);
         
-        const rawText = hpglText.replace(/\r?\n|\r/g, ' ');
-        let i = 0;
-        const len = rawText.length;
-        
-        while (i < len) {
-            // Skip leading spaces, semicolons, and control chars
-            while (i < len && (rawText[i] === ' ' || rawText[i] === ';' || rawText[i] === '\r' || rawText[i] === '\n')) {
-                i++;
+        if (hpglParser) {
+            const tokens = hpglParser.parse(hpglText);
+            for (const token of tokens) {
+                executeParsedToken(token);
             }
-            if (i >= len) break;
-            
-            // Extract command mnemonic (first 2 alphabetical characters)
-            if (i + 1 >= len) break;
-            
-            const mnemonic = rawText.substring(i, i + 2).toUpperCase();
-            if (!/^[A-Z]{2}$/.test(mnemonic)) {
-                i++;
-                continue;
+            const flushed = hpglParser.flush();
+            for (const token of flushed) {
+                executeParsedToken(token);
             }
-            
-            i += 2;
-            
-            let paramStr = "";
-            if (mnemonic === 'LB') {
-                const termChar = String.fromCharCode(labelTerminator);
-                while (i < len) {
-                    const char = rawText[i];
-                    if (char === termChar) {
-                        i++; // consume terminator
-                        break;
-                    }
-                    paramStr += char;
-                    i++;
-                }
-                executeHPGLCommand(mnemonic, [], paramStr);
-                continue;
-            }
-            
-            // General command parameter parsing: read until next mnemonic or semicolon
-            while (i < len) {
-                const char = rawText[i];
-                if (char === ';') {
-                    i++; // consume semicolon
-                    break;
-                }
-                
-                // If we see two letters starting a new command
-                if (i + 1 < len) {
-                    const nextTwo = rawText.substring(i, i + 2).toUpperCase();
-                    if (/^[A-Z]{2}$/.test(nextTwo)) {
-                        break;
-                    }
-                }
-                
-                paramStr += char;
-                i++;
-            }
-            
-            const params = [];
-            const regex = /[-+]?[0-9]*\.?[0-9]+/g;
-            let match;
-            while ((match = regex.exec(paramStr)) !== null) {
-                params.push(parseFloat(match[0]));
-            }
-            
-            executeHPGLCommand(mnemonic, params, paramStr.trim());
         }
     }
     
@@ -1992,21 +2056,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Put pen back if carriage is holding one (using safe vertical clearance route)
                     if (logicalSelectedPen > 0) {
                         const prevPen = logicalSelectedPen;
-                        const clearanceY = 1200;
-                        // Move vertically first to clearance line from current logical target coordinates
-                        actionQueue.push({ type: 'move', x: targetX, y: clearanceY, draw: false });
-                        // Move horizontally to slot
-                        actionQueue.push({ type: 'move', x: penSlotsX[prevPen], y: clearanceY, draw: false, isPhysical: true, penIndex: prevPen });
-                        // Move vertically down to deposit
-                        actionQueue.push({ type: 'move', x: penSlotsX[prevPen], y: 0, draw: false, isPhysical: true, penIndex: prevPen });
-                        // Put pen
-                        actionQueue.push({ type: 'state', key: 'putPen', val: prevPen });
-                        // Move straight up to clearance line
-                        actionQueue.push({ type: 'move', x: penSlotsX[prevPen], y: clearanceY, draw: false, isPhysical: true, penIndex: prevPen });
-                        // Move horizontally to target coordinate column (which is 0)
-                        actionQueue.push({ type: 'move', x: 0, y: clearanceY, draw: false });
+                        if (simulatePenSwapTravel) {
+                            const frameHeight = hpglParser ? hpglParser.pictureFrameHeight : 11400;
+                            const baselineY = isYInverted() ? frameHeight : 0;
+                            const clearanceY = isYInverted() ? (frameHeight - 600) : 600;
+                            const penWidthOffset = 600;
+                            const prevPenX = penSlotsX[prevPen] || targetX;
+                            const disengageX = prevPenX + penWidthOffset;
+                            
+                            // 1. Move diagonally to its vertical place above the stable
+                            actionQueue.push({ type: 'move', x: prevPenX, y: clearanceY, draw: false });
+                            // 2. Pen movement into the stable (Y negative only)
+                            actionQueue.push({ type: 'move', x: prevPenX, y: baselineY, draw: false, isPhysical: true, penIndex: prevPen });
+                            // 3. Put pen
+                            actionQueue.push({ type: 'state', key: 'putPen', val: prevPen });
+                            // 4. Slide to the right to complete return of the pen
+                            actionQueue.push({ type: 'move', x: disengageX, y: baselineY, draw: false, isPhysical: true, penIndex: prevPen });
+                            // 5. Advance Y positive only to a position above the stable
+                            actionQueue.push({ type: 'move', x: disengageX, y: clearanceY, draw: false, isPhysical: true, penIndex: prevPen });
+                            actionQueue.push({ type: 'state', key: 'clearPhysicalTrack' });
+                        } else {
+                            actionQueue.push({ type: 'state', key: 'putPen', val: prevPen });
+                        }
                     }
-                    actionQueue.push({ type: 'move', x: 0, y: 0, draw: false });
+                    const frameHeight = hpglParser ? hpglParser.pictureFrameHeight : 11400;
+                    const homeY = isYInverted() ? frameHeight : 0;
+                    actionQueue.push({ type: 'move', x: 0, y: homeY, draw: false });
                     
                     logicalSelectedPen = 0;
                     // Reset target coordinates logically to (0, 0)
@@ -2032,6 +2107,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     activeLineType = 'solid';
                     actionQueue.push({ type: 'state', key: 'lineType', val: 'solid' });
                     labelTerminator = 3; // Reset to default ETX
+                    if (hpglParser) {
+                        hpglParser.labelTerminator = '\x03';
+                    }
                     labelOrigin = 21;
                     labelExtraSpaceWidth = 0.0;
                     labelExtraSpaceHeight = 0.0;
@@ -2070,6 +2148,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     activeLineType = 'solid';
                     actionQueue.push({ type: 'state', key: 'lineType', val: 'solid' });
                     labelTerminator = 3; // Reset to default ETX
+                    if (hpglParser) {
+                        hpglParser.labelTerminator = '\x03';
+                    }
                     labelOrigin = 21;
                     labelExtraSpaceWidth = 0.0;
                     labelExtraSpaceHeight = 0.0;
@@ -2097,6 +2178,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     break;
                     
+                case 'DP': // Digitize Point
+                    isDigitizingMode = true;
+                    isDigitizedPointReady = false;
+                    showToast('Digitize Mode: Press ENTER button on console to register point', 'fa-fingerprint');
+                    break;
+                    
+                    
                 case 'SP': // Select Pen
                     const penVal = params[0] || 0;
                     const nextPen = Math.floor(Math.max(0, Math.min(8, penVal)));
@@ -2104,46 +2192,75 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (nextPen !== logicalSelectedPen) {
                         const originalX = targetX;
                         const originalY = targetY;
-                        const clearanceY = 1200; // Y coordinate depth for the slot center (deposit)
+                        const originalPenState = penStateLogical;
                         
-                        // 1. Lift Pen UP
-                        actionQueue.push({ type: 'state', key: 'penState', val: 'up' });
-                        
-                        // 2. Move vertically down to baseline y = 0 from current logical coordinate
-                        actionQueue.push({ type: 'move', x: originalX, y: 0, draw: false });
-                        
-                        // 3. Put old pen back (if any)
-                        if (logicalSelectedPen > 0) {
-                            const oldPen = logicalSelectedPen;
-                            // Move horizontally along the baseline y = 0 to old pen slot X coordinate
-                            actionQueue.push({ type: 'move', x: penSlotsX[oldPen], y: 0, draw: false });
-                            // Move straight down into the slot
-                            actionQueue.push({ type: 'move', x: penSlotsX[oldPen], y: clearanceY, draw: false, isPhysical: true, penIndex: oldPen });
-                            // Put the pen
-                            actionQueue.push({ type: 'state', key: 'putPen', val: oldPen });
-                            // Move straight up to physical clearance/baseline height (vertical exit)
-                            actionQueue.push({ type: 'move', x: penSlotsX[oldPen], y: 0, draw: false, isPhysical: true, penIndex: oldPen });
-                            // Transition to logical baseline y = 0 on the bed
-                            actionQueue.push({ type: 'move', x: penSlotsX[oldPen], y: 0, draw: false });
+                        if (simulatePenSwapTravel) {
+                            const frameHeight = hpglParser ? hpglParser.pictureFrameHeight : 11400;
+                            const baselineY = isYInverted() ? frameHeight : 0;
+                            const clearanceY = isYInverted() ? (frameHeight - 600) : 600;
+                            const penWidthOffset = 600;
+                            
+                            // 1. Lift Pen UP
+                            actionQueue.push({ type: 'state', key: 'penState', val: 'up' });
+                            
+                            // 2. Put old pen back
+                            if (logicalSelectedPen > 0) {
+                                const oldPen = logicalSelectedPen;
+                                const lastDepositedSlotX = penSlotsX[oldPen] || originalX;
+                                const disengageX = lastDepositedSlotX + penWidthOffset;
+                                
+                                // Move diagonally to its vertical place above the stable
+                                actionQueue.push({ type: 'move', x: lastDepositedSlotX, y: clearanceY, draw: false });
+                                // Pen movement into the stable (Y negative only)
+                                actionQueue.push({ type: 'move', x: lastDepositedSlotX, y: baselineY, draw: false, isPhysical: true, penIndex: oldPen });
+                                // Put the pen
+                                actionQueue.push({ type: 'state', key: 'putPen', val: oldPen });
+                                // Slide to the right to complete return of the pen
+                                actionQueue.push({ type: 'move', x: disengageX, y: baselineY, draw: false, isPhysical: true, penIndex: oldPen });
+                                // Advance Y positive only to a position above the stable
+                                actionQueue.push({ type: 'move', x: disengageX, y: clearanceY, draw: false, isPhysical: true, penIndex: oldPen });
+                                actionQueue.push({ type: 'state', key: 'clearPhysicalTrack' });
+                            }
+                            
+                            // 3. Retrieve new pen (if any)
+                            if (nextPen > 0) {
+                                const newPenX = penSlotsX[nextPen];
+                                const enterX = newPenX + penWidthOffset;
+                                
+                                // Move diagonally to its vertical place above the stable (offset to the right)
+                                actionQueue.push({ type: 'move', x: enterX, y: clearanceY, draw: false });
+                                // Pen movement into the stable (Y negative only)
+                                actionQueue.push({ type: 'move', x: enterX, y: baselineY, draw: false, isPhysical: true, penIndex: nextPen });
+                                // Move to the left (engage) to collect the pen
+                                actionQueue.push({ type: 'move', x: newPenX, y: baselineY, draw: false, isPhysical: true, penIndex: nextPen });
+                                // Take the pen
+                                actionQueue.push({ type: 'state', key: 'takePen', val: nextPen });
+                                // Advance Y positive only to a position above the stable
+                                actionQueue.push({ type: 'move', x: newPenX, y: clearanceY, draw: false, isPhysical: true, penIndex: nextPen });
+                                actionQueue.push({ type: 'state', key: 'clearPhysicalTrack' });
+                            }
+                            
+                            // 4. Return carriage to the original coordinates with the pen UP
+                            actionQueue.push({ type: 'move', x: originalX, y: originalY, draw: false });
+                            
+                            // 5. Restore original pen state at that coordinate
+                            actionQueue.push({ type: 'state', key: 'penState', val: originalPenState });
+                            
+                            // Target coordinates remain the original coordinates
+                            targetX = originalX;
+                            targetY = originalY;
+                        } else {
+                            // Instant pen change (bypassing travel)
+                            actionQueue.push({ type: 'state', key: 'penState', val: 'up' });
+                            if (logicalSelectedPen > 0) {
+                                actionQueue.push({ type: 'state', key: 'putPen', val: logicalSelectedPen });
+                            }
+                            if (nextPen > 0) {
+                                actionQueue.push({ type: 'state', key: 'takePen', val: nextPen });
+                            }
+                            // Restore pen state instantly without moving (since it didn't move)
+                            actionQueue.push({ type: 'state', key: 'penState', val: originalPenState });
                         }
-                        
-                        // 4. Retrieve new pen (if any)
-                        if (nextPen > 0) {
-                            // Move horizontally along the baseline y = 0 to the new pen slot X coordinate
-                            actionQueue.push({ type: 'move', x: penSlotsX[nextPen], y: 0, draw: false });
-                            // Move straight down into the slot (vertical entry)
-                            actionQueue.push({ type: 'move', x: penSlotsX[nextPen], y: clearanceY, draw: false, isPhysical: true, penIndex: nextPen });
-                            // Take the pen
-                            actionQueue.push({ type: 'state', key: 'takePen', val: nextPen });
-                            // Move straight up to physical clearance/baseline height (vertical exit)
-                            actionQueue.push({ type: 'move', x: penSlotsX[nextPen], y: 0, draw: false, isPhysical: true, penIndex: nextPen });
-                            // Transition to logical baseline y = 0 on the bed
-                            actionQueue.push({ type: 'move', x: penSlotsX[nextPen], y: 0, draw: false });
-                        }
-                        
-                        // 5. Return to pre-swap draw position
-                        actionQueue.push({ type: 'move', x: originalX, y: 0, draw: false });
-                        actionQueue.push({ type: 'move', x: originalX, y: originalY, draw: false });
                         
                         logicalSelectedPen = nextPen;
                     }
@@ -2196,7 +2313,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             } else {
                                 actionQueue.push({ type: 'move', x: targetX, y: targetY, draw: (penStateLogical === 'down') });
                                 if (symbolModeChar && penStateLogical === 'down') {
-                                    actionQueue.push({ type: 'state', key: 'char', val: { char: symbolModeChar, x: targetX, y: targetY, isSymbol: true } });
+                                    const wPlu = labelCharSize.width * 400 * (autoScaleActive ? fitScale : 1);
+                                    const hPlu = labelCharSize.height * 400 * (autoScaleActive ? fitScale : 1);
+                                    queueVectorChar(symbolModeChar, targetX - wPlu / 2, targetY - hPlu / 2, wPlu, hPlu, 0, 0);
+                                    actionQueue.push({ type: 'state', key: 'penState', val: 'down' });
                                 }
                             }
                         }
@@ -2237,7 +2357,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             } else {
                                 actionQueue.push({ type: 'move', x: targetX, y: targetY, draw: (penStateLogical === 'down') });
                                 if (symbolModeChar && penStateLogical === 'down') {
-                                    actionQueue.push({ type: 'state', key: 'char', val: { char: symbolModeChar, x: targetX, y: targetY, isSymbol: true } });
+                                    const wPlu = labelCharSize.width * 400 * (autoScaleActive ? fitScale : 1);
+                                    const hPlu = labelCharSize.height * 400 * (autoScaleActive ? fitScale : 1);
+                                    queueVectorChar(symbolModeChar, targetX - wPlu / 2, targetY - hPlu / 2, wPlu, hPlu, 0, 0);
+                                    actionQueue.push({ type: 'state', key: 'penState', val: 'down' });
                                 }
                             }
                         }
@@ -2354,7 +2477,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         for (let j = 0; j <= steps; j++) {
                             const ang = (startAngle + j * stepAngle) * Math.PI / 180;
-                            pts.push({ x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang) });
+                            const y = isYInverted() ? (cy - r * Math.sin(ang)) : (cy + r * Math.sin(ang));
+                            pts.push({ x: cx + r * Math.cos(ang), y: y });
                         }
                         pts.push({ x: cx, y: cy });
                         
@@ -2395,11 +2519,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         actionQueue.push({ type: 'move', x: cx, y: cy, draw: false });
                         actionQueue.push({ type: 'state', key: 'penState', val: 'down' });
                         
-                        actionQueue.push({ x: cx + r * Math.cos(startAngleRad), y: cy + r * Math.sin(startAngleRad), draw: true, type: 'move' });
+                        const startYVal = isYInverted() ? (cy - r * Math.sin(startAngleRad)) : (cy + r * Math.sin(startAngleRad));
+                        actionQueue.push({ x: cx + r * Math.cos(startAngleRad), y: startYVal, draw: true, type: 'move' });
                         
                         for (let j = 1; j <= steps; j++) {
                             const ang = (startAngle + j * stepAngle) * Math.PI / 180;
-                            actionQueue.push({ x: cx + r * Math.cos(ang), y: cy + r * Math.sin(ang), draw: true, type: 'move' });
+                            const y = isYInverted() ? (cy - r * Math.sin(ang)) : (cy + r * Math.sin(ang));
+                            actionQueue.push({ x: cx + r * Math.cos(ang), y: y, draw: true, type: 'move' });
                         }
                         
                         actionQueue.push({ x: cx, y: cy, draw: true, type: 'move' });
@@ -2471,27 +2597,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     const dyPlu = shiftHorizontal * Math.sin(angle) + shiftVertical * Math.cos(angle);
                     
                     let tempX = targetX + dxPlu;
-                    let tempY = targetY + dyPlu;
+                    let tempY = isYInverted() ? (targetY - dyPlu) : (targetY + dyPlu);
+                    
+                    const savedPenState = penStateLogical;
                     
                     for (let i = 0; i < labelText.length; i++) {
                         const char = labelText[i];
                         if (char === '\n') {
                             tempX -= charHeightPlu * (1 + labelExtraSpaceHeight) * Math.sin(angle);
-                            tempY += charHeightPlu * (1 + labelExtraSpaceHeight) * Math.cos(angle);
+                            tempY = isYInverted() ? (tempY - charHeightPlu * (1 + labelExtraSpaceHeight) * Math.cos(angle)) : (tempY + charHeightPlu * (1 + labelExtraSpaceHeight) * Math.cos(angle));
                             continue;
                         }
                         const charX = tempX;
                         const charY = tempY;
                         
                         const nextX = tempX + stepWidthPlu * Math.cos(angle);
-                        const nextY = tempY + stepWidthPlu * Math.sin(angle);
+                        const nextY = isYInverted() ? (tempY - stepWidthPlu * Math.sin(angle)) : (tempY + stepWidthPlu * Math.sin(angle));
                         
-                        actionQueue.push({ type: 'state', key: 'char', val: { char: char, x: charX, y: charY, slant: activeSlant, charSet: activeCharSet, fontKind: activeCharSet === 'alternate' ? alternateFontKind : standardFontKind } });
+                        queueVectorChar(char, charX, charY, charWidthPlu, charHeightPlu, activeSlant, angle);
                         actionQueue.push({ type: 'move', x: nextX, y: nextY, draw: false });
                         
                         tempX = nextX;
                         tempY = nextY;
                     }
+                    
+                    actionQueue.push({ type: 'state', key: 'penState', val: savedPenState });
                     
                     targetX = tempX;
                     targetY = tempY;
@@ -2502,6 +2632,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         labelTerminator = rawParamStr.charCodeAt(0);
                     } else {
                         labelTerminator = 3; // default ETX
+                    }
+                    if (hpglParser) {
+                        hpglParser.labelTerminator = String.fromCharCode(labelTerminator);
                     }
                     break;
                     
@@ -2606,7 +2739,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const x1 = targetX;
                         const y1 = targetY;
                         const x2 = x1 + dx;
-                        const y2 = y1 + dy;
+                        const y2 = isYInverted() ? (y1 - dy) : (y1 + dy);
                         
                         polygonBuffer = [
                             { x: x1, y: y1 },
@@ -2683,7 +2816,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const x1 = targetX;
                         const y1 = targetY;
                         const x2 = x1 + dx;
-                        const y2 = y1 + dy;
+                        const y2 = isYInverted() ? (y1 - dy) : (y1 + dy);
                         
                         polygonBuffer = [
                             { x: x1, y: y1 },
@@ -2981,6 +3114,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function isYInverted() {
+        return hpglParser && (hpglParser.currentMode === 'HPGL2_STANDALONE' || hpglParser.currentMode === 'HPGL2_ANCHORED');
+    }
+
     // Helper: Scales user coordinates (via SC) into raw plotter units,
     // then applies any active RO rotation around P1.
     function scaleCoordinate(ux, uy) {
@@ -3023,6 +3160,11 @@ document.addEventListener('DOMContentLoaded', () => {
             py = p1Y + ry;
         }
 
+        // Y-axis inversion for HP-GL/2 standalone/anchored modes
+        if (hpglParser && (hpglParser.currentMode === 'HPGL2_STANDALONE' || hpglParser.currentMode === 'HPGL2_ANCHORED')) {
+            py = hpglParser.pictureFrameHeight - py;
+        }
+
         return { x: px, y: py };
     }
 
@@ -3048,7 +3190,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 1; i <= totalSteps; i++) {
             const angle = i * radChord;
             const x = cx + r * Math.cos(angle);
-            const y = cy + r * Math.sin(angle);
+            const y = isYInverted() ? (cy - r * Math.sin(angle)) : (cy + r * Math.sin(angle));
             actionQueue.push({ type: 'move', x: x, y: y, draw: true });
         }
         
@@ -3075,14 +3217,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 dy = dy * fitScale;
             }
             centerX = targetX + dx;
-            centerY = targetY + dy;
+            centerY = isYInverted() ? (targetY - dy) : (targetY + dy);
         } else {
-            // Apply scale if absolute
-            if (userScaleActive) {
-                const pt = scaleCoordinate(xParam, yParam);
-                centerX = pt.x;
-                centerY = pt.y;
-            }
+            // ALWAYS apply scaleCoordinate to get scaled, auto-fit, and Y-inverted coordinates
+            const pt = scaleCoordinate(xParam, yParam);
+            centerX = pt.x;
+            centerY = pt.y;
         }
         
         const startX = targetX;
@@ -3110,7 +3250,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const currentAngle = startAngle + angleOffset;
             const x = centerX + r * Math.cos(currentAngle);
-            const y = centerY + r * Math.sin(currentAngle);
+            const y = isYInverted() ? (centerY - r * Math.sin(currentAngle)) : (centerY + r * Math.sin(currentAngle));
             
             targetX = x;
             targetY = y;
@@ -3148,9 +3288,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 dyEnd *= fitScale;
             }
             interX = startX + dxInter;
-            interY = startY + dyInter;
+            interY = isYInverted() ? (startY - dyInter) : (startY + dyInter);
             endX = startX + dxEnd;
-            endY = startY + dyEnd;
+            endY = isYInverted() ? (startY - dyEnd) : (startY + dyEnd);
         } else {
             const ptInter = scaleCoordinate(xInter, yInter);
             interX = ptInter.x;
@@ -3236,8 +3376,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 10. Bounding Box Scanners (for Auto-Fit to Paper Bed)
     function preScanHPGLBounds(hpglText) {
-        const cleanText = hpglText.replace(/\r?\n|\r/g, '').trim();
-        const commands = cleanText.split(';');
+        const commands = hpglText.split(/[;\r\n]+/);
         
         let minX = Infinity, maxX = -Infinity;
         let minY = Infinity, maxY = -Infinity;
@@ -3416,8 +3555,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const w = maxX - minX || 1;
             const h = maxY - minY || 1;
             
-            // Calculate scale to fit printable A3 dimensions (15000 x 10400)
-            fitScale = Math.min(PAPER_WIDTH / w, PAPER_HEIGHT / h);
+            // Calculate scale to fit printable A3 dimensions (15000 x 10400), capped at 20x max zoom
+            fitScale = Math.min(20, Math.min(PAPER_WIDTH / w, PAPER_HEIGHT / h));
             
             // Center drawing
             fitOffsetX = PAPER_MIN_X + (PAPER_WIDTH - w * fitScale) / 2;
@@ -3449,8 +3588,20 @@ document.addEventListener('DOMContentLoaded', () => {
             let nextX = currentX;
             let nextY = currentY;
             
-            if (dir === 'up') nextY += step;
-            if (dir === 'down') nextY -= step;
+            if (dir === 'up') {
+                if (isYInverted()) {
+                    nextY -= step;
+                } else {
+                    nextY += step;
+                }
+            }
+            if (dir === 'down') {
+                if (isYInverted()) {
+                    nextY += step;
+                } else {
+                    nextY -= step;
+                }
+            }
             if (dir === 'left') nextX -= step;
             if (dir === 'right') nextX += step;
             
@@ -3495,6 +3646,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function updateSerialControlsState() {
+        const msg = document.getElementById('serial-connected-msg');
+        if (selectBaud) selectBaud.disabled = isSerialConnected;
+        if (selectFlowControl) selectFlowControl.disabled = isSerialConnected;
+        if (msg) {
+            msg.style.display = isSerialConnected ? 'flex' : 'none';
+        }
+    }
+
     async function connectSerial() {
         playClick();
         try {
@@ -3506,19 +3666,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 dataBits: 8,
                 stopBits: 1,
                 parity: 'none',
-                flowControl: 'none'
+                flowControl: flowControlMode === 'hardware' ? 'hardware' : 'none'
             });
             
             isSerialConnected = true;
+            updateSerialControlsState();
             serialStatus.textContent = 'Online';
             serialStatus.className = 'status-indicator online';
             btnSerialConnect.innerHTML = '<i class="fa-solid fa-plug-circle-xmark"></i> Disconnect';
             showToast('Serial Port Connected Successfully!', 'fa-plug');
             
+            isFlowControlPaused = false;
+            if (flowControlMode === 'xonxoff') {
+                await sendFlowControl(17); // ASCII DC1 / XON (send 1 on activation)
+            }
+            
             readLoop();
         } catch (err) {
             console.error('Serial connection error:', err);
             isSerialConnected = false;
+            updateSerialControlsState();
             serialStatus.textContent = 'Offline';
             serialStatus.className = 'status-indicator offline';
             showToast('Connection Failed!', 'fa-circle-xmark');
@@ -3526,35 +3693,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    let serialFlushTimeout = null;
+
     async function readLoop() {
         keepReading = true;
         const textDecoder = new TextDecoderStream();
         const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
         const reader = textDecoder.readable.getReader();
         
-        let textBuffer = '';
-        
         try {
             while (keepReading) {
                 const { value, done } = await reader.read();
                 if (done) break;
                 if (value) {
-                    textBuffer += value;
-                    
-                    // HPGL commands end with a semicolon. Split buffers by semicolons.
-                    let semiIndex;
-                    while ((semiIndex = textBuffer.indexOf(';')) !== -1) {
-                        const cmd = textBuffer.substring(0, semiIndex + 1);
-                        textBuffer = textBuffer.substring(semiIndex + 1);
-                        
-                        // Parse command
-                        processIncomingHPGL(cmd);
+                    // Check for and strip software flow control bytes sent by host (XON/XOFF)
+                    let cleanValue = '';
+                    for (let i = 0; i < value.length; i++) {
+                        const char = value[i];
+                        if (char === '\x11') {
+                            isHostFlowControlPaused = false;
+                        } else if (char === '\x13') {
+                            isHostFlowControlPaused = true;
+                        } else {
+                            cleanValue += char;
+                        }
                     }
                     
-                    // Hardware Flow Control Simulator (XON/XOFF Feedback)
-                    if (flowControlEnabled && actionQueue.length > 100) {
-                        // Send XOFF
-                        sendFlowControl(19); // ASCII DC3 / XOFF
+                    if (cleanValue) {
+                        logCommand(cleanValue);
+                        if (hpglParser) {
+                            const tokens = hpglParser.parse(cleanValue);
+                            for (const token of tokens) {
+                                await executeParsedToken(token);
+                            }
+                        }
+                    }
+                    
+                    // Software Flow Control (XON/XOFF Feedback to Host)
+                    if (flowControlMode === 'xonxoff' && actionQueue.length > 1000 && !isFlowControlPaused) {
+                        isFlowControlPaused = true;
+                        await sendFlowControl(19); // ASCII DC3 / XOFF
                     }
                 }
             }
@@ -3562,6 +3740,16 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Serial read loop error:', err);
             ledError.classList.add('active'); // Light console Error LED for COMMS read errors
         } finally {
+            if (serialFlushTimeout) {
+                clearTimeout(serialFlushTimeout);
+            }
+            // Flush any remaining data upon disconnect
+            if (hpglParser) {
+                const flushed = hpglParser.flush();
+                for (const token of flushed) {
+                    await executeParsedToken(token);
+                }
+            }
             reader.releaseLock();
             await readableStreamClosed.catch(() => {});
             await disconnectSerial();
@@ -3569,21 +3757,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function sendFlowControl(byteVal) {
-        if (!port || !port.writable) return;
-        const writer = port.writable.getWriter();
-        try {
-            const data = new Uint8Array([byteVal]);
-            await writer.write(data);
-        } catch (e) {
-            console.error('Failed to send flow control code:', e);
-        } finally {
-            writer.releaseLock();
-        }
+        const data = new Uint8Array([byteVal]);
+        await writeToSerialPort(data);
     }
 
     function updateTerminalLogStatus() {
         // Resume sender when queue drops below watermark
-        if (flowControlEnabled && isSerialConnected && actionQueue.length < 20) {
+        if (flowControlMode === 'xonxoff' && isSerialConnected && isFlowControlPaused && actionQueue.length < 200) {
+            isFlowControlPaused = false;
             sendFlowControl(17); // ASCII DC1 / XON
         }
     }
@@ -3591,6 +3772,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function disconnectSerial() {
         keepReading = false;
         isSerialConnected = false;
+        updateSerialControlsState();
         
         serialStatus.textContent = 'Offline';
         serialStatus.className = 'status-indicator offline';
@@ -3623,6 +3805,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (helpPanel && helpPanel.classList.contains('open')) {
                 helpPanel.classList.remove('open');
                 if (helpTrigger) helpTrigger.classList.remove('panel-open');
+                if (helpTriggerIcon) helpTriggerIcon.className = 'fa-solid fa-chevron-left';
             }
         } else {
             sidebarTriggerIcon.className = 'fa-solid fa-chevron-left';
@@ -3638,6 +3821,10 @@ document.addEventListener('DOMContentLoaded', () => {
         helpPanel.classList.toggle('open');
         const isOpen = helpPanel.classList.contains('open');
         helpTrigger.classList.toggle('panel-open', isOpen);
+        
+        if (helpTriggerIcon) {
+            helpTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+        }
 
         if (isOpen) {
             // Close Controls panel if Help is opening
@@ -3782,14 +3969,15 @@ document.addEventListener('DOMContentLoaded', () => {
     btnP1.addEventListener('click', (e) => {
         if (!isPowerOn) return;
         if (e.shiftKey) {
-            // SHIFT+P1: Set P1 to the current pen position
+            // SHIFT+P1: Set P1 to the current pen position (store un-inverted)
             p1X = currentX;
-            p1Y = currentY;
+            p1Y = isYInverted() ? (hpglParser.pictureFrameHeight - currentY) : currentY;
             showToast(`P1 set to (${Math.round(p1X)}, ${Math.round(p1Y)})`, 'fa-crosshairs');
         } else {
-            // P1 alone: Move pen to the P1 position (pen up)
+            // P1 alone: Move pen to the P1 position (pen up, map to active coordinate space)
+            const targetYVal = isYInverted() ? (hpglParser.pictureFrameHeight - p1Y) : p1Y;
             actionQueue.push({ type: 'state', key: 'penState', val: 'up' });
-            actionQueue.push({ type: 'move', x: p1X, y: p1Y, draw: false });
+            actionQueue.push({ type: 'move', x: p1X, y: targetYVal, draw: false });
             showToast(`Moving to P1 (${Math.round(p1X)}, ${Math.round(p1Y)})`, 'fa-location-crosshairs');
         }
     });
@@ -3797,22 +3985,28 @@ document.addEventListener('DOMContentLoaded', () => {
     btnP2.addEventListener('click', (e) => {
         if (!isPowerOn) return;
         if (e.shiftKey) {
-            // SHIFT+P2: Set P2 to the current pen position
+            // SHIFT+P2: Set P2 to the current pen position (store un-inverted)
             p2X = currentX;
-            p2Y = currentY;
+            p2Y = isYInverted() ? (hpglParser.pictureFrameHeight - currentY) : currentY;
             showToast(`P2 set to (${Math.round(p2X)}, ${Math.round(p2Y)})`, 'fa-crosshairs');
         } else {
-            // P2 alone: Move pen to the P2 position (pen up)
+            // P2 alone: Move pen to the P2 position (pen up, map to active coordinate space)
+            const targetYVal = isYInverted() ? (hpglParser.pictureFrameHeight - p2Y) : p2Y;
             actionQueue.push({ type: 'state', key: 'penState', val: 'up' });
-            actionQueue.push({ type: 'move', x: p2X, y: p2Y, draw: false });
+            actionQueue.push({ type: 'move', x: p2X, y: targetYVal, draw: false });
             showToast(`Moving to P2 (${Math.round(p2X)}, ${Math.round(p2Y)})`, 'fa-location-crosshairs');
         }
     });
     
     btnEnter.addEventListener('click', () => {
         if (!isPowerOn) return;
-        console.log(`Registered point coordinates: (${currentX}, ${currentY})`);
-        showToast(`Coords: (${Math.round(currentX)}, ${Math.round(currentY)})`, 'fa-circle-dot');
+        digitizedX = currentX;
+        digitizedY = currentY;
+        digitizedPenStatus = (penState === 'down' ? 1 : 0);
+        isDigitizedPointReady = true;
+        isDigitizingMode = false;
+        console.log(`Registered digitized coordinates: (${digitizedX}, ${digitizedY}), Pen Status: ${digitizedPenStatus}`);
+        showToast(`Digitized Point: (${Math.round(digitizedX)}, ${Math.round(digitizedY)})`, 'fa-circle-dot');
     });
 
     // Velocity / Speed Slider
@@ -3837,9 +4031,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!soundFxEnabled) updateMotorSound(0);
     });
 
-    chkFlowControl.addEventListener('change', (e) => {
-        flowControlEnabled = e.target.checked;
-    });
+    if (chkPenSwapTravel) {
+        chkPenSwapTravel.addEventListener('change', (e) => {
+            simulatePenSwapTravel = e.target.checked;
+            showToast(`Simulate Pen Swap Travel: ${simulatePenSwapTravel ? 'ON' : 'OFF'}`, 'fa-arrows-spin');
+        });
+    }
+
+    if (selectFlowControl) {
+        selectFlowControl.addEventListener('change', (e) => {
+            flowControlMode = e.target.value;
+            showToast(`Flow control set to: ${flowControlMode}`, 'fa-gears');
+        });
+    }
+
 
     // Clear Bed Button
     btnClearBed.addEventListener('click', () => {
@@ -4057,29 +4262,21 @@ document.addEventListener('DOMContentLoaded', () => {
         debugActiveIndex = -1;
         debugState = 'paused';
         actionQueue = []; // clear current motion queue
+        labelTerminator = 3; // Reset global emulator terminator to ETX
         
-        // Tokenize HPGL commands
-        const cleanText = hpglText.replace(/\r?\n|\r/g, '').trim();
-        const commands = cleanText.split(';');
+        // Reset parser state to start fresh
+        if (hpglParser) {
+            hpglParser.reset();
+        }
         
-        for (let cmd of commands) {
-            cmd = cmd.trim();
-            if (cmd.length < 2) continue;
-            
-            const mnemonic = cmd.substring(0, 2).toUpperCase();
-            const paramStr = cmd.substring(2);
-            
-            const params = [];
-            const regex = /[-+]?[0-9]*\.?[0-9]+/g;
-            let match;
-            while ((match = regex.exec(paramStr)) !== null) {
-                params.push(parseFloat(match[0]));
-            }
-            
+        // Tokenize HPGL commands using the robust parser
+        const tokens = hpglParser.parse(hpglText);
+        const flushed = hpglParser.flush();
+        const allTokens = tokens.concat(flushed);
+        
+        for (const token of allTokens) {
             debugQueue.push({
-                mnemonic: mnemonic,
-                params: params,
-                raw: cmd + ';',
+                ...token,
                 state: 'pending'
             });
         }
@@ -4121,8 +4318,8 @@ document.addEventListener('DOMContentLoaded', () => {
         renderDebugQueue();
         updateDebugUIStatus();
         
-        // Execute the single command (adds steps to actionQueue)
-        executeHPGLCommand(currentCmd.mnemonic, currentCmd.params, currentCmd.raw);
+        // Execute the single command (adds steps to actionQueue or handles queries)
+        executeParsedToken(currentCmd);
     }
 
     function renderDebugQueue() {
@@ -4483,6 +4680,57 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Save Canvas Plot button
+    const btnSaveCanvas = document.getElementById('btn-save-canvas');
+    if (btnSaveCanvas) {
+        btnSaveCanvas.addEventListener('click', () => {
+            playClick();
+            try {
+                // Create a temporary canvas matching the plotter canvas dimensions
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = canvas.width;
+                tempCanvas.height = canvas.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                
+                // 1. Draw Paper Color Background Fill (skip for transparent film to preserve alpha transparency)
+                if (activePaperColor !== 'transparent') {
+                    let paperColorHex = '#faf9f6'; // cream default
+                    if (activePaperColor === 'white') paperColorHex = '#ffffff';
+                    else if (activePaperColor === 'blueprint') paperColorHex = '#0f172a';
+                    else if (activePaperColor === 'black') paperColorHex = '#1c1917';
+                    else if (activePaperColor === 'green') paperColorHex = '#ecfdf5';
+                    else if (activePaperColor === 'paleblue') paperColorHex = '#eff6ff';
+                    else if (activePaperColor === 'paleyellow') paperColorHex = '#fefce8';
+                    else if (activePaperColor === 'palepink') paperColorHex = '#fdf2f8';
+                    else if (activePaperColor === 'mattefilm') paperColorHex = 'rgba(228, 228, 231, 0.65)';
+                    
+                    tempCtx.fillStyle = paperColorHex;
+                    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+                }
+                
+                // 2. Draw Background Template Lines (Grids, borders, etc. from bgCanvas)
+                if (bgCanvas) {
+                    tempCtx.drawImage(bgCanvas, 0, 0);
+                }
+                
+                // 3. Draw Foreground Plotter Vector Lines (from active canvas)
+                tempCtx.drawImage(canvas, 0, 0);
+                
+                // 4. Trigger file download
+                const dataUrl = tempCanvas.toDataURL('image/png');
+                const link = document.createElement('a');
+                link.download = `hp-plotter-export-${Date.now()}.png`;
+                link.href = dataUrl;
+                link.click();
+                
+                showToast('Plot image saved successfully!', 'fa-download');
+            } catch (e) {
+                console.error('Canvas export error:', e);
+                showToast('Failed to save canvas image', 'fa-circle-xmark');
+            }
+        });
+    }
+
     // Graticule checkbox toggle
     if (chkGridEnable) {
         chkGridEnable.addEventListener('change', (e) => {
@@ -4504,7 +4752,21 @@ document.addEventListener('DOMContentLoaded', () => {
         hpglLevel = selectHpglLevel.value;
         selectHpglLevel.addEventListener('change', (e) => {
             hpglLevel = e.target.value;
+            parserMode = hpglLevel === 'hpgl2' ? 'HPGL2_STANDALONE' : 'LEGACY_HPGL';
+            if (hpglParser) {
+                hpglParser.initialMode = parserMode;
+                hpglParser.reset();
+            }
             showToast(`Language set to ${hpglLevel === 'hpgl2' ? 'HP-GL/2' : 'HP-GL'}`, 'fa-sliders');
+        });
+    }
+    
+    // Ink Blending selector
+    if (selectPenBlending) {
+        penBlendingMode = selectPenBlending.value;
+        selectPenBlending.addEventListener('change', (e) => {
+            penBlendingMode = e.target.value;
+            showToast(`Ink mode set to ${penBlendingMode === 'blended' ? 'Translucent Blend' : 'Opaque Overlay'}`, 'fa-sliders');
         });
     }
     
@@ -4710,9 +4972,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chkSoundFx) {
         soundFxEnabled = chkSoundFx.checked;
     }
-    if (chkFlowControl) {
-        flowControlEnabled = chkFlowControl.checked;
+    if (chkPenSwapTravel) {
+        simulatePenSwapTravel = chkPenSwapTravel.checked;
     }
+    if (selectFlowControl) {
+        flowControlMode = selectFlowControl.value;
+    }
+
     if (chkGridEnable) {
         isGridEnabled = chkGridEnable.checked;
     }
@@ -4731,7 +4997,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (selectHpglLevel) {
         hpglLevel = selectHpglLevel.value;
+        parserMode = hpglLevel === 'hpgl2' ? 'HPGL2_STANDALONE' : 'LEGACY_HPGL';
+        if (hpglParser) {
+            hpglParser.initialMode = parserMode;
+            hpglParser.reset();
+        }
     }
+    if (selectPenBlending) {
+        penBlendingMode = selectPenBlending.value;
+    }
+    updateSerialControlsState();
     if (pickerGridColor) {
         gridColor = pickerGridColor.value;
     }

@@ -487,14 +487,14 @@ body {
     transform: translateX(-50%);
 }
 
-.pen-station:nth-child(1) { left: 12.5%; }
-.pen-station:nth-child(2) { left: 22.5%; }
-.pen-station:nth-child(3) { left: 32.5%; }
-.pen-station:nth-child(4) { left: 42.5%; }
-.pen-station:nth-child(5) { left: 52.5%; }
-.pen-station:nth-child(6) { left: 62.5%; }
-.pen-station:nth-child(7) { left: 72.5%; }
-.pen-station:nth-child(8) { left: 82.5%; }
+.pen-station:nth-child(1) { left: 8.75%; }
+.pen-station:nth-child(2) { left: 19.75%; }
+.pen-station:nth-child(3) { left: 30.75%; }
+.pen-station:nth-child(4) { left: 41.75%; }
+.pen-station:nth-child(5) { left: 52.75%; }
+.pen-station:nth-child(6) { left: 63.75%; }
+.pen-station:nth-child(7) { left: 74.75%; }
+.pen-station:nth-child(8) { left: 85.75%; }
 
 .pen-slot-hole {
     width: 26px; /* 11.5 mm equivalent */
