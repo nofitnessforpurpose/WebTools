@@ -29,6 +29,9 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 - **Export Capabilities**: Clear the roll, feed paper, or download the entire print history as a single high-quality PNG image.
 - **Self-Test Mode**: Simulated test print to verify the rendering engine locally.
 
+If you wish to prepare graphics for printing, see the companion tool <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">PRINTER2TOOL</a>
+
+<BR>
 ## OPL Stub
 
 If graphics print support is needed, use the helper stub routine below to allow the emulator to handle graphics printing (since the physical Printer II hardware's internal `GPRINT` routine is not available). The `GPRINT` routine is small and can be located on your internal **A:** storage location:
@@ -47,20 +50,28 @@ GPRINT:(w%, addr%)
     i%=i%+1
   ENDWH
 ```
+<BR>
+## Physical Setup  
 
-## Physical Setup
-1. Connect your Psion Organiser II Comms Link port to your PC using a Comms Link cable connected to a USB-to-Serial converter.
-2. In the browser, click the **Connect** button, choose the serial port of your USB-to-Serial converter, and select connect.
-3. Configure your Organiser Comms Link settings to 9600 Baud, No Parity, 8 Data Bits, 1 Stop Bit, and set the printer device to serial output (Standard OPL `LPRINT` statements will then automatically route through the Comms Link interface).
+1. Connect your Psion Organiser II SOMMS Link port to your PC using a Comms Link cable connected to a USB-to-Serial converter.  
 
+2. In the browser, click the **Connect** button, choose the serial port of your USB-to-Serial converter, and select Allow connection.
+   
+4. Configure your Organiser COMMS Link settings to 9600 Baud, No Parity, 8 Data Bits, 1 Stop Bit, and set the printer device to serial output (Standard OPL `LPRINT` statements will then automatically route through the Comms Link interface).
 
+<BR>
 ### Hints   
- - Take care with any RAM Packs - COMMS links don't play nicely with them
+
+ - Take care with any RAM Packs - COMMS links don't play nicely with COMMS Links!
+   
  - Ensure your COMMS link settings are correct
+   
  - Ensure your web browser supports WEB Serial (Firefox 151 does now!!!!)
+   
  - A little patience is required for graphics as the Stub code has to send serial data
 
 <BR>
+
 
 ## Background  
 
