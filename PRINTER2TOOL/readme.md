@@ -28,7 +28,10 @@ Images can be uploaded or drag and dropped into the image manipulation tool whic
 - Justification  
 - Negative mode
 
-Following up load and any adjustments, download the two OPL routines COMPRUN: and PRRLE:
+Following up load and any adjustments, download the two OPL routines COMPRUN: and PRRLE:  
+
+If you don't have a printer or wish to preview; use your Organiser and a COMMS Link to test the image with the Printer 2 eumulation tool <a href="https://github.com/nofitnessforpurpose/WebTools/edit/main/PRINTER2EMU/">PRINTER2EMU</a>  
+
 
 ### Hints   
 Rendering - Select the rendering based on the type of image:   
