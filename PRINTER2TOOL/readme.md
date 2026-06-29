@@ -36,7 +36,7 @@ If you don't have a printer or wish to preview; use your Organiser and a COMMS L
 ### Hints   
 Rendering - Select the rendering based on the type of image:   
  - Photographs render best using Floyd-Steinberg dithering.  
- - High contrast images, such as B&W Icons / Logos or custom Fonts, render best with Threshold Cutoff rendering.  
+ - High contrast images, such as B&W Icons / Logos, QR Codes or custom Fonts, render best with Threshold Cutoff rendering.  
  
 Fine Tuning - You can copy an image out (right click the image) use third party editor tools and re-import it  
  - Add emphasis  
