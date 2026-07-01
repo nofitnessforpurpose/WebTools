@@ -1,12 +1,12 @@
 /* ==========================================================================
-   HP 9872B Multi-Colour Plotter Emulator - Core Application & Rendering
+   Multi-Colour Plotter Emulator - Core Application & Rendering
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
     // 1. DOM Elements Mapping
     const plotter = document.getElementById('plotter');
-    const canvas = document.getElementById('plotter-canvas');
-    const ctx = canvas.getContext('2d');
+    let canvas = document.getElementById('plotter-canvas');
+    let ctx = canvas.getContext('2d');
     const paperSheet = document.getElementById('paper-sheet');
     const xCarriage = document.getElementById('x-carriage');
     const yCarriage = document.getElementById('y-carriage');
@@ -59,8 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const chkPenSwapTravel = document.getElementById('chk-pen-swap-travel');
     
     // Background Canvas and Page Template Selectors
-    const bgCanvas = document.getElementById('plotter-bg-canvas');
-    const bgCtx = bgCanvas ? bgCanvas.getContext('2d') : null;
+    let bgCanvas = document.getElementById('plotter-bg-canvas');
+    let bgCtx = bgCanvas ? bgCanvas.getContext('2d') : null;
     const chkGridEnable = document.getElementById('chk-grid-enable');
     const pickerGridColor = document.getElementById('picker-grid-color');
     const selectPaperSize = document.getElementById('select-paper-size');
@@ -69,8 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectPaperTemplate = document.getElementById('select-paper-template');
     const selectHpglLevel = document.getElementById('select-hpgl-level');
     const selectPenBlending = document.getElementById('select-pen-blending');
-    const bedCanvas = document.getElementById('plotter-bed-canvas');
-    const bedCtx = bedCanvas ? bedCanvas.getContext('2d') : null;
+    let bedCanvas = document.getElementById('plotter-bed-canvas');
+    let bedCtx = bedCanvas ? bedCanvas.getContext('2d') : null;
     
     const btnDrawTest = document.getElementById('btn-draw-test');
     const btnDrawShuttle = document.getElementById('btn-draw-shuttle');
@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Plotter Coordinates & Hard limits
     // Physical bed boundaries (plotter units - PLU)
-    // HP 9872B default coordinates roughly:
+    // Default coordinates roughly:
     const MAX_X = 16000;
     const MAX_Y = 11400;
     
@@ -161,10 +161,15 @@ document.addEventListener('DOMContentLoaded', () => {
     let digitizedPenStatus = 0;
     
     // Scaling system parameters (HPGL IP/SC commands)
-    let p1X = PAPER_MIN_X;
-    let p1Y = PAPER_MIN_Y;
-    let p2X = PAPER_MAX_X;
-    let p2Y = PAPER_MAX_Y;
+    let defaultP1X = 600;
+    let defaultP1Y = 800;
+    let defaultP2X = 15400;
+    let defaultP2Y = 10800;
+    
+    let p1X = defaultP1X;
+    let p1Y = defaultP1Y;
+    let p2X = defaultP2X;
+    let p2Y = defaultP2Y;
     
     let userScaleActive = false;
     let userX1 = 0, userX2 = 1, userY1 = 0, userY2 = 1;
@@ -217,6 +222,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let chordToleranceMode = 0; // CT mode: 0 = angle (degrees), 1 = chord height (PLU)
     let chordToleranceValue = 5; // CT tolerance parameter (default 5 degrees)
     let coordinateRotation = 0; // RO angle: 0, 90, 180, or 270 degrees (applied around P1)
+    
+    // Line joins, caps, miter limits, anchor point, and last label length
+    let activeLineCap = 'butt'; // butt, round, square
+    let activeLineJoin = 'miter'; // miter, round, bevel
+    let activeMiterLimit = 10;
+    let anchorX = 0;
+    let anchorY = 0;
+    let lastLabelLength = 0;
+    
+    // HPGL command history and high-res export settings
+    let currentHPGLText = '';
+    let exportResolution = 'high'; // standard, high, ultra
+    let isSilentReplay = false;
     
     // Pen Station color arrays (configured in UI, default retro colors)
     let penColors = {
@@ -292,6 +310,30 @@ document.addEventListener('DOMContentLoaded', () => {
         PAPER_WIDTH = PAPER_MAX_X - PAPER_MIN_X;
         PAPER_HEIGHT = PAPER_MAX_Y - PAPER_MIN_Y;
 
+
+
+        const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
+        const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
+        
+        if (activePaperOrientation === 'portrait') {
+            defaultP1X = 800;
+            defaultP1Y = 800;
+            defaultP2X = 10600;
+            defaultP2Y = 15200;
+        } else {
+            defaultP1X = 600;
+            defaultP1Y = 800;
+            defaultP2X = 15400;
+            defaultP2Y = 10800;
+        }
+
+        if (!userScaleActive) {
+            p1X = defaultP1X;
+            p1Y = defaultP1Y;
+            p2X = defaultP2X;
+            p2Y = defaultP2Y;
+        }
+
         if (hpglParser) {
             hpglParser.pictureFrameWidth = activePaperOrientation === 'portrait' ? 11400 : 16000;
             hpglParser.pictureFrameHeight = activePaperOrientation === 'portrait' ? 16000 : 11400;
@@ -314,9 +356,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Calculate absolute bed scale factor relative to orientation limits
             const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
             const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
-            const scaleX = (activePaperOrientation === 'portrait' ? baseBedHeight : baseBedWidth) / limitX;
-            const scaleY = (activePaperOrientation === 'portrait' ? baseBedWidth : baseBedHeight) / limitY;
-            bedScale = Math.min(scaleX, scaleY);
             
             let targetWidth, targetHeight;
             
@@ -360,6 +399,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             paperSheet.style.width = `${targetWidth}px`;
             paperSheet.style.height = `${targetHeight}px`;
+
+            const scaleX = targetWidth / limitX;
+            const scaleY = targetHeight / limitY;
+            bedScale = Math.min(scaleX, scaleY);
         }
         
         // Save current transforms and disable transitions temporarily for instant snapping
@@ -733,7 +776,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isOutOfHardLimits = rx < 0 || rx > limitX || ry < 0 || ry > limitY;
         const isOutOfSoftLimits = rx < Math.min(softLimitX1, softLimitX2) || rx > Math.max(softLimitX1, softLimitX2) || ry < Math.min(softLimitY1, softLimitY2) || ry > Math.max(softLimitY1, softLimitY2);
         
-        if (!isPhysical && (isOutOfHardLimits || isOutOfSoftLimits)) {
+        if (!isPhysical && !lastIsPhysical && lastPenIndex === undefined && (isOutOfHardLimits || isOutOfSoftLimits)) {
             ledLimit.classList.add('active');
         } else {
             ledLimit.classList.remove('active');
@@ -945,6 +988,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     softLimitY2 = currentAction.val.y2;
                 } else if (currentAction.key === 'lineType') {
                     activeLineType = currentAction.val;
+                } else if (currentAction.key === 'lineCap') {
+                    activeLineCap = currentAction.val;
+                } else if (currentAction.key === 'lineJoin') {
+                    activeLineJoin = currentAction.val;
+                } else if (currentAction.key === 'miterLimit') {
+                    activeMiterLimit = currentAction.val;
+                } else if (currentAction.key === 'clear') {
+                    clearDrawingCanvas();
                 } else if (currentAction.key === 'fillPolygon') {
                     drawFillPolygon(
                         currentAction.val,
@@ -953,6 +1004,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         currentAction.fillSpacing !== undefined ? currentAction.fillSpacing : 0,
                         currentAction.fillAngle !== undefined ? currentAction.fillAngle : 0
                     );
+                } else if (currentAction.key === 'penColor') {
+                    const { pen, color } = currentAction.val;
+                    penColors[pen] = color;
+                    document.documentElement.style.setProperty(`--pen-${pen}-color`, color);
+                    const penBody = document.getElementById(`pen-body-${pen}`);
+                    if (penBody) penBody.style.backgroundColor = color;
+                    const previewColor = document.getElementById(`preview-color-${pen}`);
+                    if (previewColor) previewColor.style.backgroundColor = color;
+                    const colorPicker = document.getElementById(`picker-color-${pen}`);
+                    if (colorPicker) colorPicker.value = color;
+                    if (selectedPen === pen && carriagePenTip) {
+                        carriagePenTip.style.backgroundColor = color;
+                    }
+                } else if (currentAction.key === 'penWidth') {
+                    const { pen, width } = currentAction.val;
+                    penWidths[pen] = width;
+                    const inputEl = document.getElementById(`width-pen-${pen}`);
+                    if (inputEl) inputEl.value = width;
                 } else if (currentAction.key === 'clearPhysicalTrack') {
                     lastPhysical = false;
                     lastPenIndex = undefined;
@@ -1003,6 +1072,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         softLimitY2 = currentAction.val.y2;
                     } else if (currentAction.key === 'lineType') {
                         activeLineType = currentAction.val;
+                    } else if (currentAction.key === 'lineCap') {
+                        activeLineCap = currentAction.val;
+                    } else if (currentAction.key === 'lineJoin') {
+                        activeLineJoin = currentAction.val;
+                    } else if (currentAction.key === 'miterLimit') {
+                        activeMiterLimit = currentAction.val;
+                    } else if (currentAction.key === 'clear') {
+                        clearDrawingCanvas();
                     } else if (currentAction.key === 'fillPolygon') {
                         drawFillPolygon(
                             currentAction.val,
@@ -1011,6 +1088,24 @@ document.addEventListener('DOMContentLoaded', () => {
                             currentAction.fillSpacing !== undefined ? currentAction.fillSpacing : 0,
                             currentAction.fillAngle !== undefined ? currentAction.fillAngle : 0
                         );
+                    } else if (currentAction.key === 'penColor') {
+                        const { pen, color } = currentAction.val;
+                        penColors[pen] = color;
+                        document.documentElement.style.setProperty(`--pen-${pen}-color`, color);
+                        const penBody = document.getElementById(`pen-body-${pen}`);
+                        if (penBody) penBody.style.backgroundColor = color;
+                        const previewColor = document.getElementById(`preview-color-${pen}`);
+                        if (previewColor) previewColor.style.backgroundColor = color;
+                        const colorPicker = document.getElementById(`picker-color-${pen}`);
+                        if (colorPicker) colorPicker.value = color;
+                        if (selectedPen === pen && carriagePenTip) {
+                            carriagePenTip.style.backgroundColor = color;
+                        }
+                    } else if (currentAction.key === 'penWidth') {
+                        const { pen, width } = currentAction.val;
+                        penWidths[pen] = width;
+                        const inputEl = document.getElementById(`width-pen-${pen}`);
+                        if (inputEl) inputEl.value = width;
                     }
                 }
             }
@@ -1293,10 +1388,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
         const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
         
-        const clipX1 = Math.max(0, Math.min(softLimitX1, softLimitX2));
-        const clipX2 = Math.min(limitX, Math.max(softLimitX1, softLimitX2));
-        const clipY1 = Math.max(0, Math.min(softLimitY1, softLimitY2));
-        const clipY2 = Math.min(limitY, Math.max(softLimitY1, softLimitY2));
+        let clipX1 = Math.max(0, Math.min(softLimitX1, softLimitX2));
+        let clipX2 = Math.min(limitX, Math.max(softLimitX1, softLimitX2));
+        let clipY1 = Math.max(0, Math.min(softLimitY1, softLimitY2));
+        let clipY2 = Math.min(limitY, Math.max(softLimitY1, softLimitY2));
+        
+        if (autoScaleActive) {
+            clipX1 = 0;
+            clipX2 = limitX;
+            clipY1 = 0;
+            clipY2 = limitY;
+        }
         
         const clipped = clipLine(x1, y1, x2, y2, clipX1, clipY1, clipX2, clipY2);
         if (!clipped.visible) return;
@@ -1322,6 +1424,9 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.strokeStyle = penColors[selectedPen] || '#1c1917';
         const widthMm = penWidths[selectedPen] || 0.3;
         ctx.lineWidth = Math.max(0.5, widthMm * 3.5);
+        ctx.lineCap = activeLineCap;
+        ctx.lineJoin = activeLineJoin;
+        ctx.miterLimit = activeMiterLimit;
         
         applyLineType();
         
@@ -1408,6 +1513,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function clearDrawingCanvas() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        currentHPGLText = '';
     }
 
     // --- Background Template & Graticule Rendering ---
@@ -1482,10 +1588,36 @@ document.addEventListener('DOMContentLoaded', () => {
         const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
         const clampedX = Math.max(0, Math.min(limitX, px));
         const clampedY = Math.max(0, Math.min(limitY, py));
-        const bedRect = bedCanvas.getBoundingClientRect();
-        const cx = (clampedX / limitX) * bedRect.width;
-        const cy = (1 - clampedY / limitY) * bedRect.height;
+        
+        let width, height;
+        if (isSilentReplay) {
+            width = bedCanvas.width;
+            height = bedCanvas.height;
+        } else {
+            const bedRect = bedCanvas.getBoundingClientRect();
+            width = bedRect.width;
+            height = bedRect.height;
+        }
+        
+        const cx = (clampedX / limitX) * width;
+        const cy = (1 - clampedY / limitY) * height;
         return { x: cx, y: cy };
+    }
+
+    function getPaperScale() {
+        let scaleW = 1.0;
+        let scaleH = 1.0;
+        if (activePaperSize === 'A4') {
+            scaleW = 0.7071;
+            scaleH = 0.7071;
+        } else if (activePaperSize === 'A5') {
+            scaleW = 0.5;
+            scaleH = 0.5;
+        } else if (activePaperSize === 'Letter') {
+            scaleW = 279.4 / 420;
+            scaleH = 215.9 / 297;
+        }
+        return { w: scaleW, h: scaleH };
     }
 
     function drawGraticuleGrid() {
@@ -1505,32 +1637,45 @@ document.addEventListener('DOMContentLoaded', () => {
         const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
         const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
         
+        const scale = getPaperScale();
+        const mmSpacingX = 40 / scale.w;
+        const cmSpacingX = 400 / scale.w;
+        const majorSpacingX = 2000 / scale.w;
+        
+        const mmSpacingY = 40 / scale.h;
+        const cmSpacingY = 400 / scale.h;
+        const majorSpacingY = 2000 / scale.h;
+        
         // Draw vertical lines (X)
-        for (let xOffset = 0; xOffset <= limitX; xOffset += 40) {
-            const isCm = (xOffset % 400 === 0);
-            const isMajor = (xOffset % 2000 === 0);
+        for (let xOffset = 0; xOffset <= limitX; xOffset += mmSpacingX) {
+            const cmIndex = Math.round(xOffset / cmSpacingX);
+            const isCm = Math.abs(xOffset - cmIndex * cmSpacingX) < (mmSpacingX * 0.1);
+            const majorIndex = Math.round(xOffset / majorSpacingX);
+            const isMajor = Math.abs(xOffset - majorIndex * majorSpacingX) < (mmSpacingX * 0.1);
             
             if (!isCm) {
                 drawBedLine(xOffset, 0, xOffset, limitY, mmCol, 0.5);
             } else {
                 drawBedLine(xOffset, 0, xOffset, limitY, isMajor ? majorCol : cmCol, isMajor ? 1.0 : 0.7);
                 if (isMajor && xOffset > 0 && xOffset < limitX) {
-                    drawBedText(`${xOffset / 400}`, xOffset, 120, textCol, "center", "top");
+                    drawBedText(`${majorIndex * 5}`, xOffset, 120, textCol, "center", "top");
                 }
             }
         }
         
         // Draw horizontal lines (Y)
-        for (let yOffset = 0; yOffset <= limitY; yOffset += 40) {
-            const isCm = (yOffset % 400 === 0);
-            const isMajor = (yOffset % 2000 === 0);
+        for (let yOffset = 0; yOffset <= limitY; yOffset += mmSpacingY) {
+            const cmIndex = Math.round(yOffset / cmSpacingY);
+            const isCm = Math.abs(yOffset - cmIndex * cmSpacingY) < (mmSpacingY * 0.1);
+            const majorIndex = Math.round(yOffset / majorSpacingY);
+            const isMajor = Math.abs(yOffset - majorIndex * majorSpacingY) < (mmSpacingY * 0.1);
             
             if (!isCm) {
                 drawBedLine(0, yOffset, limitX, yOffset, mmCol, 0.5);
             } else {
                 drawBedLine(0, yOffset, limitX, yOffset, isMajor ? majorCol : cmCol, isMajor ? 1.0 : 0.7);
                 if (isMajor && yOffset > 0 && yOffset < limitY) {
-                    drawBedText(`${yOffset / 400}`, 120, yOffset, textCol, "left", "middle");
+                    drawBedText(`${majorIndex * 5}`, 120, yOffset, textCol, "left", "middle");
                 }
             }
         }
@@ -1554,29 +1699,62 @@ document.addEventListener('DOMContentLoaded', () => {
         drawBgLine(PAPER_MAX_X - offset, PAPER_MAX_Y - offset, PAPER_MIN_X + offset, PAPER_MAX_Y - offset, color, 0.6);
         drawBgLine(PAPER_MIN_X + offset, PAPER_MAX_Y - offset, PAPER_MIN_X + offset, PAPER_MIN_Y + offset, color, 0.6);
         
+        // Adjust text and labels dynamically to fit the top header line based on PAPER_WIDTH
+        let displayTitle = titleText;
+        let displayMeta = "DATE: ____________   PROJECT: ______________________   SHEET NO: ____";
+        
+        if (PAPER_WIDTH < 7500) {
+            // Very narrow (e.g. A5 Portrait)
+            displayMeta = "D: ____  P: ____  S: __";
+            if (titleText.includes("CENTIMETER GRID")) displayTitle = "CM GRID";
+            else if (titleText.includes("IMPERIAL INCH")) displayTitle = "INCH GRID";
+            else if (titleText.includes("MUSIC STAFF")) displayTitle = "MUSIC";
+            else if (titleText.includes("ENGINEERING")) displayTitle = "ENG. SHEET";
+            else if (titleText.includes("LOG-LOG")) displayTitle = "LOG-LOG";
+            else if (titleText.includes("SEMI-LOG")) displayTitle = "SEMI-LOG";
+            else if (titleText.includes("SMITH")) displayTitle = "SMITH";
+            else if (titleText.includes("POLAR")) displayTitle = "POLAR";
+            else if (titleText.includes("ISOMETRIC")) displayTitle = "ISO GRID";
+        } else if (PAPER_WIDTH < 11000) {
+            // Narrow (e.g. A4 Portrait / A5 Landscape)
+            displayMeta = "DATE: ________   PROJ: ____________   SH: ____";
+            if (titleText.includes("CENTIMETER GRID (NO 1MM")) displayTitle = "BLUE CM GRID";
+            else if (titleText.includes("CENTIMETER GRID")) displayTitle = "CM GRID PAPER";
+            else if (titleText.includes("IMPERIAL INCH")) displayTitle = "IMPERIAL GRID";
+            else if (titleText.includes("MUSIC STAFF")) displayTitle = "MUSIC STAFF";
+            else if (titleText.includes("ENGINEERING")) displayTitle = "ENG. DRAWING";
+        }
+        
         // Draw title blocks
         const blockY = PAPER_MAX_Y + 120;
-        drawBgText(titleText, PAPER_MIN_X + 100, blockY, color, "left", "bottom");
-        drawBgText("DATE: ____________   PROJECT: ______________________   SHEET NO: ____", PAPER_MAX_X - 100, blockY, textCol, "right", "bottom");
+        drawBgText(displayTitle, PAPER_MIN_X + 100, blockY, color, "left", "bottom");
+        drawBgText(displayMeta, PAPER_MAX_X - 100, blockY, textCol, "right", "bottom");
     }
 
     function drawLinearGridLabels() {
         const color = ['blueprint', 'black'].includes(activePaperColor) ? 'rgba(255,255,255,0.6)' : 'rgba(15,23,42,0.6)';
+        const scale = getPaperScale();
+        const cmSpacingX = 400 / scale.w;
+        const cmSpacingY = 400 / scale.h;
         
         // X centimeter numbers
-        for (let xOffset = 0; xOffset <= PAPER_WIDTH; xOffset += 400) {
+        let cmIndex = 0;
+        for (let xOffset = 0; xOffset <= PAPER_WIDTH; xOffset += cmSpacingX) {
             const px = PAPER_MIN_X + xOffset;
-            if (xOffset > 0 && xOffset < PAPER_WIDTH) {
-                drawBgText(`${xOffset / 400}`, px, PAPER_MIN_Y - 180, color, "center", "top");
+            if (cmIndex > 0 && xOffset < PAPER_WIDTH) {
+                drawBgText(`${cmIndex}`, px, PAPER_MIN_Y - 180, color, "center", "top");
             }
+            cmIndex++;
         }
         
         // Y centimeter numbers
-        for (let yOffset = 0; yOffset <= PAPER_HEIGHT; yOffset += 400) {
+        cmIndex = 0;
+        for (let yOffset = 0; yOffset <= PAPER_HEIGHT; yOffset += cmSpacingY) {
             const py = PAPER_MIN_Y + yOffset;
-            if (yOffset > 0 && yOffset < PAPER_HEIGHT) {
-                drawBgText(`${yOffset / 400}`, PAPER_MIN_X - 180, py, color, "right", "middle");
+            if (cmIndex > 0 && yOffset < PAPER_HEIGHT) {
+                drawBgText(`${cmIndex}`, PAPER_MIN_X - 180, py, color, "right", "middle");
             }
+            cmIndex++;
         }
     }
 
@@ -1594,6 +1772,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Y centimeter numbers
     function drawLogLabelsY(startY, stepY, cycleNum) {
         const color = ['blueprint', 'black'].includes(activePaperColor) ? 'rgba(255,255,255,0.6)' : 'rgba(15,23,42,0.6)';
         const base = Math.pow(10, cycleNum);
@@ -1628,19 +1807,138 @@ document.addEventListener('DOMContentLoaded', () => {
             majorColorHex = 'rgba(4, 120, 87, 0.25)';
         }
         
-        for (let xOffset = 0; xOffset <= PAPER_WIDTH; xOffset += 80) {
+        const scale = getPaperScale();
+        const spacingX = 80 / scale.w;
+        const cmSpacingX = 400 / scale.w;
+        
+        const spacingY = 80 / scale.h;
+        const cmSpacingY = 400 / scale.h;
+        
+        for (let xOffset = 0; xOffset <= PAPER_WIDTH; xOffset += spacingX) {
             const px = PAPER_MIN_X + xOffset;
-            const isCm = (xOffset % 400 === 0);
+            const cmIndex = Math.round(xOffset / cmSpacingX);
+            const isCm = Math.abs(xOffset - cmIndex * cmSpacingX) < (spacingX * 0.1);
             drawBgLine(px, PAPER_MIN_Y, px, PAPER_MAX_Y, isCm ? majorColorHex : gridColorHex, isCm ? 0.9 : 0.45);
         }
-        for (let yOffset = 0; yOffset <= PAPER_HEIGHT; yOffset += 80) {
+        for (let yOffset = 0; yOffset <= PAPER_HEIGHT; yOffset += spacingY) {
             const py = PAPER_MIN_Y + yOffset;
-            const isCm = (yOffset % 400 === 0);
+            const cmIndex = Math.round(yOffset / cmSpacingY);
+            const isCm = Math.abs(yOffset - cmIndex * cmSpacingY) < (spacingY * 0.1);
             drawBgLine(PAPER_MIN_X, py, PAPER_MAX_X, py, isCm ? majorColorHex : gridColorHex, isCm ? 0.9 : 0.45);
         }
         
         drawTemplateHeader("CENTIMETER GRID GRAPH PAPER");
         drawLinearGridLabels();
+    }
+
+    function drawBlueCentimeterGrid() {
+        const isDark = ['blueprint', 'black'].includes(activePaperColor);
+        const gridColorHex = isDark ? 'rgba(56, 189, 248, 0.35)' : 'rgba(0, 119, 182, 0.3)';
+        
+        const scale = getPaperScale();
+        const cmSpacingX = 400 / scale.w;
+        const cmSpacingY = 400 / scale.h;
+        
+        for (let xOffset = 0; xOffset <= PAPER_WIDTH; xOffset += cmSpacingX) {
+            const px = PAPER_MIN_X + xOffset;
+            drawBgLine(px, PAPER_MIN_Y, px, PAPER_MAX_Y, gridColorHex, 0.9);
+        }
+        for (let yOffset = 0; yOffset <= PAPER_HEIGHT; yOffset += cmSpacingY) {
+            const py = PAPER_MIN_Y + yOffset;
+            drawBgLine(PAPER_MIN_X, py, PAPER_MAX_X, py, gridColorHex, 0.9);
+        }
+        
+        drawTemplateHeader("BLUE CENTIMETER GRID (NO 1MM SUBDIVISIONS)");
+        drawLinearGridLabels();
+    }
+
+    function drawImperialGridLabels() {
+        const color = ['blueprint', 'black'].includes(activePaperColor) ? 'rgba(255,255,255,0.6)' : 'rgba(15,23,42,0.6)';
+        const scale = getPaperScale();
+        const inchSpacingX = 1016 / scale.w;
+        const inchSpacingY = 1016 / scale.h;
+        
+        let index = 0;
+        for (let xOffset = 0; xOffset <= PAPER_WIDTH; xOffset += inchSpacingX) {
+            const px = PAPER_MIN_X + xOffset;
+            if (index > 0 && xOffset < PAPER_WIDTH) {
+                drawBgText(`${index}"`, px, PAPER_MIN_Y - 180, color, "center", "top");
+            }
+            index++;
+        }
+        
+        index = 0;
+        for (let yOffset = 0; yOffset <= PAPER_HEIGHT; yOffset += inchSpacingY) {
+            const py = PAPER_MIN_Y + yOffset;
+            if (index > 0 && yOffset < PAPER_HEIGHT) {
+                drawBgText(`${index}"`, PAPER_MIN_X - 180, py, color, "right", "middle");
+            }
+            index++;
+        }
+    }
+
+    function drawImperialGrid() {
+        const isDark = ['blueprint', 'black'].includes(activePaperColor);
+        const gridColorHex = isDark ? 'rgba(56, 189, 248, 0.12)' : 'rgba(0, 119, 182, 0.1)';
+        const majorColorHex = isDark ? 'rgba(56, 189, 248, 0.35)' : 'rgba(0, 119, 182, 0.3)';
+        
+        const scale = getPaperScale();
+        const spacingX = 101.6 / scale.w;
+        const inchSpacingX = 1016 / scale.w;
+        
+        const spacingY = 101.6 / scale.h;
+        const inchSpacingY = 1016 / scale.h;
+        
+        for (let xOffset = 0; xOffset <= PAPER_WIDTH; xOffset += spacingX) {
+            const px = PAPER_MIN_X + xOffset;
+            const inchIndex = Math.round(xOffset / inchSpacingX);
+            const isInch = Math.abs(xOffset - inchIndex * inchSpacingX) < (spacingX * 0.1);
+            drawBgLine(px, PAPER_MIN_Y, px, PAPER_MAX_Y, isInch ? majorColorHex : gridColorHex, isInch ? 0.9 : 0.45);
+        }
+        for (let yOffset = 0; yOffset <= PAPER_HEIGHT; yOffset += spacingY) {
+            const py = PAPER_MIN_Y + yOffset;
+            const inchIndex = Math.round(yOffset / inchSpacingY);
+            const isInch = Math.abs(yOffset - inchIndex * inchSpacingY) < (spacingY * 0.1);
+            drawBgLine(PAPER_MIN_X, py, PAPER_MAX_X, py, isInch ? majorColorHex : gridColorHex, isInch ? 0.9 : 0.45);
+        }
+        
+        drawTemplateHeader("IMPERIAL INCH GRID GRAPH PAPER (1/10\")");
+        drawImperialGridLabels();
+    }
+
+    function drawMusicStaff() {
+        const isDark = ['blueprint', 'black'].includes(activePaperColor);
+        const color = isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(15, 23, 42, 0.35)';
+        
+        const scale = getPaperScale();
+        const lineSpacingY = 80 / scale.h;
+        const staffHeight = 4 * lineSpacingY;
+        const staffGapY = 600 / scale.h;
+        
+        const totalStaffUnitHeight = staffHeight + staffGapY;
+        
+        const marginY = 500 / scale.h;
+        const availableHeight = PAPER_HEIGHT - 2 * marginY;
+        
+        const staffCount = Math.floor((availableHeight + staffGapY) / totalStaffUnitHeight);
+        
+        const totalStavesHeight = staffCount * totalStaffUnitHeight - staffGapY;
+        const startY = PAPER_MIN_Y + marginY + (availableHeight - totalStavesHeight) / 2;
+        
+        for (let i = 0; i < staffCount; i++) {
+            const staffBottomY = startY + i * totalStaffUnitHeight;
+            
+            for (let lineIndex = 0; lineIndex < 5; lineIndex++) {
+                const y = staffBottomY + lineIndex * lineSpacingY;
+                drawBgLine(PAPER_MIN_X, y, PAPER_MAX_X, y, color, 0.9);
+            }
+            
+            const staffTopY = staffBottomY + staffHeight;
+            drawBgLine(PAPER_MIN_X, staffBottomY, PAPER_MIN_X, staffTopY, color, 1.2);
+            drawBgLine(PAPER_MAX_X, staffBottomY, PAPER_MAX_X, staffTopY, color, 1.2);
+        }
+        
+        drawTemplateHeader("MUSIC STAFF MANUSCRIPT PAPER");
     }
 
     function drawLogLogGrid() {
@@ -1908,6 +2206,12 @@ document.addEventListener('DOMContentLoaded', () => {
             drawEngineeringTemplate();
         } else if (activePaperTemplate === 'grid') {
             drawLinearGrid();
+        } else if (activePaperTemplate === 'grid-blue-cm') {
+            drawBlueCentimeterGrid();
+        } else if (activePaperTemplate === 'grid-imperial') {
+            drawImperialGrid();
+        } else if (activePaperTemplate === 'music') {
+            drawMusicStaff();
         } else if (activePaperTemplate === 'loglog') {
             drawLogLogGrid();
         } else if (activePaperTemplate === 'semilog') {
@@ -2021,6 +2325,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 const outY = isYInverted() ? (hpglParser.pictureFrameHeight - yVal) : yVal;
                 await sendSerialString(`${Math.round(xVal)},${Math.round(outY)},${penStatus}\r\n`);
                 isDigitizedPointReady = false;
+            } else if (m === 'OW') {
+                await sendSerialString(`${softLimitX1},${softLimitY1},${softLimitX2},${softLimitY2}\r\n`);
+            } else if (m === 'OL') {
+                await sendSerialString(`${lastLabelLength}\r\n`);
+            } else if (m === 'OO') {
+                await sendSerialString('0,1,0,0,0,0,0,0\r\n');
+            } else if (m === 'OF') {
+                await sendSerialString('40,40\r\n');
+            } else if (m === 'OG') {
+                await sendSerialString('1\r\n');
+            } else if (m === 'OK') {
+                await sendSerialString('0\r\n');
+            } else if (m === 'OT') {
+                await sendSerialString(`${selectedPen}\r\n`);
+            } else if (m === 'PE') {
+                const startCoords = getLogicalUserCoordinates();
+                const commands = decodePolylineEncoded(token.encodedData, startCoords.x, startCoords.y);
+                for (const cmd of commands) {
+                    if (cmd.type === 'SELECT_PEN') {
+                        executeHPGLCommand('SP', [cmd.value], `SP${cmd.value}`);
+                    } else if (cmd.type === 'CLOSE_POLYGON') {
+                        if (polygonMode) {
+                            if (polygonBuffer.length > 0) {
+                                polygonBuffer.push({ x: polygonBuffer[0].x, y: polygonBuffer[0].y, draw: true });
+                            }
+                        }
+                    } else {
+                        const pt = scaleCoordinate(cmd.x, cmd.y);
+                        targetX = pt.x;
+                        targetY = pt.y;
+                        if (polygonMode) {
+                            polygonBuffer.push({ x: targetX, y: targetY, draw: (cmd.type === 'POLYLINE') });
+                        } else {
+                            actionQueue.push({ type: 'state', key: 'penState', val: (cmd.type === 'POLYLINE' ? 'down' : 'up') });
+                            actionQueue.push({ type: 'move', x: targetX, y: targetY, draw: (cmd.type === 'POLYLINE') });
+                        }
+                    }
+                }
             } else {
                 let paramStr = '';
                 if (token.raw && token.raw.length >= 2) {
@@ -2035,6 +2377,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isPowerOn) return;
         
         logCommand(hpglText);
+        
+        if (currentHPGLText !== hpglText && !currentHPGLText.endsWith(hpglText)) {
+            currentHPGLText += (currentHPGLText ? ";" : "") + hpglText;
+        }
         
         if (hpglParser) {
             const tokens = hpglParser.parse(hpglText);
@@ -2090,16 +2436,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     penStateLogical = 'up';
                     
                     // Reset scaling parameters
-                    p1X = PAPER_MIN_X; p1Y = PAPER_MIN_Y;
-                    p2X = PAPER_MAX_X; p2Y = PAPER_MAX_Y;
+                    p1X = defaultP1X; p1Y = defaultP1Y;
+                    p2X = defaultP2X; p2Y = defaultP2Y;
                     userScaleActive = false;
 
-                    // Reset auto-scale boundaries
-                    scannedMinX = 0; scannedMaxX = MAX_X;
-                    scannedMinY = 0; scannedMaxY = MAX_Y;
-                    fitScale = 1;
-                    fitOffsetX = PAPER_MIN_X;
-                    fitOffsetY = PAPER_MIN_Y;
+                    // Reset auto-scale boundaries if auto-fit is not active
+                    if (!autoScaleActive) {
+                        scannedMinX = 0; scannedMaxX = MAX_X;
+                        scannedMinY = 0; scannedMaxY = MAX_Y;
+                        fitScale = 1;
+                        fitOffsetX = PAPER_MIN_X;
+                        fitOffsetY = PAPER_MIN_Y;
+                    }
                     
                     // Reset labels parameters
                     labelCharSize = { width: 0.285, height: 0.375 };
@@ -2140,8 +2488,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                     
                 case 'DF': // Default Settings
-                    p1X = PAPER_MIN_X; p1Y = PAPER_MIN_Y;
-                    p2X = PAPER_MAX_X; p2Y = PAPER_MAX_Y;
+                    p1X = defaultP1X; p1Y = defaultP1Y;
+                    p2X = defaultP2X; p2Y = defaultP2Y;
                     userScaleActive = false;
                     labelCharSize = { width: 0.285, height: 0.375 };
                     labelDirection = { run: 1, rise: 0 };
@@ -2373,8 +2721,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         p2X = params[2]; p2Y = params[3];
                     } else {
                         // Reset defaults
-                        p1X = PAPER_MIN_X; p1Y = PAPER_MIN_Y;
-                        p2X = PAPER_MAX_X; p2Y = PAPER_MAX_Y;
+                        p1X = defaultP1X; p1Y = defaultP1Y;
+                        p2X = defaultP2X; p2Y = defaultP2Y;
                     }
                     break;
                     
@@ -2546,6 +2894,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         labelText = rawParamStr; // fallback if terminator is missing
                     }
+                    lastLabelLength = labelText.length;
                     
                     const angle = Math.atan2(labelDirection.rise, labelDirection.run);
                     
@@ -2844,11 +3193,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (widthUnit === 1) {
                             width = width * 0.025; // 1 plu = 0.025 mm
                         }
-                        const targetPen = params[1] !== undefined ? Math.floor(params[1]) : selectedPen;
+                        const targetPen = params[1] !== undefined ? Math.floor(params[1]) : logicalSelectedPen;
                         if (targetPen >= 1 && targetPen <= 8) {
-                            penWidths[targetPen] = width;
-                            const inputEl = document.getElementById(`width-pen-${targetPen}`);
-                            if (inputEl) inputEl.value = width;
+                            actionQueue.push({ type: 'state', key: 'penWidth', val: { pen: targetPen, width: width } });
                         }
                     }
                     break;
@@ -2866,18 +3213,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         const b = Math.max(0, Math.min(255, Math.floor(params[3])));
                         if (targetPen >= 1 && targetPen <= 8) {
                             const hexColor = "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
-                            penColors[targetPen] = hexColor;
-                            document.documentElement.style.setProperty(`--pen-${targetPen}-color`, hexColor);
-                            const penBody = document.getElementById(`pen-body-${targetPen}`);
-                            if (penBody) penBody.style.backgroundColor = hexColor;
-                            const previewColor = document.getElementById(`preview-color-${targetPen}`);
-                            if (previewColor) previewColor.style.backgroundColor = hexColor;
-                            const colorPicker = document.getElementById(`picker-color-${targetPen}`);
-                            if (colorPicker) colorPicker.value = hexColor;
-                            
-                            if (selectedPen === targetPen && carriagePenTip) {
-                                carriagePenTip.style.backgroundColor = hexColor;
-                            }
+                            actionQueue.push({ type: 'state', key: 'penColor', val: { pen: targetPen, color: hexColor } });
                         }
                     }
                     break;
@@ -2938,6 +3274,190 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (hpglLevel !== 'hpgl2') {
                         ledError.classList.add('active');
                         break;
+                    }
+                    break;
+
+                case 'BZ': // Bezier Absolute
+                    {
+                        const startCoords = getLogicalUserCoordinates();
+                        let currentBezierX = startCoords.x;
+                        let currentBezierY = startCoords.y;
+                        
+                        for (let i = 0; i < params.length - 5; i += 6) {
+                            const p1x = params[i];
+                            const p1y = params[i+1];
+                            const p2x = params[i+2];
+                            const p2y = params[i+3];
+                            const p3x = params[i+4];
+                            const p3y = params[i+5];
+                            
+                            const steps = 30;
+                            for (let j = 1; j <= steps; j++) {
+                                const t = j / steps;
+                                const mt = 1 - t;
+                                const mt2 = mt * mt;
+                                const mt3 = mt2 * mt;
+                                const t2 = t * t;
+                                const t3 = t2 * t;
+                                
+                                const px = mt3 * currentBezierX + 3 * mt2 * t * p1x + 3 * mt * t2 * p2x + t3 * p3x;
+                                const py = mt3 * currentBezierY + 3 * mt2 * t * p1y + 3 * mt * t2 * p2y + t3 * p3y;
+                                
+                                const pt = scaleCoordinate(px, py);
+                                targetX = pt.x;
+                                targetY = pt.y;
+                                
+                                if (polygonMode) {
+                                    polygonBuffer.push({ x: targetX, y: targetY, draw: (penStateLogical === 'down') });
+                                } else {
+                                    actionQueue.push({ type: 'move', x: targetX, y: targetY, draw: (penStateLogical === 'down') });
+                                }
+                            }
+                            currentBezierX = p3x;
+                            currentBezierY = p3y;
+                        }
+                    }
+                    break;
+                    
+                case 'BR': // Bezier Relative
+                    {
+                        const startCoords = getLogicalUserCoordinates();
+                        let currentBezierX = startCoords.x;
+                        let currentBezierY = startCoords.y;
+                        
+                        for (let i = 0; i < params.length - 5; i += 6) {
+                            const p1x = currentBezierX + params[i];
+                            const p1y = currentBezierY + params[i+1];
+                            const p2x = currentBezierX + params[i+2];
+                            const p2y = currentBezierY + params[i+3];
+                            const p3x = currentBezierX + params[i+4];
+                            const p3y = currentBezierY + params[i+5];
+                            
+                            const steps = 30;
+                            for (let j = 1; j <= steps; j++) {
+                                const t = j / steps;
+                                const mt = 1 - t;
+                                const mt2 = mt * mt;
+                                const mt3 = mt2 * mt;
+                                const t2 = t * t;
+                                const t3 = t2 * t;
+                                
+                                const px = mt3 * currentBezierX + 3 * mt2 * t * p1x + 3 * mt * t2 * p2x + t3 * p3x;
+                                const py = mt3 * currentBezierY + 3 * mt2 * t * p1y + 3 * mt * t2 * p2y + t3 * p3y;
+                                
+                                const pt = scaleCoordinate(px, py);
+                                targetX = pt.x;
+                                targetY = pt.y;
+                                
+                                if (polygonMode) {
+                                    polygonBuffer.push({ x: targetX, y: targetY, draw: (penStateLogical === 'down') });
+                                } else {
+                                    actionQueue.push({ type: 'move', x: targetX, y: targetY, draw: (penStateLogical === 'down') });
+                                }
+                            }
+                            currentBezierX = p3x;
+                            currentBezierY = p3y;
+                        }
+                    }
+                    break;
+
+                case 'LA': // Line Attribute
+                    {
+                        for (let i = 0; i < params.length - 1; i += 2) {
+                            const kind = Math.floor(params[i]);
+                            const val = params[i+1];
+                            if (kind === 1) { // Line End Type
+                                const capVal = Math.floor(val);
+                                if (capVal === 1) activeLineCap = 'butt';
+                                else if (capVal === 2) activeLineCap = 'square';
+                                else if (capVal === 3) activeLineCap = 'square';
+                                else if (capVal === 4) activeLineCap = 'round';
+                                actionQueue.push({ type: 'state', key: 'lineCap', val: activeLineCap });
+                            } else if (kind === 2) { // Line Join Type
+                                const joinVal = Math.floor(val);
+                                if (joinVal === 1) activeLineJoin = 'miter';
+                                else if (joinVal === 2) activeLineJoin = 'miter';
+                                else if (joinVal === 3) activeLineJoin = 'miter';
+                                else if (joinVal === 4) activeLineJoin = 'round';
+                                else if (joinVal === 5) activeLineJoin = 'bevel';
+                                else if (joinVal === 6) activeLineJoin = 'miter';
+                                actionQueue.push({ type: 'state', key: 'lineJoin', val: activeLineJoin });
+                            } else if (kind === 3) { // Miter Limit
+                                activeMiterLimit = Math.max(1, Math.min(32767, val));
+                                actionQueue.push({ type: 'state', key: 'miterLimit', val: activeMiterLimit });
+                            }
+                        }
+                    }
+                    break;
+
+                case 'PG': // Page Feed
+                    actionQueue.push({ type: 'state', key: 'clear' });
+                    {
+                        const frameHeight = hpglParser ? hpglParser.pictureFrameHeight : 11400;
+                        const homeY = isYInverted() ? frameHeight : 0;
+                        actionQueue.push({ type: 'move', x: 0, y: homeY, draw: false });
+                        targetX = 0;
+                        targetY = homeY;
+                    }
+                    showToast('Page Feed / Canvas Cleared', 'fa-file-lines');
+                    break;
+
+                case 'PS': // Plot Size
+                    if (params.length >= 2) {
+                        const w = params[0];
+                        const h = params[1];
+                        if (hpglParser) {
+                            hpglParser.pictureFrameWidth = w;
+                            hpglParser.pictureFrameHeight = h;
+                        }
+                        actionQueue.push({ type: 'state', key: 'softLimits', val: { x1: 0, y1: 0, x2: w, y2: h } });
+                        showToast(`Plot Size set to ${w} x ${h} PLU`, 'fa-ruler-combined');
+                    } else {
+                        const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
+                        const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
+                        if (hpglParser) {
+                            hpglParser.pictureFrameWidth = limitX;
+                            hpglParser.pictureFrameHeight = limitY;
+                        }
+                        actionQueue.push({ type: 'state', key: 'softLimits', val: { x1: 0, y1: 0, x2: limitX, y2: limitY } });
+                        showToast('Plot Size reset to paper limits', 'fa-ruler-combined');
+                    }
+                    break;
+
+                case 'IR': // Input Relative Scaling Points
+                    {
+                        const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
+                        const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
+                        if (params.length >= 4) {
+                            p1X = (params[0] / 100) * limitX;
+                            p1Y = (params[1] / 100) * limitY;
+                            p2X = (params[2] / 100) * limitX;
+                            p2Y = (params[3] / 100) * limitY;
+                        } else {
+                            p1X = 0;
+                            p1Y = 0;
+                            p2X = limitX;
+                            p2Y = limitY;
+                        }
+                        showToast(`P1/P2 scaling points set via IR`, 'fa-crosshairs');
+                    }
+                    break;
+
+                case 'AC': // Anchor Corner
+                    if (params.length >= 2) {
+                        anchorX = params[0];
+                        anchorY = params[1];
+                    } else {
+                        anchorX = 0;
+                        anchorY = 0;
+                    }
+                    break;
+
+                case 'DV': // Vertical Label Direction
+                    if (params.length > 0 && Math.floor(params[0]) === 1) {
+                        labelDirection = { run: 0, rise: -1 };
+                    } else {
+                        labelDirection = { run: 1, rise: 0 };
                     }
                     break;
 
@@ -3077,12 +3597,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     activeCharSet = 'alternate';
                     break;
                     
+                case 'FI': // Select Primary Font
+                case 'FN': // Select Secondary Font
+                case 'CS': // Designate Standard Character Set
+                case 'CA': // Designate Alternate Character Set
+                case 'SB': // Scalable or Bitmap Fonts
+                case 'CC': // Character Chord Angle
+                case 'CF': // Character Fill Mode
+                case 'CP': // Character Plot
+                case 'LM': // Label Mode
+                case 'LD': // Language Definition
+                case 'DL': // Define Downloadable Character
+                case 'RF': // Raster Fill Definition
+                case 'SV': // Screened Vectors
+                case 'AP': // Automatic Pen Operations
+                case 'PP': // Pixel Placement
+                case 'CR': // Color Range
                 case 'TD': // Transparent Data
                 case 'AS': // Acceleration Select
                 case 'FS': // Force Select
                 case 'NP': // Number of Pens
                 case 'TR': // Transparency mode
                 case 'MC': // Merge Control
+                case 'BP': // Begin Plot
+                case 'RP': // Replot
+                case 'BL': // Buffer Label
                     // Safely stubbed to prevent lighting the console Error LED
                     console.log(`HP-GL/2 Command stubbed: ${mnemonic} with params: ${params.join(`,`)}`);
                     break;
@@ -3116,6 +3655,156 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function isYInverted() {
         return hpglParser && (hpglParser.currentMode === 'HPGL2_STANDALONE' || hpglParser.currentMode === 'HPGL2_ANCHORED');
+    }
+
+    function getLogicalUserCoordinates() {
+        let ux = targetX;
+        let uy = targetY;
+        
+        const frameHeight = autoScaleActive ? (activePaperOrientation === 'portrait' ? 16000 : 11400) : (hpglParser ? hpglParser.pictureFrameHeight : 11400);
+        
+        // Reverse RO rotation around P1 if active
+        if (coordinateRotation !== 0) {
+            let rx = targetX - p1X;
+            let ry = targetY - p1Y;
+            if (isYInverted()) {
+                ry = frameHeight - targetY - p1Y;
+            }
+            let ox, oy;
+            switch (coordinateRotation) {
+                case 90:  ox = ry; oy = -rx; break;
+                case 180: ox = -rx; oy = -ry; break;
+                case 270: ox = -ry; oy = rx; break;
+                default:  ox = rx; oy = ry; break;
+            }
+            ux = p1X + ox;
+            uy = p1Y + oy;
+        } else {
+            if (isYInverted()) {
+                uy = frameHeight - targetY;
+            }
+        }
+        
+        // Reverse SC scaling
+        if (userScaleActive) {
+            const xPct = (ux - p1X) / ((p2X - p1X) || 1);
+            const yPct = (uy - p1Y) / ((p2Y - p1Y) || 1);
+            ux = userX1 + xPct * (userX2 - userX1);
+            uy = userY1 + yPct * (userY2 - userY1);
+        } else if (autoScaleActive) {
+            ux = (ux - fitOffsetX) / fitScale + scannedMinX;
+            uy = (uy - fitOffsetY) / fitScale + scannedMinY;
+        }
+        return { x: ux, y: uy };
+    }
+
+    function decodePolylineEncoded(encodedStr, startX, startY) {
+        let state = {
+            currentX: startX,
+            currentY: startY,
+            penDown: false,
+            absoluteMode: false, // Default is relative
+            fractionalBits: 0,   // Set if '<' flag is encountered
+        };
+        
+        let index = 0;
+        let len = encodedStr.length;
+        let output = [];
+        let isFirstPair = true;
+        
+        function decodePEValue() {
+            let N = 0;
+            let shift = 0;
+            let charsConsumed = 0;
+            while (index < len) {
+                let char = encodedStr[index];
+                let code = char.charCodeAt(0);
+                let V = code - 63;
+                charsConsumed++;
+                index++;
+                
+                let hasMore = (V & 32) !== 0;
+                V &= 31;
+                N |= (V << shift);
+                shift += 5;
+                
+                if (!hasMore) {
+                    break;
+                }
+            }
+            
+            let isNegative = (N & 1) === 1;
+            N >>>= 1;
+            if (isNegative) {
+                N = ~N;
+            }
+            return N;
+        }
+        
+        while (index < len) {
+            let char = encodedStr[index];
+            
+            if (char === ' ' || char === ',' || char === '\r' || char === '\n') {
+                index++;
+                continue;
+            }
+            
+            if (char === ':' || char === '<' || char === '>' || char === '=' || char === '7' || char === 'F' || char === ';') {
+                index++; // consume flag
+                if (char === ':') {
+                    let penId = decodePEValue();
+                    output.push({ type: 'SELECT_PEN', value: penId });
+                } else if (char === '<') {
+                    let frac = decodePEValue();
+                    state.fractionalBits = frac;
+                } else if (char === '>') {
+                    state.absoluteMode = true;
+                } else if (char === '=') {
+                    state.absoluteMode = false;
+                } else if (char === '7' || char === 'F') {
+                    output.push({ type: 'CLOSE_POLYGON' });
+                } else if (char === ';') {
+                    break;
+                }
+            } else {
+                // Coordinate pair (X and Y)
+                let X = decodePEValue();
+                let Y = decodePEValue();
+                
+                if (state.fractionalBits > 0) {
+                    let divisor = Math.pow(2, state.fractionalBits);
+                    X /= divisor;
+                    Y /= divisor;
+                }
+                
+                let targetX, targetY;
+                if (state.absoluteMode) {
+                    targetX = X;
+                    targetY = Y;
+                    state.absoluteMode = false;
+                } else {
+                    targetX = state.currentX + X;
+                    targetY = state.currentY + Y;
+                }
+                
+                if (isFirstPair) {
+                    state.penDown = false;
+                    isFirstPair = false;
+                } else {
+                    state.penDown = true;
+                }
+                
+                output.push({
+                    type: state.penDown ? 'POLYLINE' : 'MOVE',
+                    x: targetX,
+                    y: targetY
+                });
+                
+                state.currentX = targetX;
+                state.currentY = targetY;
+            }
+        }
+        return output;
     }
 
     // Helper: Scales user coordinates (via SC) into raw plotter units,
@@ -3162,7 +3851,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Y-axis inversion for HP-GL/2 standalone/anchored modes
         if (hpglParser && (hpglParser.currentMode === 'HPGL2_STANDALONE' || hpglParser.currentMode === 'HPGL2_ANCHORED')) {
-            py = hpglParser.pictureFrameHeight - py;
+            const frameHeight = autoScaleActive ? (activePaperOrientation === 'portrait' ? 16000 : 11400) : hpglParser.pictureFrameHeight;
+            py = frameHeight - py;
         }
 
         return { x: px, y: py };
@@ -3457,6 +4147,65 @@ document.addEventListener('DOMContentLoaded', () => {
                         pointsScanned++;
                     }
                 }
+            } else if (mnemonic === 'PE') {
+                const decCommands = decodePolylineEncoded(paramStr, localX, localY);
+                for (const cmd of decCommands) {
+                    if (cmd.type === 'MOVE' || cmd.type === 'POLYLINE') {
+                        let px = cmd.x;
+                        let py = cmd.y;
+                        if (activeScale) {
+                            const xPct = (px - usX1) / ((usX2 - usX1) || 1);
+                            const yPct = (py - usY1) / ((usY2 - usY1) || 1);
+                            px = p1x + xPct * (p2x - p1x);
+                            py = p1y + yPct * (p2y - p1y);
+                        }
+                        localX = px;
+                        localY = py;
+                        minX = Math.min(minX, px);
+                        maxX = Math.max(maxX, px);
+                        minY = Math.min(minY, py);
+                        maxY = Math.max(maxY, py);
+                        pointsScanned++;
+                    }
+                }
+            } else if (mnemonic === 'BZ') {
+                for (let i = 0; i < params.length; i += 2) {
+                    if (params[i+1] !== undefined) {
+                        let px = params[i];
+                        let py = params[i+1];
+                        if (activeScale) {
+                            const xPct = (px - usX1) / ((usX2 - usX1) || 1);
+                            const yPct = (py - usY1) / ((usY2 - usY1) || 1);
+                            px = p1x + xPct * (p2x - p1x);
+                            py = p1y + yPct * (p2y - p1y);
+                        }
+                        localX = px;
+                        localY = py;
+                        minX = Math.min(minX, px);
+                        maxX = Math.max(maxX, px);
+                        minY = Math.min(minY, py);
+                        maxY = Math.max(maxY, py);
+                        pointsScanned++;
+                    }
+                }
+            } else if (mnemonic === 'BR') {
+                for (let i = 0; i < params.length; i += 2) {
+                    if (params[i+1] !== undefined) {
+                        let dx = params[i];
+                        let dy = params[i+1];
+                        if (activeScale) {
+                            dx = dx * (Math.abs(p2x - p1x) / (Math.abs(usX2 - usX1) || 1));
+                            dy = dy * (Math.abs(p2y - p1y) / (Math.abs(usY2 - usY1) || 1));
+                        }
+                        localX += dx;
+                        localY += dy;
+                        minX = Math.min(minX, localX);
+                        maxX = Math.max(maxX, localX);
+                        minY = Math.min(minY, localY);
+                        maxY = Math.max(maxY, localY);
+                        pointsScanned++;
+                    }
+                }
             } else if (mnemonic === 'EA' || mnemonic === 'RA') {
                 if (params.length >= 2) {
                     let px = params[0];
@@ -3720,10 +4469,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     if (cleanValue) {
-                        logCommand(cleanValue);
+                        currentHPGLText += cleanValue;
                         if (hpglParser) {
                             const tokens = hpglParser.parse(cleanValue);
                             for (const token of tokens) {
+                                if (token.raw) {
+                                    logCommand(token.raw);
+                                }
                                 await executeParsedToken(token);
                             }
                         }
@@ -4026,6 +4778,14 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`Auto scaling: ${autoScaleActive ? 'ON' : 'OFF'}`, 'fa-compress');
     });
     
+    const selectExportRes = document.getElementById('select-export-res');
+    if (selectExportRes) {
+        selectExportRes.addEventListener('change', (e) => {
+            exportResolution = e.target.value;
+            showToast(`Export Resolution: ${exportResolution === 'standard' ? 'Standard' : exportResolution === 'high' ? '2K High' : '4K Ultra'}`, 'fa-image');
+        });
+    }
+    
     chkSoundFx.addEventListener('change', (e) => {
         soundFxEnabled = e.target.checked;
         if (!soundFxEnabled) updateMotorSound(0);
@@ -4131,6 +4891,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Toast Messages system
     function showToast(msg, icon = 'fa-check') {
+        if (isSilentReplay) return;
         const toast = document.createElement('div');
         toast.className = 'toast-feedback';
         toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${msg}</span>`;
@@ -4263,6 +5024,7 @@ document.addEventListener('DOMContentLoaded', () => {
         debugState = 'paused';
         actionQueue = []; // clear current motion queue
         labelTerminator = 3; // Reset global emulator terminator to ETX
+        currentHPGLText = hpglText;
         
         // Reset parser state to start fresh
         if (hpglParser) {
@@ -4624,42 +5386,326 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function getExportedPlotCanvas() {
+        if (exportResolution === 'standard') {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            if (activePaperColor !== 'transparent') {
+                let paperColorHex = '#faf9f6';
+                if (activePaperColor === 'white') paperColorHex = '#ffffff';
+                else if (activePaperColor === 'blueprint') paperColorHex = '#0f172a';
+                else if (activePaperColor === 'black') paperColorHex = '#1c1917';
+                else if (activePaperColor === 'green') paperColorHex = '#ecfdf5';
+                else if (activePaperColor === 'paleblue') paperColorHex = '#eff6ff';
+                else if (activePaperColor === 'paleyellow') paperColorHex = '#fefce8';
+                else if (activePaperColor === 'palepink') paperColorHex = '#fdf2f8';
+                else if (activePaperColor === 'mattefilm') paperColorHex = 'rgba(228, 228, 231, 0.65)';
+                
+                tempCtx.fillStyle = paperColorHex;
+                tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            }
+            if (bgCanvas) {
+                tempCtx.drawImage(bgCanvas, 0, 0);
+            }
+            tempCtx.drawImage(canvas, 0, 0);
+            return tempCanvas;
+        }
+
+        // Approach B: High Resolution offscreen render
+        let baseBedWidth = 2048;
+        let baseBedHeight = 1448;
+        if (exportResolution === 'ultra') {
+            baseBedWidth = activePaperOrientation === 'portrait' ? 2896 : 4096;
+            baseBedHeight = activePaperOrientation === 'portrait' ? 4096 : 2896;
+        } else {
+            baseBedWidth = activePaperOrientation === 'portrait' ? 1448 : 2048;
+            baseBedHeight = activePaperOrientation === 'portrait' ? 2048 : 1448;
+        }
+
+        let paperScaleW = 1.0;
+        let paperScaleH = 1.0;
+        if (activePaperSize === 'A4') {
+            paperScaleW = 0.7071;
+            paperScaleH = 0.7071;
+        } else if (activePaperSize === 'A5') {
+            paperScaleW = 0.5;
+            paperScaleH = 0.5;
+        } else if (activePaperSize === 'Letter') {
+            paperScaleW = 279.4 / 420;  // 0.6652
+            paperScaleH = 215.9 / 297; // 0.7269
+        }
+
+        const exportWidth = Math.round(baseBedWidth * paperScaleW);
+        const exportHeight = Math.round(baseBedHeight * paperScaleH);
+
+        const exportCanvas = document.createElement('canvas');
+        const exportBgCanvas = document.createElement('canvas');
+        const exportBedCanvas = document.createElement('canvas');
+        
+        exportCanvas.width = exportWidth;
+        exportCanvas.height = exportHeight;
+        exportBgCanvas.width = exportWidth;
+        exportBgCanvas.height = exportHeight;
+        exportBedCanvas.width = exportWidth;
+        exportBedCanvas.height = exportHeight;
+        
+        const exportCtx = exportCanvas.getContext('2d');
+        const exportBgCtx = exportBgCanvas.getContext('2d');
+        const exportBedCtx = exportBedCanvas.getContext('2d');
+
+        const originalCanvas = canvas;
+        const originalBgCanvas = bgCanvas;
+        const originalBedCanvas = bedCanvas;
+        const originalCtx = ctx;
+        const originalBgCtx = bgCtx;
+        const originalBedCtx = bedCtx;
+        const originalCanvasRect = canvasRectCached;
+        const originalBedScale = bedScale;
+        const originalInstantDraw = isInstantDraw;
+        const originalActionQueue = actionQueue;
+        const originalHPGLParser = hpglParser;
+        
+        const originalCurrentX = currentX;
+        const originalCurrentY = currentY;
+        const originalPenState = penState;
+        const originalPenStateLogical = penStateLogical;
+        const originalSelectedPen = selectedPen;
+        const originalLogicalSelectedPen = logicalSelectedPen;
+        const originalActiveLineType = activeLineType;
+        const originalActiveLineCap = activeLineCap;
+        const originalActiveLineJoin = activeLineJoin;
+        const originalActiveMiterLimit = activeMiterLimit;
+        const originalSoftLimitX1 = softLimitX1;
+        const originalSoftLimitY1 = softLimitY1;
+        const originalSoftLimitX2 = softLimitX2;
+        const originalSoftLimitY2 = softLimitY2;
+        const originalUserScaleActive = userScaleActive;
+        const originalUserX1 = userX1; const originalUserX2 = userX2;
+        const originalUserY1 = userY1; const originalUserY2 = userY2;
+        const originalP1X = p1X; const originalP1Y = p1Y;
+        const originalP2X = p2X; const originalP2Y = p2Y;
+
+        canvas = exportCanvas;
+        bgCanvas = exportBgCanvas;
+        bedCanvas = exportBedCanvas;
+        ctx = exportCtx;
+        bgCtx = exportBgCtx;
+        bedCtx = exportBedCtx;
+        
+        canvasRectCached = {
+            width: exportWidth,
+            height: exportHeight,
+            left: 0, top: 0, right: exportWidth, bottom: exportHeight
+        };
+        const limitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
+        const limitY = activePaperOrientation === 'portrait' ? 16000 : 11400;
+        const scaleX = (activePaperOrientation === 'portrait' ? exportHeight : exportWidth) / limitX;
+        const scaleY = (activePaperOrientation === 'portrait' ? exportWidth : exportHeight) / limitY;
+        bedScale = Math.min(scaleX, scaleY);
+        
+        isInstantDraw = true;
+        isSilentReplay = true;
+        actionQueue = [];
+
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        try {
+            drawGraticuleGrid();
+            drawBackgroundTemplate();
+
+            if (currentHPGLText && hpglParser) {
+                const tempParser = new HPGLMultiModeParser({
+                    initialMode: hpglLevel === 'hpgl2' ? 'HPGL2_STANDALONE' : 'LEGACY_HPGL'
+                });
+                hpglParser = tempParser; // Redirect global parser reference
+                
+                currentX = 0;
+                currentY = 0;
+                penState = 'up';
+                penStateLogical = 'up';
+                selectedPen = 0;
+                logicalSelectedPen = 0;
+                activeLineType = 'solid';
+                activeLineCap = 'butt';
+                activeLineJoin = 'miter';
+                activeMiterLimit = 10;
+                userScaleActive = false;
+                p1X = defaultP1X; p1Y = defaultP1Y;
+                p2X = defaultP2X; p2Y = defaultP2Y;
+
+                const tokens = tempParser.parse(currentHPGLText);
+                const flushed = tempParser.flush();
+                const allTokens = tokens.concat(flushed);
+                
+                for (const token of allTokens) {
+                    if (token.type === 'HPGL_COMMAND') {
+                        const m = token.mnemonic;
+                        if (m === 'PE') {
+                            const startCoords = getLogicalUserCoordinates();
+                            const commands = decodePolylineEncoded(token.encodedData, startCoords.x, startCoords.y);
+                            for (const cmd of commands) {
+                                if (cmd.type === 'SELECT_PEN') {
+                                    executeHPGLCommand('SP', [cmd.value], `SP${cmd.value}`);
+                                } else if (cmd.type === 'CLOSE_POLYGON') {
+                                    if (polygonMode) {
+                                        if (polygonBuffer.length > 0) {
+                                            polygonBuffer.push({ x: polygonBuffer[0].x, y: polygonBuffer[0].y, draw: true });
+                                        }
+                                    }
+                                } else {
+                                    const pt = scaleCoordinate(cmd.x, cmd.y);
+                                    targetX = pt.x;
+                                    targetY = pt.y;
+                                    if (polygonMode) {
+                                        polygonBuffer.push({ x: targetX, y: targetY, draw: (cmd.type === 'POLYLINE') });
+                                    } else {
+                                        actionQueue.push({ type: 'state', key: 'penState', val: (cmd.type === 'POLYLINE' ? 'down' : 'up') });
+                                        actionQueue.push({ type: 'move', x: targetX, y: targetY, draw: (cmd.type === 'POLYLINE') });
+                                    }
+                                }
+                            }
+                        } else {
+                            let paramStr = '';
+                            if (token.raw && token.raw.length >= 2) {
+                                paramStr = token.raw.substring(2);
+                            }
+                            executeHPGLCommand(token.mnemonic, token.params, paramStr);
+                        }
+                    }
+                }
+
+                while (actionQueue.length > 0) {
+                    const currentAction = actionQueue.shift();
+                    if (currentAction.type === 'move') {
+                        if (currentAction.draw && penState === 'down' && selectedPen > 0) {
+                            drawLineSegment(currentX, currentY, currentAction.x, currentAction.y);
+                        }
+                        currentX = currentAction.x;
+                        currentY = currentAction.y;
+                    } else if (currentAction.type === 'state') {
+                        if (currentAction.key === 'penState') {
+                            penState = currentAction.val;
+                        } else if (currentAction.key === 'takePen') {
+                            selectedPen = currentAction.val;
+                        } else if (currentAction.key === 'putPen') {
+                            selectedPen = 0;
+                        } else if (currentAction.key === 'lineType') {
+                            activeLineType = currentAction.val;
+                        } else if (currentAction.key === 'lineCap') {
+                            activeLineCap = currentAction.val;
+                        } else if (currentAction.key === 'lineJoin') {
+                            activeLineJoin = currentAction.val;
+                        } else if (currentAction.key === 'miterLimit') {
+                            activeMiterLimit = currentAction.val;
+                        } else if (currentAction.key === 'softLimits') {
+                            softLimitX1 = currentAction.val.x1;
+                            softLimitY1 = currentAction.val.y1;
+                            softLimitX2 = currentAction.val.x2;
+                            softLimitY2 = currentAction.val.y2;
+                        } else if (currentAction.key === 'clear') {
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        } else if (currentAction.key === 'fillPolygon') {
+                            drawFillPolygon(
+                                currentAction.val,
+                                currentAction.penIndex,
+                                currentAction.fillType !== undefined ? currentAction.fillType : 1,
+                                currentAction.fillSpacing !== undefined ? currentAction.fillSpacing : 0,
+                                currentAction.fillAngle !== undefined ? currentAction.fillAngle : 0
+                            );
+                        } else if (currentAction.key === 'penColor') {
+                            const { pen, color } = currentAction.val;
+                            penColors[pen] = color;
+                            document.documentElement.style.setProperty(`--pen-${pen}-color`, color);
+                            const penBody = document.getElementById(`pen-body-${pen}`);
+                            if (penBody) penBody.style.backgroundColor = color;
+                            const previewColor = document.getElementById(`preview-color-${pen}`);
+                            if (previewColor) previewColor.style.backgroundColor = color;
+                            const colorPicker = document.getElementById(`picker-color-${pen}`);
+                            if (colorPicker) colorPicker.value = color;
+                            if (selectedPen === pen && carriagePenTip) {
+                                carriagePenTip.style.backgroundColor = color;
+                            }
+                        } else if (currentAction.key === 'penWidth') {
+                            const { pen, width } = currentAction.val;
+                            penWidths[pen] = width;
+                            const inputEl = document.getElementById(`width-pen-${pen}`);
+                            if (inputEl) inputEl.value = width;
+                        }
+                    }
+                }
+            }
+        } finally {
+            canvas = originalCanvas;
+            bgCanvas = originalBgCanvas;
+            bedCanvas = originalBedCanvas;
+            ctx = originalCtx;
+            bgCtx = originalBgCtx;
+            bedCtx = originalBedCtx;
+            canvasRectCached = originalCanvasRect;
+            bedScale = originalBedScale;
+            isInstantDraw = originalInstantDraw;
+            actionQueue = originalActionQueue;
+            hpglParser = originalHPGLParser;
+            
+            currentX = originalCurrentX;
+            currentY = originalCurrentY;
+            penState = originalPenState;
+            penStateLogical = originalPenStateLogical;
+            selectedPen = originalSelectedPen;
+            logicalSelectedPen = originalLogicalSelectedPen;
+            activeLineType = originalActiveLineType;
+            activeLineCap = originalActiveLineCap;
+            activeLineJoin = originalActiveLineJoin;
+            activeMiterLimit = originalActiveMiterLimit;
+            softLimitX1 = originalSoftLimitX1;
+            softLimitY1 = originalSoftLimitY1;
+            softLimitX2 = originalSoftLimitX2;
+            softLimitY2 = originalSoftLimitY2;
+            userScaleActive = originalUserScaleActive;
+            userX1 = originalUserX1; userX2 = originalUserX2;
+            userY1 = originalUserY1; userY2 = originalUserY2;
+            p1X = originalP1X; p1Y = originalP1Y;
+            p2X = originalP2X; p2Y = originalP2Y;
+            isSilentReplay = false;
+        }
+
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = exportWidth;
+        finalCanvas.height = exportHeight;
+        const finalCtx = finalCanvas.getContext('2d');
+        
+        if (activePaperColor !== 'transparent') {
+            let paperColorHex = '#faf9f6';
+            if (activePaperColor === 'white') paperColorHex = '#ffffff';
+            else if (activePaperColor === 'blueprint') paperColorHex = '#0f172a';
+            else if (activePaperColor === 'black') paperColorHex = '#1c1917';
+            else if (activePaperColor === 'green') paperColorHex = '#ecfdf5';
+            else if (activePaperColor === 'paleblue') paperColorHex = '#eff6ff';
+            else if (activePaperColor === 'paleyellow') paperColorHex = '#fefce8';
+            else if (activePaperColor === 'palepink') paperColorHex = '#fdf2f8';
+            else if (activePaperColor === 'mattefilm') paperColorHex = 'rgba(228, 228, 231, 0.65)';
+            
+            finalCtx.fillStyle = paperColorHex;
+            finalCtx.fillRect(0, 0, exportWidth, exportHeight);
+        }
+        
+        finalCtx.drawImage(exportBgCanvas, 0, 0);
+        finalCtx.drawImage(exportCanvas, 0, 0);
+        
+        return finalCanvas;
+    }
+
     // Copy Canvas Plot button
     const btnCopyCanvas = document.getElementById('btn-copy-canvas');
     if (btnCopyCanvas) {
         btnCopyCanvas.addEventListener('click', () => {
             playClick();
             try {
-                // Create a temporary canvas matching the plotter canvas dimensions
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
-                const tempCtx = tempCanvas.getContext('2d');
-                
-                // 1. Draw Paper Color Background Fill (skip for transparent film to preserve alpha transparency)
-                if (activePaperColor !== 'transparent') {
-                    let paperColorHex = '#faf9f6'; // cream default
-                    if (activePaperColor === 'white') paperColorHex = '#ffffff';
-                    else if (activePaperColor === 'blueprint') paperColorHex = '#0f172a';
-                    else if (activePaperColor === 'black') paperColorHex = '#1c1917';
-                    else if (activePaperColor === 'green') paperColorHex = '#ecfdf5';
-                    else if (activePaperColor === 'paleblue') paperColorHex = '#eff6ff';
-                    else if (activePaperColor === 'paleyellow') paperColorHex = '#fefce8';
-                    else if (activePaperColor === 'palepink') paperColorHex = '#fdf2f8';
-                    else if (activePaperColor === 'mattefilm') paperColorHex = 'rgba(228, 228, 231, 0.65)';
-                    
-                    tempCtx.fillStyle = paperColorHex;
-                    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-                }
-                
-                // 2. Draw Background Template Lines (Grids, borders, etc. from bgCanvas)
-                if (bgCanvas) {
-                    tempCtx.drawImage(bgCanvas, 0, 0);
-                }
-                
-                // 3. Draw Foreground Plotter Vector Lines (from active canvas)
-                tempCtx.drawImage(canvas, 0, 0);
-                
+                const tempCanvas = getExportedPlotCanvas();
                 tempCanvas.toBlob(blob => {
                     if (!blob) {
                         showToast('Canvas is empty!', 'fa-circle-xmark');
@@ -4686,43 +5732,12 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSaveCanvas.addEventListener('click', () => {
             playClick();
             try {
-                // Create a temporary canvas matching the plotter canvas dimensions
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = canvas.width;
-                tempCanvas.height = canvas.height;
-                const tempCtx = tempCanvas.getContext('2d');
-                
-                // 1. Draw Paper Color Background Fill (skip for transparent film to preserve alpha transparency)
-                if (activePaperColor !== 'transparent') {
-                    let paperColorHex = '#faf9f6'; // cream default
-                    if (activePaperColor === 'white') paperColorHex = '#ffffff';
-                    else if (activePaperColor === 'blueprint') paperColorHex = '#0f172a';
-                    else if (activePaperColor === 'black') paperColorHex = '#1c1917';
-                    else if (activePaperColor === 'green') paperColorHex = '#ecfdf5';
-                    else if (activePaperColor === 'paleblue') paperColorHex = '#eff6ff';
-                    else if (activePaperColor === 'paleyellow') paperColorHex = '#fefce8';
-                    else if (activePaperColor === 'palepink') paperColorHex = '#fdf2f8';
-                    else if (activePaperColor === 'mattefilm') paperColorHex = 'rgba(228, 228, 231, 0.65)';
-                    
-                    tempCtx.fillStyle = paperColorHex;
-                    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
-                }
-                
-                // 2. Draw Background Template Lines (Grids, borders, etc. from bgCanvas)
-                if (bgCanvas) {
-                    tempCtx.drawImage(bgCanvas, 0, 0);
-                }
-                
-                // 3. Draw Foreground Plotter Vector Lines (from active canvas)
-                tempCtx.drawImage(canvas, 0, 0);
-                
-                // 4. Trigger file download
+                const tempCanvas = getExportedPlotCanvas();
                 const dataUrl = tempCanvas.toDataURL('image/png');
                 const link = document.createElement('a');
-                link.download = `hp-plotter-export-${Date.now()}.png`;
+                link.download = `plotter-export-${Date.now()}.png`;
                 link.href = dataUrl;
                 link.click();
-                
                 showToast('Plot image saved successfully!', 'fa-download');
             } catch (e) {
                 console.error('Canvas export error:', e);
@@ -4789,7 +5804,20 @@ document.addEventListener('DOMContentLoaded', () => {
             // Defer calculations until DOM reflow is complete
             setTimeout(() => {
                 cacheLayoutDimensions();
+                
+                // Reset scales on orientation change
+                p1X = defaultP1X;
+                p1Y = defaultP1Y;
+                p2X = defaultP2X;
+                p2Y = defaultP2Y;
+                userScaleActive = false;
+                userX1 = 0;
+                userX2 = 1;
+                userY1 = 0;
+                userY2 = 1;
+                
                 initCanvas();
+                clearDrawingCanvas();
                 updateCarriageDOM(currentX, currentY);
             }, 60);
         });
@@ -4799,6 +5827,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (selectPaperSize) {
         selectPaperSize.addEventListener('change', (e) => {
             activePaperSize = e.target.value;
+            resetSoftLimits();
             
             // Move carriage to top-right of new layout by default to keep plotter axis synchronized
             const targetLimitX = activePaperOrientation === 'portrait' ? 11400 : 16000;
@@ -4813,7 +5842,20 @@ document.addEventListener('DOMContentLoaded', () => {
             // Defer calculations until DOM reflow is complete
             setTimeout(() => {
                 cacheLayoutDimensions();
+                
+                // Reset scales on paper size change
+                p1X = defaultP1X;
+                p1Y = defaultP1Y;
+                p2X = defaultP2X;
+                p2Y = defaultP2Y;
+                userScaleActive = false;
+                userX1 = 0;
+                userX2 = 1;
+                userY1 = 0;
+                userY2 = 1;
+                
                 initCanvas();
+                clearDrawingCanvas();
                 updateCarriageDOM(currentX, currentY);
             }, 60);
         });
@@ -4968,6 +6010,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (chkAutoScale) {
         autoScaleActive = chkAutoScale.checked;
+    }
+    const startupSelectExportRes = document.getElementById('select-export-res');
+    if (startupSelectExportRes) {
+        exportResolution = startupSelectExportRes.value;
     }
     if (chkSoundFx) {
         soundFxEnabled = chkSoundFx.checked;

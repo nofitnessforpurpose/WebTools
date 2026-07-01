@@ -404,6 +404,15 @@
                             </select>
                         </div>
                         
+                        <div class="control-item" style="margin-top: 10px; margin-bottom: 10px;">
+                            <label class="control-label" for="select-export-res">Copy Paper Bed Resolution</label>
+                            <select id="select-export-res" class="setting-select">
+                                <option value="standard">Standard Screen (1x)</option>
+                                <option value="high" selected>High Resolution (2K)</option>
+                                <option value="ultra">Ultra Print Quality (4K)</option>
+                            </select>
+                        </div>
+                        
                         <div class="control-item-row" style="margin-top: 10px;">
                             <input type="checkbox" id="chk-instant-draw">
                             <label for="chk-instant-draw"><strong>Instant Render</strong> (Bypass animations)</label>
@@ -483,12 +492,15 @@
                                 <option value="plain" selected>Plain Sheet</option>
                                 <option value="engineering">Engineering Sheet</option>
                                 <option value="grid">Centimeter Grid</option>
+                                <option value="grid-blue-cm">Blue Centimeter Grid (No 1mm)</option>
+                                <option value="grid-imperial">Imperial Grid (1 inch)</option>
+                                <option value="isometric">Isometric Grid</option>
+                                <option value="polar">Polar Grid</option>
                                 <option value="loglog">Log-Log Grid (3x3)</option>
                                 <option value="semilog">Semi-Log Grid (3-Cycle Y)</option>
                                 <option value="semilogx">Semi-Log Grid (3-Cycle X)</option>
                                 <option value="smith">Smith Chart (RF)</option>
-                                <option value="polar">Polar Grid</option>
-                                <option value="isometric">Isometric Grid</option>
+                                <option value="music">Music Staff Paper</option>
                             </select>
                         </div>
 

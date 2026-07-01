@@ -172,7 +172,18 @@ class HPGLMultiModeParser {
         if (i + 1 < len) {
             const mnemonic = data.substring(i, i + 2).toUpperCase();
             if (/^[A-Z]{2}$/.test(mnemonic)) {
-                if (mnemonic === 'LB') {
+                if (mnemonic === 'PE') {
+                    const paramStr = data.substring(i + 2);
+                    tokens.push({
+                        type: 'HPGL_COMMAND',
+                        name: 'Polyline Encoded',
+                        mnemonic: 'PE',
+                        raw: data.substring(i),
+                        length: len - i,
+                        params: [],
+                        encodedData: paramStr
+                    });
+                } else if (mnemonic === 'LB') {
                     const paramStr = data.substring(i + 2);
                     tokens.push({
                         type: 'HPGL_COMMAND',
@@ -386,6 +397,32 @@ class HPGLMultiModeParser {
         let i = start + 2;
         let paramStr = '';
 
+        if (mnemonic === 'PE') {
+            let foundSemicolon = false;
+            while (i < len) {
+                if (data[i] === ';') {
+                    foundSemicolon = true;
+                    i++;
+                    break;
+                }
+                paramStr += data[i];
+                i++;
+            }
+            if (!foundSemicolon) {
+                return { incomplete: true };
+            }
+            const raw = data.substring(start, i);
+            return {
+                type: 'HPGL_COMMAND',
+                name: 'Polyline Encoded',
+                mnemonic: 'PE',
+                raw: raw,
+                length: raw.length,
+                params: [],
+                encodedData: paramStr
+            };
+        }
+
         if (mnemonic === 'LB') {
             let termFound = false;
             while (i < len) {
@@ -596,7 +633,42 @@ class HPGLMultiModeParser {
             'CT': 'Chord Tolerance',
             'SM': 'Symbol Mode',
             'DP': 'Digitize Point',
-            'OD': 'Output Digitized Point'
+            'OD': 'Output Digitized Point',
+            'AC': 'Anchor Corner',
+            'AP': 'Automatic Pen Operations',
+            'BL': 'Buffer Label',
+            'BP': 'Begin Plot',
+            'BR': 'Bezier Relative',
+            'BZ': 'Bezier Absolute',
+            'CA': 'Designate Alternate Character Set',
+            'CS': 'Designate Standard Character Set',
+            'CC': 'Character Chord Angle',
+            'CF': 'Character Fill Mode',
+            'CP': 'Character Plot',
+            'CR': 'Color Range',
+            'DL': 'Define Downloadable Character',
+            'DV': 'Vertical Label Direction',
+            'FI': 'Select Primary Font',
+            'FN': 'Select Secondary Font',
+            'IR': 'Input Relative Scaling Points',
+            'LA': 'Line Attribute',
+            'LD': 'Language Definition',
+            'LM': 'Label Mode',
+            'PE': 'Polyline Encoded',
+            'PG': 'Page Feed',
+            'PP': 'Pixel Placement',
+            'PS': 'Plot Size',
+            'RF': 'Raster Fill Definition',
+            'RP': 'Replot',
+            'SB': 'Scalable or Bitmap Fonts',
+            'SV': 'Screened Vectors',
+            'OW': 'Output Window',
+            'OL': 'Output Label Length',
+            'OO': 'Output Options',
+            'OF': 'Output Factors',
+            'OG': 'Output Group',
+            'OK': 'Output Key',
+            'OT': 'Output Tool'
         };
         return names[mnemonic] || `HP-GL Mnemonic ${mnemonic}`;
     }
