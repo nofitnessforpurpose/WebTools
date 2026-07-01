@@ -105,7 +105,8 @@ Graphics Mode:
 
 ## Technical Details
 
-*   **Architecture**: Client-side JavaScript application (no server required).
+*   **Architecture**: Client-side JavaScript application (no server required).  
+*   **Hosting**: May be hosted locally by downloading the repository or run from the link above.  
 
 <BR>
 
