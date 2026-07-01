@@ -94,8 +94,8 @@ Regardless of image width to be printed the GPRINT:(w, memory_address) command r
 
 ## Technical Details
 
-*   **Architecture**: Client-side JavaScript application (no server required).
-
+*   **Architecture**: Client-side JavaScript application (no server required).  
+*   **Hosting**: May be run locally by downloading the repository or from the link above
 <BR>
 
 ## NOTE - BETA Software 
