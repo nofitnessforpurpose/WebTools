@@ -1,6 +1,6 @@
 # LinkTool
 
-A web-based tool for downloading data packs from the Psion Organiser II via the Comms Link interface. This tool implements the Psion Link Protocol to perform boot injection and data pack transfer operations directly in your browser using the Web Serial API.
+A web-based tool for downloading data packs from the Psion Organiser II via the COMMS Link interface. This tool implements the Psion Link Protocol to perform boot injection and data pack transfer operations directly in your browser using the Web Serial API.
 
 ** Use a browser supporting <a href="https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_API">Web Serial</a> e.g. Chrome, IE, (Firefox needs additional software) ***  
 
@@ -17,7 +17,7 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 *   **Web Serial API**: Direct serial communication with Psion Organiser II hardware via browser
 *   **Boot Injection**: Automated bootstrap code download to device RAM
 *   **Pack Reading**: Download data packs from Packs B and C (Read Mode)
-*   **Pack Writing**: Flash .OPK files to Datapacks (Write Mode) - *New!*
+*   **Pack Writing**: Flash .OPK files to Datapacks (Write Mode) - *TBC*
 *   **Protocol Implementation**: Full implementation of the Psion Link Protocol with:
     *   CRC checksums for data integrity
     *   Phase-based state machine (HEADER/BODY phases)
@@ -26,6 +26,7 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 *   **OPK Export**: Save downloaded packs as .OPK files for use with OPK Editor tools
 *   **Debug Mode**: Detailed logging for protocol analysis (append `?debug=true` to URL)
 
+<BR>
 ## Usage
 
 1.  **Connect Hardware**: Connect your Psion Organiser II to your computer via a serial adapter
@@ -36,6 +37,7 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 5.  **Save Pack**: Once complete, click "Save Pack" to download the .OPK file
 6.  **Disconnect**: Click "Disconnect" to release the serial port
 
+<BR>
 ## Technical Details
 
 *   **Architecture**: Client-side JavaScript application
@@ -44,6 +46,7 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 *   **CRC Algorithm**: Check sum verification to ensure data integrity
 *   **Output Format**: OPK files with magic header, length field, and terminator
 
+<BR>
 ## Browser Support
 
 This tool requires a browser with Web Serial API support:
@@ -53,23 +56,26 @@ This tool requires a browser with Web Serial API support:
 
 **Note**: Firefox and Safari do not currently natively support the Web Serial API.
 
-
+<BR>
 ## Credits
 
 *   Protocol documentation by **Jaap Scherphuis** ([www.jaapsch.net/psion/](https://www.jaapsch.net/psion/))
 *   Implemented by **Antigravity**
 *   Re-imagined by **NFfP**
 
+<BR>
 ## License
 
 MIT
 
 Check Attribution [source www](https://www.jaapsch.net/psion/) for elements covered under a Non Commercial basis use.
 
+<BR>
 ## Questions / Discussion
 
 See [Organiser 2](https://www.organiser2.com/) forum.
 
+<BR>
 ## Please note:
 
 All information is For Indication only. No association, affiliation, recommendation, suitability, fitness for purpose should be assumed or is implied. Registered trademarks are owned by their respective registrants.
