@@ -1,6 +1,6 @@
-# Psion Printer II Web Emulator
+# Psion Printer 2 Web Emulator
 
-This web application emulates the **Psion Organiser II Printer II** (based on the Epson M1221 thermal printer mechanism). It connects to a physical Psion Organiser II via a serial cable (using the browser's Web Serial API) and prints text or graphics onto an emulated scrolling paper roll in real-time.
+This web application emulates the **Psion Organiser II Printer 2** (based on the Epson M1221 thermal printer mechanism). It connects to a physical Psion Organiser II via a serial cable (using the browser's Web Serial API) and prints text or graphics onto an emulated scrolling paper roll in real-time.
 
 ## Features
 - **Web Serial Interface**: Receives data directly at 9600 baud.
@@ -9,6 +9,10 @@ This web application emulates the **Psion Organiser II Printer II** (based on th
 - **Hardware Simulation**: Retro style status LEDs (Rx active, Buffer status, Connection state) and simulated thermal paper scroll.
 - **Export Capabilities**: Clear the roll, feed paper, or download the entire print history as a single high-quality PNG image.
 - **Self-Test Mode**: Simulated test print to verify the rendering engine locally.
+
+This repository is intended to be viewed <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2EMU/">here</a>.  
+
+<BR>
 
 ## OPL Stub
 
@@ -28,6 +32,7 @@ GPRINT:(w%, addr%)
     i%=i%+1
   ENDWH
 ```
+<BR>
 
 ## Physical Setup
 1. Connect your Psion Organiser II Comms Link port to your PC using a Comms Link cable connected to a USB-to-Serial converter.
