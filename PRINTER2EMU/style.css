@@ -1396,3 +1396,52 @@ input:checked + .slider:before {
     white-space: nowrap;
 }
 
+/* Print Media Styles (Prints ONLY the paper roll, hiding the UI) */
+@media print {
+    /* Hide everything on the page by default */
+    body * {
+        visibility: hidden !important;
+    }
+    
+    /* Show ONLY the paper roll, container, and its content wrapper elements */
+    .paper-roll-container,
+    .paper-roll,
+    #paperContentWrapper,
+    #paperContentWrapper *,
+    .paper-roll::after {
+        visibility: visible !important;
+    }
+    
+    /* Position and center the paper roll for physical page margins */
+    .paper-roll-container {
+        position: absolute !important;
+        left: 0 !important;
+        top: 0 !important;
+        width: 100% !important;
+        height: auto !important;
+        overflow: visible !important;
+        display: flex !important;
+        justify-content: center !important;
+        background: none !important;
+    }
+    
+    .paper-roll {
+        position: relative !important;
+        box-shadow: none !important;
+        border: none !important;
+        min-height: auto !important;
+        height: auto !important;
+        background-color: var(--paper-bg) !important;
+        print-color-adjust: exact !important;
+        -webkit-print-color-adjust: exact !important;
+    }
+    
+    /* Hide top/bottom spacers and return buttons when printing */
+    #paperTopSpacer,
+    #paperBottomSpacer,
+    .btn-return-bottom {
+        display: none !important;
+        visibility: hidden !important;
+    }
+}
+

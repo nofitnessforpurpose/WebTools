@@ -114,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnFeedPaper = document.getElementById('btnFeedPaper');
     const btnDownloadPrint = document.getElementById('btnDownloadPrint');
     const btnCopyPrint = document.getElementById('btnCopyPrint');
+    const btnPrintPaper = document.getElementById('btnPrintPaper');
     const btnDownloadText = document.getElementById('btnDownloadText');
     const btnCopyText = document.getElementById('btnCopyText');
     const btnClearRoll = document.getElementById('btnClearRoll');
@@ -1214,6 +1215,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     if (btnCopyPrint) btnCopyPrint.addEventListener('click', copyPrintoutImage);
+    if (btnPrintPaper) {
+        btnPrintPaper.addEventListener('click', () => {
+            const wrapper = document.getElementById('paperContentWrapper');
+            const canvases = wrapper ? wrapper.getElementsByTagName('canvas') : [];
+            if (canvases.length === 0) {
+                showToast('No print data to print!', 'fa-circle-xmark');
+                return;
+            }
+            window.print();
+        });
+    }
 
     // Save Text Printout (downloads accumulated text as a .txt file)
     function downloadTextPrintout() {
