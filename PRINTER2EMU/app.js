@@ -1040,6 +1040,112 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     btnClearRoll.addEventListener('click', clearPaperRoll);
 
+    // Stitches all canvas elements into a single export canvas applying simulation filters
+    function stitchPrintoutCanvas(canvases, totalHeight) {
+        // 1. Create intermediate canvas for ink content
+        const inkCanvas = document.createElement('canvas');
+        inkCanvas.width = 640;
+        inkCanvas.height = totalHeight;
+        const inkCtx = inkCanvas.getContext('2d');
+        
+        // 2. Draw all printed canvases onto intermediate ink canvas
+        let currentY = 0;
+        for (let i = 0; i < canvases.length; i++) {
+            inkCtx.drawImage(canvases[i], 0, currentY);
+            currentY += canvases[i].height;
+        }
+        
+        // 3. Apply Paper Degradation (135deg repeating mask) to the ink canvas
+        const degVal = sliderDegradation ? parseInt(sliderDegradation.value) : 0;
+        if (degVal > 0) {
+            const minOpacity = 1 - (degVal / 100) * 0.85;
+            
+            const maskCanvas = document.createElement('canvas');
+            maskCanvas.width = 640;
+            maskCanvas.height = totalHeight;
+            const maskCtx = maskCanvas.getContext('2d');
+            
+            // Create a tile to repeat the 135deg linear gradient
+            const tileCanvas = document.createElement('canvas');
+            tileCanvas.width = 700;
+            tileCanvas.height = 700;
+            const tileCtx = tileCanvas.getContext('2d');
+            
+            const grad = tileCtx.createLinearGradient(700, 0, 0, 700);
+            grad.addColorStop(0/700, 'rgba(0,0,0,1)');
+            grad.addColorStop(120/700, 'rgba(0,0,0,1)');
+            grad.addColorStop(280/700, `rgba(0,0,0,${minOpacity})`);
+            grad.addColorStop(380/700, `rgba(0,0,0,${minOpacity})`);
+            grad.addColorStop(540/700, 'rgba(0,0,0,1)');
+            grad.addColorStop(700/700, 'rgba(0,0,0,1)');
+            
+            tileCtx.fillStyle = grad;
+            tileCtx.fillRect(0, 0, 700, 700);
+            
+            const pattern = maskCtx.createPattern(tileCanvas, 'repeat');
+            maskCtx.fillStyle = pattern;
+            maskCtx.fillRect(0, 0, 640, totalHeight);
+            
+            inkCtx.globalCompositeOperation = 'destination-in';
+            inkCtx.drawImage(maskCanvas, 0, 0);
+        }
+        
+        // 4. Create final export canvas
+        const exportCanvas = document.createElement('canvas');
+        exportCanvas.width = 640;
+        exportCanvas.height = totalHeight;
+        const exportCtx = exportCanvas.getContext('2d');
+        
+        // 4a. Fill paper background
+        exportCtx.fillStyle = currentPaperBg;
+        exportCtx.fillRect(0, 0, 640, totalHeight);
+        
+        // 4b. Draw edge burn borders on export canvas if ageVal > 0
+        const ageVal = sliderPaperAge ? parseInt(sliderPaperAge.value) : 0;
+        if (ageVal > 0) {
+            const factor = ageVal / 100;
+            const inkRgb = hexToRgb(currentInkColor);
+            
+            const sharpOpacity = factor * 0.55;
+            const burnOpacity = factor * 0.12;
+            
+            // Sharp left edge
+            let gradLeftSharp = exportCtx.createLinearGradient(0, 0, 3 * factor, 0);
+            gradLeftSharp.addColorStop(0, `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, ${sharpOpacity})`);
+            gradLeftSharp.addColorStop(1, `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, 0)`);
+            exportCtx.fillStyle = gradLeftSharp;
+            exportCtx.fillRect(0, 0, Math.ceil(3 * factor), totalHeight);
+            
+            // Sharp right edge
+            let gradRightSharp = exportCtx.createLinearGradient(640, 0, 640 - 3 * factor, 0);
+            gradRightSharp.addColorStop(0, `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, ${sharpOpacity})`);
+            gradRightSharp.addColorStop(1, `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, 0)`);
+            exportCtx.fillStyle = gradRightSharp;
+            exportCtx.fillRect(640 - Math.ceil(3 * factor), 0, Math.ceil(3 * factor), totalHeight);
+            
+            // Soft left edge
+            let gradLeftSoft = exportCtx.createLinearGradient(0, 0, 16 * factor, 0);
+            gradLeftSoft.addColorStop(0, `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, ${burnOpacity})`);
+            gradLeftSoft.addColorStop(1, `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, 0)`);
+            exportCtx.fillStyle = gradLeftSoft;
+            exportCtx.fillRect(0, 0, Math.ceil(16 * factor), totalHeight);
+            
+            // Soft right edge
+            let gradRightSoft = exportCtx.createLinearGradient(640, 0, 640 - 16 * factor, 0);
+            gradRightSoft.addColorStop(0, `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, ${burnOpacity})`);
+            gradRightSoft.addColorStop(1, `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, 0)`);
+            exportCtx.fillStyle = gradRightSoft;
+            exportCtx.fillRect(640 - Math.ceil(16 * factor), 0, Math.ceil(16 * factor), totalHeight);
+        }
+        
+        // 4c. Draw ink canvas with the appropriate global alpha (Ink Fade)
+        const fadeVal = sliderInkFade ? parseInt(sliderInkFade.value) : 0;
+        exportCtx.globalAlpha = 1 - (fadeVal / 100) * 0.75;
+        exportCtx.drawImage(inkCanvas, 0, 0);
+        
+        return exportCanvas;
+    }
+
     // Save Printout (Stitches all canvas elements into one image)
     function downloadPrintout() {
         const wrapper = document.getElementById('paperContentWrapper');
@@ -1057,22 +1163,8 @@ document.addEventListener('DOMContentLoaded', () => {
             totalHeight += canvases[i].height;
         }
 
-        // Create temporary canvas
-        const exportCanvas = document.createElement('canvas');
-        exportCanvas.width = 640;
-        exportCanvas.height = totalHeight;
-        
-        const ctx = exportCanvas.getContext('2d');
-        // Fill paper background on export
-        ctx.fillStyle = currentPaperBg;
-        ctx.fillRect(0, 0, 640, totalHeight);
-        
-        // Draw canvases onto export canvas
-        let currentY = 0;
-        for (let i = 0; i < canvases.length; i++) {
-            ctx.drawImage(canvases[i], 0, currentY);
-            currentY += canvases[i].height;
-        }
+        // Create temporary canvas with stitched contents
+        const exportCanvas = stitchPrintoutCanvas(canvases, totalHeight);
 
         // Trigger download
         const link = document.createElement('a');
@@ -1103,19 +1195,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalHeight += canvases[i].height;
             }
 
-            const exportCanvas = document.createElement('canvas');
-            exportCanvas.width = 640;
-            exportCanvas.height = totalHeight;
-            const ctx = exportCanvas.getContext('2d');
-            // Fill paper background on export
-            ctx.fillStyle = currentPaperBg;
-            ctx.fillRect(0, 0, 640, totalHeight);
-
-            let currentY = 0;
-            for (let i = 0; i < canvases.length; i++) {
-                ctx.drawImage(canvases[i], 0, currentY);
-                currentY += canvases[i].height;
-            }
+            // Create temporary canvas with stitched contents
+            const exportCanvas = stitchPrintoutCanvas(canvases, totalHeight);
 
             exportCanvas.toBlob(async (blob) => {
                 try {
