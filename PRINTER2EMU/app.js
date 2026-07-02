@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Psion Organiser II Printer II Emulator - Core Logic & Rendering
+   Psion Organiser II Printer 2 Emulator - Core Logic & Rendering
    ========================================================================== */
 
 // 1. Standard 5x7 GLCD Matrix Font (ASCII 32 - 126)
@@ -113,6 +113,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnPrintTest = document.getElementById('btnPrintTest');
     const btnFeedPaper = document.getElementById('btnFeedPaper');
     const btnDownloadPrint = document.getElementById('btnDownloadPrint');
+    const btnCopyPrint = document.getElementById('btnCopyPrint');
+    const btnDownloadText = document.getElementById('btnDownloadText');
+    const btnCopyText = document.getElementById('btnCopyText');
     const btnClearRoll = document.getElementById('btnClearRoll');
     
     const btnCopyGprint = document.getElementById('btnCopyGprint');
@@ -130,11 +133,57 @@ document.addEventListener('DOMContentLoaded', () => {
     
     const toastContainer = document.getElementById('toastContainer');
     const chkFilterHandshake = document.getElementById('chkFilterHandshake');
+    const chkFocusMode = document.getElementById('chkFocusMode');
+
+    // Thermal Simulation elements
+    const selectPaperPreset = document.getElementById('selectPaperPreset');
+    const sliderInkFade = document.getElementById('sliderInkFade');
+    const labelInkFade = document.getElementById('labelInkFade');
+    const sliderPaperAge = document.getElementById('sliderPaperAge');
+    const labelPaperAge = document.getElementById('labelPaperAge');
+    const sliderJitter = document.getElementById('sliderJitter');
+    const labelJitter = document.getElementById('labelJitter');
+    const sliderDegradation = document.getElementById('sliderDegradation');
+    const labelDegradation = document.getElementById('labelDegradation');
+
+    // Sidebar & Panel elements
+    const guideTrigger = document.getElementById('guide-trigger');
+    const guideTriggerIcon = document.getElementById('guide-trigger-icon');
+    const guidePanel = document.getElementById('guide-panel');
+    const btnCloseGuide = document.getElementById('btn-close-guide');
+
+    const controlsTrigger = document.getElementById('controls-trigger');
+    const controlsTriggerIcon = document.getElementById('controls-trigger-icon');
+    const controlsPanel = document.getElementById('controls-panel');
+    const btnCloseControls = document.getElementById('btn-close-controls');
+
+    const helpTrigger = document.getElementById('help-trigger');
+    const helpTriggerIcon = document.getElementById('help-trigger-icon');
+    const helpPanel = document.getElementById('help-panel');
+    const btnCloseHelp = document.getElementById('btn-close-help');
+
+    // GPRINT Transfer modal elements
+    const btnTransferGprint = document.getElementById('btnTransferGprint');
+    const gprintModal = document.getElementById('gprintModal');
+    const btnCloseGprintModal = document.getElementById('btnCloseGprintModal');
+    const btnCancelGprintTransfer = document.getElementById('btnCancelGprintTransfer');
+    const btnStartGprintTransfer = document.getElementById('btnStartGprintTransfer');
+    const btnDoneGprintTransfer = document.getElementById('btnDoneGprintTransfer');
+    const modalStepWarning = document.getElementById('modalStepWarning');
+    const transferProgressSection = document.getElementById('transferProgressSection');
+    const gprintProgressBar = document.getElementById('gprintProgressBar');
+    const gprintTransferStatus = document.getElementById('gprintTransferStatus');
+    const translationInstructions = document.getElementById('translationInstructions');
 
     // 3. Application State variables
     let port = null;
     let reader = null;
     let keepReading = false;
+    let isPrinterEmulationActive = false;
+    let wasEmulationActiveBeforeTransfer = false;
+    let currentPaperBg = '#ffffff';
+    let currentInkColor = '#000000';
+    let mechanicalJitterAmount = 0; // Max right-shift in pixels
     let isLockedToBottom = true;
     let isProgrammaticScroll = false;
     let programmaticScrollTimeout = null;
@@ -153,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let timeoutTimer = null;
     let lastReceivedWasCr = false;
+    let printedLinesText = []; // Buffers text for saving and copying
     let ignoreHandshake = false; // Filter out startup serial handshakes (like XON/XOFF)
 
     // 4. Utility Functions
@@ -190,12 +240,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isConnected) {
             btnSerialConnect.innerHTML = '<i class="fa-solid fa-unlink"></i> Disconnect';
             ledStatus.className = 'led led-status connected';
-            printStats.textContent = 'Ready';
+            printStats.textContent = 'Idle';
+            printStats.classList.remove('offline');
             showToast('Serial Port Connected!', 'fa-plug-circle-check');
         } else {
             btnSerialConnect.innerHTML = '<i class="fa-solid fa-plug"></i> Connect Serial';
             ledStatus.className = 'led led-status disconnected';
-            printStats.textContent = 'Idle';
+            printStats.textContent = 'Offline';
+            printStats.classList.add('offline');
             showToast('Serial Port Disconnected', 'fa-plug-circle-xmark');
         }
     }
@@ -282,8 +334,196 @@ document.addEventListener('DOMContentLoaded', () => {
             narrowMode: 'normal'
         });
         updateActiveStyleUI();
+
+        // Reset Thermal Print Simulation
+        if (selectPaperPreset) {
+            selectPaperPreset.value = 'standard';
+            currentInkColor = '#000000';
+            document.documentElement.style.setProperty('--ink-color', currentInkColor);
+            localStorage.removeItem('thermalPreset');
+        }
+        if (sliderInkFade) {
+            sliderInkFade.value = 0;
+            if (labelInkFade) labelInkFade.textContent = '0%';
+            document.documentElement.style.setProperty('--ink-fade-opacity', 1);
+            localStorage.removeItem('thermalFade');
+        }
+        if (sliderPaperAge) {
+            sliderPaperAge.value = 0;
+            if (labelPaperAge) labelPaperAge.textContent = '0%';
+            localStorage.removeItem('thermalAge');
+        }
+        updatePaperColor();
+        if (sliderJitter) {
+            sliderJitter.value = 0;
+            if (labelJitter) labelJitter.textContent = '0.0px';
+            mechanicalJitterAmount = 0;
+            localStorage.removeItem('thermalJitter');
+        }
+        if (sliderDegradation) {
+            sliderDegradation.value = 0;
+            if (labelDegradation) labelDegradation.textContent = '0%';
+            document.documentElement.style.setProperty('--degradation-mask', 'none');
+            localStorage.removeItem('thermalDegradation');
+        }
+
         showToast('Settings reset to defaults', 'fa-arrow-rotate-left');
     });
+
+    // Thermal Simulation Event Handlers
+    // Color blending helpers for paper age simulation
+    function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : { r: 255, g: 255, b: 255 };
+    }
+
+    function rgbToHex(r, g, b) {
+        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    function updatePaperColor() {
+        const preset = selectPaperPreset ? selectPaperPreset.value : 'standard';
+        const ageVal = sliderPaperAge ? parseInt(sliderPaperAge.value) : 0;
+        
+        let baseBg = '#ffffff';
+        if (preset === 'aged') {
+            baseBg = '#fef08a';
+        }
+        
+        const baseRgb = hexToRgb(baseBg);
+        const targetRgb = hexToRgb('#e2cd9c'); // Warm vintage aged yellow/sepia paper color
+        
+        const factor = ageVal / 100;
+        const r = Math.round(baseRgb.r + (targetRgb.r - baseRgb.r) * factor);
+        const g = Math.round(baseRgb.g + (targetRgb.g - baseRgb.g) * factor);
+        const b = Math.round(baseRgb.b + (targetRgb.b - baseRgb.b) * factor);
+        
+        currentPaperBg = rgbToHex(r, g, b);
+        document.documentElement.style.setProperty('--paper-bg', currentPaperBg);
+
+        // Apply edge oxidation (burn shadows) matching the ink color
+        const inkRgb = hexToRgb(currentInkColor);
+        
+        // 1. Narrow, sharp outer edge shadow (higher opacity, small width/blur)
+        const sharpOpacity = factor * 0.55; // up to 55% opacity at absolute edge
+        const sharpColor = `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, ${sharpOpacity})`;
+        const sharpWidth = factor * 3; // narrow 3px width
+        const sharpBlur = factor * 3;  // narrow 3px blur
+
+        // 2. Soft, wide inner transition shadow (lower opacity, wider blur)
+        const burnOpacity = factor * 0.12; // light 12% opacity so it fades gently
+        const burnColor = `rgba(${inkRgb.r}, ${inkRgb.g}, ${inkRgb.b}, ${burnOpacity})`;
+        const burnWidth = factor * 16; // up to 16px wide
+        const burnBlur = factor * 32;  // up to 32px blur
+
+        document.documentElement.style.setProperty('--edge-sharp-color', sharpColor);
+        document.documentElement.style.setProperty('--edge-sharp-width', `${sharpWidth}px`);
+        document.documentElement.style.setProperty('--edge-sharp-blur', `${sharpBlur}px`);
+
+        document.documentElement.style.setProperty('--edge-burn-color', burnColor);
+        document.documentElement.style.setProperty('--edge-burn-width', `${burnWidth}px`);
+        document.documentElement.style.setProperty('--edge-burn-blur', `${burnBlur}px`);
+    }
+
+    // Thermal Simulation Event Handlers
+    if (selectPaperPreset) {
+        selectPaperPreset.addEventListener('change', (e) => {
+            const val = e.target.value;
+            if (val === 'standard') {
+                currentInkColor = '#000000';
+            } else if (val === 'blue') {
+                currentInkColor = '#1e3a8a';
+            } else if (val === 'aged') {
+                currentInkColor = '#44403c';
+            }
+            updatePaperColor();
+            document.documentElement.style.setProperty('--ink-color', currentInkColor);
+            localStorage.setItem('thermalPreset', val);
+            showToast(`Paper preset changed: ${e.target.options[e.target.selectedIndex].text}`, 'fa-palette');
+        });
+    }
+
+    if (sliderInkFade) {
+        sliderInkFade.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            if (labelInkFade) labelInkFade.textContent = `${val}%`;
+            
+            const opacity = 1 - (val / 100) * 0.75; // down to 0.25 opacity
+            document.documentElement.style.setProperty('--ink-fade-opacity', opacity);
+            localStorage.setItem('thermalFade', val);
+        });
+    }
+
+    if (sliderPaperAge) {
+        sliderPaperAge.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            if (labelPaperAge) labelPaperAge.textContent = `${val}%`;
+            updatePaperColor();
+            localStorage.setItem('thermalAge', val);
+        });
+    }
+
+    if (sliderJitter) {
+        sliderJitter.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            mechanicalJitterAmount = (val / 100) * 4; // up to 4px max right shift
+            if (labelJitter) labelJitter.textContent = `${mechanicalJitterAmount.toFixed(1)}px`;
+            localStorage.setItem('thermalJitter', val);
+        });
+    }
+
+    if (sliderDegradation) {
+        sliderDegradation.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            if (labelDegradation) labelDegradation.textContent = `${val}%`;
+            
+            if (val === 0) {
+                document.documentElement.style.setProperty('--degradation-mask', 'none');
+            } else {
+                const degMask = `repeating-linear-gradient(135deg,
+                    rgba(0,0,0,1) 0px,
+                    rgba(0,0,0,1) 120px,
+                    rgba(0,0,0,${minOpacity}) 280px,
+                    rgba(0,0,0,${minOpacity}) 380px,
+                    rgba(0,0,0,1) 540px,
+                    rgba(0,0,0,1) 700px
+                )`;
+                document.documentElement.style.setProperty('--degradation-mask', degMask);
+            }
+            localStorage.setItem('thermalDegradation', val);
+        });
+    }
+
+    // Focus Mode toggling and persistence
+    if (chkFocusMode) {
+        const isFocusMode = sessionStorage.getItem('printerFocusMode') === 'true';
+        chkFocusMode.checked = isFocusMode;
+        if (isFocusMode) {
+            document.body.classList.add('focus-mode');
+        }
+        
+        chkFocusMode.addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            if (isChecked) {
+                document.body.classList.add('focus-mode');
+                sessionStorage.setItem('printerFocusMode', 'true');
+                showToast('Focus Mode Enabled', 'fa-expand');
+                
+                // Auto-close side panels
+                toggleGuideSidebar(false);
+                toggleControlsSidebar(false);
+                toggleHelpSidebar(false);
+            } else {
+                document.body.classList.remove('focus-mode');
+                sessionStorage.setItem('printerFocusMode', 'false');
+                showToast('Focus Mode Disabled', 'fa-compress');
+            }
+        });
+    }
 
     // 3-second Timeout Timer
     function resetTimeoutTimer() {
@@ -304,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
         serialAlert.style.display = 'flex';
     } else {
         btnSerialConnect.addEventListener('click', async () => {
-            if (port) {
+            if (isPrinterEmulationActive) {
                 await disconnectSerial();
             } else {
                 await connectSerial();
@@ -314,23 +554,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function connectSerial() {
         try {
-            port = await navigator.serial.requestPort();
-            await port.open({ 
-                baudRate: 9600,
-                dataBits: 8,
-                stopBits: 1,
-                parity: 'none',
-                flowControl: 'none'
-            });
+            if (!port) {
+                port = await navigator.serial.requestPort();
+                await port.open({ 
+                    baudRate: 9600,
+                    dataBits: 8,
+                    stopBits: 1,
+                    parity: 'none',
+                    flowControl: 'none'
+                });
+            }
             
+            isPrinterEmulationActive = true;
             updateConnectionStatus(true);
             ignoreHandshake = true;
             setTimeout(() => { ignoreHandshake = false; }, 1000); // Filter startup handshakes for 1 sec
-            readLoop();
+            if (!keepReading) {
+                readLoop();
+            }
         } catch (err) {
             console.error('Serial port connection error:', err);
             updateConnectionStatus(false);
             port = null;
+            isPrinterEmulationActive = false;
         }
     }
 
@@ -345,7 +591,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     }
                     if (value) {
-                        processIncomingBytes(value);
+                        if (isPrinterEmulationActive) {
+                            processIncomingBytes(value);
+                        }
                     }
                 }
             } catch (err) {
@@ -362,6 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function disconnectSerial() {
+        isPrinterEmulationActive = false;
         keepReading = false;
         if (timeoutTimer) clearTimeout(timeoutTimer);
         
@@ -421,7 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (graphicsBuffer.length >= graphicsLength) {
                     printGraphicsLine(graphicsBuffer);
                     rxState = 'TEXT';
-                    printStats.textContent = 'Ready';
+                    printStats.textContent = 'Idle';
                 }
             }
         }
@@ -459,7 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 printStats.textContent = 'Rx FF';
                 printCurrentLine();
                 feedPaper(3);
-                printStats.textContent = 'Ready';
+                printStats.textContent = 'Idle';
                 break;
             case 13: // Carriage Return
                 printStats.textContent = 'Rx CR';
@@ -567,12 +816,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // If line is empty, print a blank normal-height line
         if (currentLineText.length === 0) {
             createBlankLineCanvas(24);
+            printedLinesText.push(''); // Accumulate empty line
             return;
         }
 
         // Determine line height: 48px if any character is doubleHeight, otherwise 24px
         const hasDoubleHeight = currentLineText.some(item => item.doubleHeight);
         const canvasHeight = hasDoubleHeight ? 48 : 24;
+
+        // Accumulate printed text line
+        const lineString = currentLineText.map(item => String.fromCharCode(item.char)).join('');
+        printedLinesText.push(lineString);
 
         // Create strip canvas
         const canvas = document.createElement('canvas');
@@ -583,12 +837,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const ctx = canvas.getContext('2d');
         
-        // Fill paper background
-        ctx.fillStyle = '#faf9f5';
-        ctx.fillRect(0, 0, 640, canvasHeight);
-        
         // Setup ink color
-        ctx.fillStyle = '#1c1917';
+        ctx.fillStyle = currentInkColor;
+        
+        // Define separate top and bottom pass jitter for two-pass double-height text simulation
+        const topJitter = Math.round(Math.random() * mechanicalJitterAmount);
+        const bottomJitter = hasDoubleHeight ? Math.round(Math.random() * mechanicalJitterAmount) : topJitter;
         
         // Alignments: Text is centered in a 480px width area. Offset starts at X = 88px.
         let currentX = 88;
@@ -611,8 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Baseline calculations: normal height on double line height is pushed down
             const charHeight = 7 * scaleY;
-            const startY = baselineY - charHeight + (item.doubleHeight ? 0 : 0); 
-            // Normal characters have 14px height. At baseline Y=32, they start at Y=18 (ending Y=32). Perfect alignment.
+            const startY = baselineY - charHeight; 
 
             const charData = FONT_5X7[item.char] || FONT_5X7[32]; // fallback to space
 
@@ -621,7 +874,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const colVal = charData[colIdx];
                 for (let bit = 0; bit < 8; bit++) {
                     if ((colVal & (1 << bit)) !== 0) {
-                        const px = currentX + colIdx * scaleX;
+                        // Apply separate horizontal jitter for top half vs bottom half of double-height print passes
+                        const passJitter = (item.doubleHeight && bit >= 4) ? bottomJitter : topJitter;
+                        const px = currentX + passJitter + colIdx * scaleX;
                         const py = startY + bit * scaleY;
                         ctx.fillRect(px, py, scaleX, scaleY);
                     }
@@ -638,7 +893,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (item.narrowMode === 'narrow') charWidthWithSpacing = 8;
                 else if (item.doubleWidth) charWidthWithSpacing = 24;
                 
-                ctx.fillRect(currentX, underlineY, charWidthWithSpacing, underlineHeight);
+                const passJitter = item.doubleHeight ? bottomJitter : topJitter;
+                ctx.fillRect(currentX + passJitter, underlineY, charWidthWithSpacing, underlineHeight);
             }
 
             // Advance cursor
@@ -669,16 +925,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const ctx = canvas.getContext('2d');
         
-        // Fill paper background
-        ctx.fillStyle = '#faf9f5';
-        ctx.fillRect(0, 0, 640, 16);
-        
         // Setup ink
-        ctx.fillStyle = '#1c1917';
+        ctx.fillStyle = currentInkColor;
         
         // Center graphics (256 columns * 2px scale = 512px)
         // Starts at X = 72px (matching left border 12.5mm / 0.35mm = 36 dots = 72px)
-        const startX = 72;
+        const startX = 72 + Math.round(Math.random() * mechanicalJitterAmount);
 
         const maxCols = Math.min(buffer.length, 256);
         for (let col = 0; col < maxCols; col++) {
@@ -698,11 +950,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Helper to append canvas and scroll view
     function appendCanvasToPaper(canvas) {
-        const bottomSpacer = document.getElementById('paperBottomSpacer');
-        if (bottomSpacer) {
-            paperRoll.insertBefore(canvas, bottomSpacer);
+        const wrapper = document.getElementById('paperContentWrapper');
+        if (wrapper) {
+            wrapper.appendChild(canvas);
         } else {
-            paperRoll.appendChild(canvas);
+            const bottomSpacer = document.getElementById('paperBottomSpacer');
+            if (bottomSpacer) {
+                paperRoll.insertBefore(canvas, bottomSpacer);
+            } else {
+                paperRoll.appendChild(canvas);
+            }
         }
         
         // Dynamically update padding on every print to handle layout shifts/initial 0-height client heights
@@ -736,8 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.classList.add('paper-feed-anim');
         
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#faf9f5';
-        ctx.fillRect(0, 0, 640, height);
+        // Left transparent to show paper-roll background
         
         appendCanvasToPaper(canvas);
     }
@@ -754,9 +1010,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Clear Roll
     function clearPaperRoll() {
         // Clear only canvas elements, keeping spacers intact
-        const canvases = Array.from(paperRoll.getElementsByTagName('canvas'));
+        const wrapper = document.getElementById('paperContentWrapper');
+        const canvases = wrapper 
+            ? Array.from(wrapper.getElementsByTagName('canvas')) 
+            : Array.from(paperRoll.getElementsByTagName('canvas'));
         canvases.forEach(c => c.remove());
         currentLineText = [];
+        printedLinesText = []; // Reset text buffer
         Object.assign(activeStyles, {
             doubleWidth: false,
             doubleHeight: false,
@@ -785,7 +1045,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Save Printout (Stitches all canvas elements into one image)
     function downloadPrintout() {
-        const canvases = paperRoll.getElementsByTagName('canvas');
+        const wrapper = document.getElementById('paperContentWrapper');
+        const canvases = wrapper 
+            ? wrapper.getElementsByTagName('canvas')
+            : paperRoll.getElementsByTagName('canvas');
         if (canvases.length === 0) {
             showToast('No print data to save!', 'fa-circle-xmark');
             return;
@@ -803,6 +1066,9 @@ document.addEventListener('DOMContentLoaded', () => {
         exportCanvas.height = totalHeight;
         
         const ctx = exportCanvas.getContext('2d');
+        // Fill paper background on export
+        ctx.fillStyle = currentPaperBg;
+        ctx.fillRect(0, 0, 640, totalHeight);
         
         // Draw canvases onto export canvas
         let currentY = 0;
@@ -824,13 +1090,104 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     btnDownloadPrint.addEventListener('click', downloadPrintout);
 
+    async function copyPrintoutImage() {
+        const wrapper = document.getElementById('paperContentWrapper');
+        const canvases = wrapper 
+            ? wrapper.querySelectorAll('canvas')
+            : paperRoll.querySelectorAll('canvas');
+        if (canvases.length === 0) {
+            showToast('No print content to copy!', 'fa-circle-xmark');
+            return;
+        }
+
+        try {
+            let totalHeight = 0;
+            for (let i = 0; i < canvases.length; i++) {
+                totalHeight += canvases[i].height;
+            }
+
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = 640;
+            exportCanvas.height = totalHeight;
+            const ctx = exportCanvas.getContext('2d');
+            // Fill paper background on export
+            ctx.fillStyle = currentPaperBg;
+            ctx.fillRect(0, 0, 640, totalHeight);
+
+            let currentY = 0;
+            for (let i = 0; i < canvases.length; i++) {
+                ctx.drawImage(canvases[i], 0, currentY);
+                currentY += canvases[i].height;
+            }
+
+            exportCanvas.toBlob(async (blob) => {
+                try {
+                    const item = new ClipboardItem({ 'image/png': blob });
+                    await navigator.clipboard.write([item]);
+                    showToast('Printout image copied to clipboard!', 'fa-copy');
+                } catch (err) {
+                    console.error('Failed to copy image to clipboard:', err);
+                    showToast('Failed to copy image', 'fa-triangle-exclamation');
+                }
+            }, 'image/png');
+        } catch (err) {
+            console.error('Failed to copy printout:', err);
+            showToast('Error copying image', 'fa-triangle-exclamation');
+        }
+    }
+    if (btnCopyPrint) btnCopyPrint.addEventListener('click', copyPrintoutImage);
+
+    // Save Text Printout (downloads accumulated text as a .txt file)
+    function downloadTextPrintout() {
+        if (printedLinesText.length === 0) {
+            showToast('No print text to save!', 'fa-circle-xmark');
+            return;
+        }
+
+        const textContent = printedLinesText.join('\n');
+        const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+        
+        const link = document.createElement('a');
+        link.download = `psion_printout_${Date.now()}.txt`;
+        link.href = URL.createObjectURL(blob);
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
+
+        showToast('Text printout saved!', 'fa-file-arrow-down');
+    }
+    if (btnDownloadText) {
+        btnDownloadText.addEventListener('click', downloadTextPrintout);
+    }
+
+    // Copy Text to Clipboard
+    function copyTextPrintout() {
+        if (printedLinesText.length === 0) {
+            showToast('No print text to copy!', 'fa-circle-xmark');
+            return;
+        }
+
+        const textContent = printedLinesText.join('\n');
+        navigator.clipboard.writeText(textContent)
+            .then(() => {
+                showToast('Text copied to clipboard!', 'fa-copy');
+            })
+            .catch(err => {
+                showToast('Failed to copy text!', 'fa-circle-xmark');
+                console.error(err);
+            });
+    }
+    if (btnCopyText) {
+        btnCopyText.addEventListener('click', copyTextPrintout);
+    }
+
     // 9. Simulated Self-Test Page
     function printTestPage() {
         showToast('Starting Self-Test Print...', 'fa-vial');
         printStats.textContent = 'Testing';
-
-        // 1. Feed a blank space
-        createBlankLineCanvas(12);
+        if (btnPrintTest) btnPrintTest.disabled = true;
 
         // Helper to simulate receiving byte arrays
         function simReceiveString(str, customStyles = {}) {
@@ -851,28 +1208,8 @@ document.addEventListener('DOMContentLoaded', () => {
             processIncomingBytes([13]);
         }
 
-        // Test normal width
-        simReceiveString('PSION PRINTER II WEB EMULATOR', { doubleWidth: false, doubleHeight: true, underline: true });
-        simReceiveString('----------------------------', { underline: false });
-        
-        // Test modes
-        simReceiveString('Normal Mode: 40 Columns Standard 5x7', { narrowMode: 'normal' });
-        simReceiveString('20 Column Mode', { doubleWidth: true });
-        simReceiveString('Narrow Mode: 60 Columns Dense Font', { narrowMode: 'narrow' });
-        simReceiveString('Very Narrow Mode: 80 Columns High Density', { narrowMode: 'very-narrow' });
-        
-        // Test underlining and height combinations
-        simReceiveString('Standard Underline Text Example', { underline: true });
-        simReceiveString('Double Height Text Example', { doubleHeight: true, underline: false });
-        simReceiveString('Double Height Underline Text', { doubleHeight: true, underline: true });
-        
-        // Clear styles
-        simReceiveString('Back to normal baseline printing.', { narrowMode: 'normal' });
-        simReceiveString('----------------------------');
-
         // Test Graphics drawing
         // Create checkered graphics lines (8 vertical dots each, 256 wide)
-        // Line 1: alternating pattern
         const buf1 = [];
         const buf2 = [];
         const buf3 = [];
@@ -886,30 +1223,60 @@ document.addEventListener('DOMContentLoaded', () => {
             buf3.push(col % 16 === 0 || col === 255 ? 0xFF : 0x81);
         }
 
-        // Print graphics lines
-        printGraphicsLine(buf1);
-        printGraphicsLine(buf2);
-        printGraphicsLine(buf1);
-        printGraphicsLine(buf2);
-        printGraphicsLine(buf3);
-        
-        simReceiveString('--- PHYSICAL GRAPHICS COMPLETED ---');
+        // Define print sequence steps
+        const steps = [
+            () => createBlankLineCanvas(12),
+            () => simReceiveString('PSION PRINTER 2 WEB EMULATOR', { doubleWidth: false, doubleHeight: true, underline: true }),
+            () => simReceiveString('----------------------------', { underline: false }),
+            () => simReceiveString('Normal Mode: 40 Columns Standard 5x7', { narrowMode: 'normal' }),
+            () => simReceiveString('20 Column Mode', { doubleWidth: true }),
+            () => simReceiveString('Narrow Mode: 60 Columns Dense Font', { narrowMode: 'narrow' }),
+            () => simReceiveString('Very Narrow Mode: 80 Columns High Density', { narrowMode: 'very-narrow' }),
+            () => simReceiveString('Standard Underline Text Example', { underline: true }),
+            () => simReceiveString('Double Height Text Example', { doubleHeight: true, underline: false }),
+            () => simReceiveString('Double Height Underline Text', { doubleHeight: true, underline: true }),
+            () => simReceiveString('Back to normal baseline printing.', { narrowMode: 'normal' }),
+            () => simReceiveString('----------------------------'),
+            () => printGraphicsLine(buf1),
+            () => printGraphicsLine(buf2),
+            () => printGraphicsLine(buf1),
+            () => printGraphicsLine(buf2),
+            () => printGraphicsLine(buf3),
+            () => simReceiveString('--- PHYSICAL GRAPHICS COMPLETED ---'),
+            () => simReceiveString('** SELF-TEST COMPLETED SUCCESSFULLY **', { doubleWidth: false, doubleHeight: true })
+        ];
 
-        // Finish self-test
-        simReceiveString('** SELF-TEST COMPLETED SUCCESSFULLY **', { doubleWidth: false, doubleHeight: true });
-        
-        // Reset emulator styles to normal
-        Object.assign(activeStyles, {
-            doubleWidth: false,
-            doubleHeight: false,
-            underline: false,
-            narrowMode: 'normal'
-        });
-        updateActiveStyleUI();
-        
-        feedPaper(3);
+        let index = 0;
+        function runNextStep() {
+            if (index >= steps.length) {
+                // Reset emulator styles to normal
+                Object.assign(activeStyles, {
+                    doubleWidth: false,
+                    doubleHeight: false,
+                    underline: false,
+                    narrowMode: 'normal'
+                });
+                updateActiveStyleUI();
+                feedPaper(3);
+                
+                if (btnPrintTest) btnPrintTest.disabled = false;
+                printStats.textContent = 'Online';
+                return;
+            }
+
+            steps[index]();
+            
+            // Graphics take longer (500ms) than text lines (300ms)
+            const isGraphics = index >= 12 && index <= 16;
+            const delay = isGraphics ? 500 : 300;
+            
+            index++;
+            setTimeout(runNextStep, delay);
+        }
+
+        runNextStep();
     }
-    btnPrintTest.addEventListener('click', printTestPage);
+    if (btnPrintTest) btnPrintTest.addEventListener('click', printTestPage);
 
     // Scroll monitoring for live view lock
     paperRollContainer.addEventListener('scroll', () => {
@@ -962,7 +1329,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updatePaperPadding() {
         const clientHeight = paperRollContainer.clientHeight;
         const coverHeight = 120; // height of the smoky cover (5 lines of 24px)
-        const printHeadOffset = 96; // 4 lines under print head (bottom spacer height)
+        const printHeadOffset = 72; // 3 lines under print head (bottom spacer height)
         
         // padding-top ensures that on a new page, the top of the paper starts at the print head
         const paddingTop = Math.max(0, clientHeight - printHeadOffset);
@@ -979,8 +1346,367 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     window.addEventListener('resize', updatePaperPadding);
 
+    // Sidebar Panel Toggle logic
+    function toggleGuideSidebar(forceState) {
+        const isOpen = forceState !== undefined ? forceState : !guidePanel.classList.contains('open');
+        guidePanel.classList.toggle('open', isOpen);
+        if (guideTrigger) {
+            guideTrigger.classList.toggle('panel-open', isOpen);
+            if (guideTriggerIcon) {
+                guideTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-left' : 'fa-solid fa-chevron-right';
+            }
+        }
+    }
+
+    function toggleControlsSidebar(forceState) {
+        if (controlsPanel) controlsPanel.classList.remove('peek');
+        if (controlsTrigger) controlsTrigger.classList.remove('peek');
+
+        const isOpen = forceState !== undefined ? forceState : !controlsPanel.classList.contains('open');
+        controlsPanel.classList.toggle('open', isOpen);
+        if (controlsTrigger) {
+            controlsTrigger.classList.toggle('panel-open', isOpen);
+            if (controlsTriggerIcon) {
+                controlsTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+            }
+        }
+        if (isOpen) {
+            // Close Help if opening Controls
+            toggleHelpSidebar(false);
+        }
+    }
+
+    function toggleHelpSidebar(forceState) {
+        const isOpen = forceState !== undefined ? forceState : !helpPanel.classList.contains('open');
+        helpPanel.classList.toggle('open', isOpen);
+        if (helpTrigger) {
+            helpTrigger.classList.toggle('panel-open', isOpen);
+            if (helpTriggerIcon) {
+                helpTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+            }
+        }
+        if (isOpen) {
+            // Close Controls if opening Help
+            toggleControlsSidebar(false);
+        }
+    }
+
+    // Set up click listeners for triggers and close buttons
+    if (guideTrigger) guideTrigger.addEventListener('click', () => toggleGuideSidebar());
+    if (btnCloseGuide) btnCloseGuide.addEventListener('click', () => toggleGuideSidebar(false));
+
+    if (controlsTrigger) controlsTrigger.addEventListener('click', () => toggleControlsSidebar());
+    if (btnCloseControls) btnCloseControls.addEventListener('click', () => toggleControlsSidebar(false));
+
+    if (helpTrigger) helpTrigger.addEventListener('click', () => toggleHelpSidebar());
+    if (btnCloseHelp) btnCloseHelp.addEventListener('click', () => toggleHelpSidebar(false));
+
+    // GPRINT Transfer Modal wizard logic
+    if (btnTransferGprint) {
+        btnTransferGprint.addEventListener('click', () => {
+            // Check if emulation serial session is active
+            if (isPrinterEmulationActive) {
+                modalStepWarning.style.display = 'block';
+                wasEmulationActiveBeforeTransfer = true;
+            } else {
+                modalStepWarning.style.display = 'none';
+                wasEmulationActiveBeforeTransfer = false;
+            }
+
+            // Reset modal elements state
+            transferProgressSection.style.display = 'none';
+            translationInstructions.style.display = 'none';
+            btnStartGprintTransfer.style.display = 'inline-block';
+            btnCancelGprintTransfer.style.display = 'inline-block';
+            btnDoneGprintTransfer.style.display = 'none';
+            
+            btnStartGprintTransfer.disabled = false;
+            btnCancelGprintTransfer.disabled = false;
+            gprintProgressBar.style.width = '0%';
+            
+            // Show modal
+            gprintModal.style.display = 'flex';
+        });
+    }
+
+    function closeGprintModal() {
+        gprintModal.style.display = 'none';
+    }
+
+    function finishOrCancelTransfer() {
+        closeGprintModal();
+        if (wasEmulationActiveBeforeTransfer) {
+            isPrinterEmulationActive = true;
+            updateConnectionStatus(true);
+            wasEmulationActiveBeforeTransfer = false;
+            showToast('Returned to printer emulation mode', 'fa-print');
+        }
+    }
+
+    if (btnCloseGprintModal) btnCloseGprintModal.addEventListener('click', finishOrCancelTransfer);
+    if (btnCancelGprintTransfer) btnCancelGprintTransfer.addEventListener('click', finishOrCancelTransfer);
+    if (btnDoneGprintTransfer) btnDoneGprintTransfer.addEventListener('click', finishOrCancelTransfer);
+
+    if (btnStartGprintTransfer) {
+        btnStartGprintTransfer.addEventListener('click', async () => {
+            try {
+                // Step A: Warn user and suspend emulation if active
+                if (isPrinterEmulationActive) {
+                    wasEmulationActiveBeforeTransfer = true;
+                    isPrinterEmulationActive = false;
+                    updateConnectionStatus(false); // Logically disconnects UI
+                }
+
+                // Step B: Open serial port for GPRINT transfer if not open
+                if (!port) {
+                    gprintTransferStatus.classList.add('awaiting');
+                    gprintTransferStatus.textContent = 'Awaiting Serial Port Selection...';
+                    transferProgressSection.style.display = 'block';
+                    
+                    port = await navigator.serial.requestPort();
+                    await port.open({ 
+                        baudRate: 9600,
+                        dataBits: 8,
+                        stopBits: 1,
+                        parity: 'none',
+                        flowControl: 'none'
+                    });
+                    if (!keepReading) {
+                        readLoop();
+                    }
+                }
+
+                // Step C & D: Start Transfer Sequence
+                gprintTransferStatus.classList.remove('awaiting');
+                btnStartGprintTransfer.disabled = true;
+                btnCancelGprintTransfer.disabled = true;
+                transferProgressSection.style.display = 'block';
+                gprintTransferStatus.textContent = 'Clearing buffers & initiating transfer...';
+
+                // Get OPL code content
+                const codeText = gprintCode.value;
+                // Split by newline
+                const lines = codeText.split('\n');
+
+                let lineIdx = 0;
+                // Tiny pause to ensure serial links are cleared
+                await new Promise(r => setTimeout(r, 400));
+
+                async function sendNextLine() {
+                    if (lineIdx >= lines.length) {
+                        // Send CTRL+Z (ASCII 26) to cleanly terminate the transfer on the Psion Organiser
+                        try {
+                            const writer = port.writable.getWriter();
+                            const ctrlZ = new Uint8Array([26]);
+                            await writer.write(ctrlZ);
+                            writer.releaseLock();
+                        } catch (err) {
+                            console.error('Error sending CTRL+Z terminator:', err);
+                        }
+
+                        // Transfer done
+                        gprintProgressBar.style.width = '100%';
+                        gprintTransferStatus.textContent = 'Transfer completed!';
+                        btnStartGprintTransfer.style.display = 'none';
+                        btnCancelGprintTransfer.style.display = 'none';
+                        btnDoneGprintTransfer.style.display = 'inline-block';
+                        translationInstructions.style.display = 'block';
+                        showToast('GPRINT routine transferred!', 'fa-file-circle-check');
+
+                        // Smoothly scroll modal body to reveal translation instructions
+                        if (gprintModal) {
+                            const modalBody = gprintModal.querySelector('.modal-body');
+                            if (modalBody) {
+                                setTimeout(() => {
+                                    modalBody.scrollTo({
+                                        top: modalBody.scrollHeight,
+                                        behavior: 'smooth'
+                                    });
+                                }, 150);
+                            }
+                        }
+                        return;
+                    }
+
+                    // Append CRLF to each code line for COMMS link compatibility
+                    const lineStr = lines[lineIdx].trimRight() + '\r\n';
+                    gprintTransferStatus.textContent = `Sending line ${lineIdx + 1} of ${lines.length}...`;
+
+                    try {
+                        const writer = port.writable.getWriter();
+                        const encoder = new TextEncoder();
+                        await writer.write(encoder.encode(lineStr));
+                        writer.releaseLock();
+
+                        // Update progress bar
+                        const pct = Math.round(((lineIdx + 1) / lines.length) * 100);
+                        gprintProgressBar.style.width = `${pct}%`;
+
+                        lineIdx++;
+                        // Use 80ms delay between lines to match Psion receiver speed
+                        setTimeout(sendNextLine, 80);
+                    } catch (err) {
+                        console.error('GPRINT transfer error:', err);
+                        gprintTransferStatus.textContent = `Error: ${err.message}`;
+                        btnStartGprintTransfer.disabled = false;
+                        btnCancelGprintTransfer.disabled = false;
+                        showToast('Transfer failed', 'fa-triangle-exclamation');
+                    }
+                }
+
+                sendNextLine();
+
+            } catch (err) {
+                console.error('GPRINT serial initiation error:', err);
+                gprintTransferStatus.classList.remove('awaiting');
+                gprintTransferStatus.textContent = `Initiation Error: ${err.message}`;
+                btnStartGprintTransfer.disabled = false;
+                btnCancelGprintTransfer.disabled = false;
+            }
+        });
+    }
+
+    // Global Keyboard Shortcut Bindings
+    window.addEventListener('keydown', (e) => {
+        // Ignore keybindings if focusing on input fields to allow normal typing
+        const tag = document.activeElement.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement.isContentEditable) {
+            return;
+        }
+
+        // Alt + G: Toggle Guide Panel
+        if (e.altKey && e.key.toLowerCase() === 'g') {
+            e.preventDefault();
+            toggleGuideSidebar();
+        }
+        // Alt + C: Toggle Controls Panel
+        else if (e.altKey && e.key.toLowerCase() === 'c') {
+            e.preventDefault();
+            toggleControlsSidebar();
+        }
+        // Alt + H: Toggle Help Panel
+        else if (e.altKey && e.key.toLowerCase() === 'h') {
+            e.preventDefault();
+            toggleHelpSidebar();
+        }
+        // Alt + S: Connect Serial
+        else if (e.altKey && e.key.toLowerCase() === 's') {
+            e.preventDefault();
+            if (btnSerialConnect && !btnSerialConnect.disabled) {
+                btnSerialConnect.click();
+            }
+        }
+        // Alt + T: Print Test Page
+        else if (e.altKey && e.key.toLowerCase() === 't') {
+            e.preventDefault();
+            if (btnPrintTest && !btnPrintTest.disabled) {
+                btnPrintTest.click();
+            }
+        }
+        // Alt + F: Feed Paper
+        else if (e.altKey && e.key.toLowerCase() === 'f') {
+            e.preventDefault();
+            if (btnFeedPaper && !btnFeedPaper.disabled) {
+                btnFeedPaper.click();
+            }
+        }
+        // Delete: Clear Paper Roll
+        else if (e.key === 'Delete') {
+            e.preventDefault();
+            clearPaperRoll();
+        }
+    });
+
+    // Start visual cues (Pulse & Peek) for Controls tab after a short delay
+    setTimeout(() => {
+        if (controlsTrigger) {
+            // Apply pulse glow animation class
+            controlsTrigger.classList.add('pulse-glow');
+            
+            // Peek slide-out animation hint
+            if (controlsPanel && !controlsPanel.classList.contains('open')) {
+                controlsPanel.classList.add('peek');
+                controlsTrigger.classList.add('peek');
+                
+                // Retract peek after 1.5 seconds
+                setTimeout(() => {
+                    controlsPanel.classList.remove('peek');
+                    controlsTrigger.classList.remove('peek');
+                }, 1500);
+            }
+        }
+    }, 600);
+
+    // Load and apply stored Thermal Print Simulation settings
+    function loadThermalSimulationSettings() {
+        const preset = localStorage.getItem('thermalPreset') || 'standard';
+        const fade = parseInt(localStorage.getItem('thermalFade') || '0');
+        const age = parseInt(localStorage.getItem('thermalAge') || '0');
+        const jitter = parseInt(localStorage.getItem('thermalJitter') || '0');
+
+        // Apply Preset
+        if (selectPaperPreset) {
+            selectPaperPreset.value = preset;
+            if (preset === 'standard') {
+                currentInkColor = '#000000';
+            } else if (preset === 'blue') {
+                currentInkColor = '#1e3a8a';
+            } else if (preset === 'aged') {
+                currentInkColor = '#44403c';
+            }
+            document.documentElement.style.setProperty('--ink-color', currentInkColor);
+        }
+
+        // Apply Ink Fade
+        if (sliderInkFade) {
+            sliderInkFade.value = fade;
+            if (labelInkFade) labelInkFade.textContent = `${fade}%`;
+            const opacity = 1 - (fade / 100) * 0.75;
+            document.documentElement.style.setProperty('--ink-fade-opacity', opacity);
+        }
+
+        // Apply Paper Age
+        if (sliderPaperAge) {
+            sliderPaperAge.value = age;
+            if (labelPaperAge) labelPaperAge.textContent = `${age}%`;
+        }
+
+        // Apply Paper Color based on Preset and Age
+        updatePaperColor();
+
+        // Apply Mechanical Jitter
+        if (sliderJitter) {
+            sliderJitter.value = jitter;
+            mechanicalJitterAmount = (jitter / 100) * 4;
+            if (labelJitter) labelJitter.textContent = `${mechanicalJitterAmount.toFixed(1)}px`;
+        }
+
+        // Apply Paper Degradation
+        const degradation = parseInt(localStorage.getItem('thermalDegradation') || '0');
+        if (sliderDegradation) {
+            sliderDegradation.value = degradation;
+            if (labelDegradation) labelDegradation.textContent = `${degradation}%`;
+            
+            if (degradation === 0) {
+                document.documentElement.style.setProperty('--degradation-mask', 'none');
+            } else {
+                const minOpacity = 1 - (degradation / 100) * 0.85; // fades down to 15% opacity
+                const degMask = `repeating-linear-gradient(135deg,
+                    rgba(0,0,0,1) 0px,
+                    rgba(0,0,0,1) 120px,
+                    rgba(0,0,0,${minOpacity}) 280px,
+                    rgba(0,0,0,${minOpacity}) 380px,
+                    rgba(0,0,0,1) 540px,
+                    rgba(0,0,0,1) 700px
+                )`;
+                document.documentElement.style.setProperty('--degradation-mask', degMask);
+            }
+        }
+    }
+
     // Initial state setup
     updateActiveStyleUI();
+    loadThermalSimulationSettings();
     updateConnectionStatus(false);
     updatePaperPadding();
 });
