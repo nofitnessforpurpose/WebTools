@@ -833,7 +833,6 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.width = 640; // Native physical paper scale
         canvas.height = canvasHeight;
         canvas.style.height = `${canvasHeight}px`; // Lock display height to prevent browser flex stretching
-        canvas.classList.add('paper-feed-anim');
         
         const ctx = canvas.getContext('2d');
         
@@ -921,7 +920,6 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.width = 640;
         canvas.height = 16; // 8 dots vertical * 2px scale = 16px
         canvas.style.height = '16px'; // Lock display height to prevent browser flex stretching
-        canvas.classList.add('paper-feed-anim');
         
         const ctx = canvas.getContext('2d');
         
@@ -990,7 +988,6 @@ document.addEventListener('DOMContentLoaded', () => {
         canvas.width = 640;
         canvas.height = height;
         canvas.style.height = `${height}px`; // Lock display height to prevent browser flex stretching
-        canvas.classList.add('paper-feed-anim');
         
         const ctx = canvas.getContext('2d');
         // Left transparent to show paper-roll background

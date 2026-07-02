@@ -696,10 +696,6 @@ h1 {
     image-rendering: crisp-edges;
 }
 
-/* Paper Feed animation (Disabled layout shifting/opacity to prevent black background flash) */
-.paper-feed-anim {
-    /* Render instantly to ensure opaque paper background is preserved */
-}
 
 /* Toast alert system */
 .toast-container {
