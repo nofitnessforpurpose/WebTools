@@ -1,4 +1,4 @@
-# LinkTool
+# LinkTool  
 
 A web-based tool for downloading data packs from the Psion Organiser II via the COMMS Link interface. This tool implements the Psion Link Protocol to perform boot injection and data pack transfer operations directly in your browser using the Web Serial API.
 
@@ -20,7 +20,7 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 [![Maintenance](https://img.shields.io/badge/maintained%3F-yes-green.svg?style=flat-square)](https://github.com/nofitnessforpurpose/WebTools/LinkTool/graphs/commit-activity)
 [![Static Badge](https://img.shields.io/badge/format-CODE-blue?style=flat-square)](https://en.wikipedia.org/)
 
-## Features
+## Features  
 
 *   **Web Serial API**: Direct serial communication with Psion Organiser II hardware via browser
 *   **Boot Injection**: Automated bootstrap code download to device RAM
@@ -35,7 +35,8 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 *   **Debug Mode**: Detailed logging for protocol analysis (append `?debug=true` to URL)
 
 <BR>
-## Usage
+
+## Usage  
 
 1.  **Connect Hardware**: Connect your Psion Organiser II to your computer via a serial adapter
 2.  **Select Pack**: Choose Pack B or Pack C using the "Pack select" button (default: Pack B)
@@ -46,7 +47,8 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 6.  **Disconnect**: Click "Disconnect" to release the serial port
 
 <BR>
-## Technical Details
+
+## Technical Details  
 
 *   **Architecture**: Client-side JavaScript application
 *   **Protocol**: Psion Link Protocol (Boot Injection + Data Dump phases)
@@ -55,7 +57,8 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 *   **Output Format**: OPK files with magic header, length field, and terminator
 
 <BR>
-## Browser Support
+
+## Browser Support  
 
 This tool requires a browser with Web Serial API support:
 *   **Google Chrome** (version 89+)
@@ -65,21 +68,24 @@ This tool requires a browser with Web Serial API support:
 **Note**: Firefox and Safari do not currently natively support the Web Serial API.
 
 <BR>
-## Credits
+
+## Credits  
 
 *   Protocol documentation by **Jaap Scherphuis** ([www.jaapsch.net/psion/](https://www.jaapsch.net/psion/))
 *   Implemented by **Antigravity**
 *   Re-imagined by **NFfP**
 
 <BR>
-## License
+
+## License  
 
 MIT
 
 Check Attribution [source www](https://www.jaapsch.net/psion/) for elements covered under a Non Commercial basis use.
 
 <BR>
-## Questions / Discussion
+
+## Questions / Discussion  
 
 See [Organiser 2](https://www.organiser2.com/) forum.
 
