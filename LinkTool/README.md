@@ -6,6 +6,14 @@ A web-based tool for downloading data packs from the Psion Organiser II via the 
 
 This repository is intended to be accessed at [https://nofitnessforpurpose.github.io/WebTools/LinkTool/](https://nofitnessforpurpose.github.io/WebTools/LinkTool/)  
 
+<BR>
+<div align="center">
+  <div style="display: flex; align-items: flex-start;">
+  <img src="https://github.com/nofitnessforpurpose/WebTools/blob/main/LinkTool/images/20250605_COMMS_LINK.jpg" width="400px" alt="COMMS Link Image copyright (c) 5 June 2025 nofitnessforpurpose All Rights Reserved">
+  </div>
+</div>
+<BR>
+
 
 [![Organiser](https://img.shields.io/badge/gadget-Organiser_II-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Psion_Organiser)
 [![Static Badge](https://img.shields.io/badge/license-CC_BY_NC_SA_4.0-brightgreen/nofitnessforpurpose/WebTools/LinkTool?style=flat-square)](https://github.com/vitorsr/cc/blob/master/CC-BY-NC-4.0.md)
