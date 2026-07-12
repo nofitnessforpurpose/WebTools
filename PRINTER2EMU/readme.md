@@ -1,9 +1,10 @@
 # PRINTER2EMU  
 
-A modern, web-based PSION Printer II emulator tool for Psion Organiser II family of devices.  
-This web application emulates the **Psion Organiser II Printer II** (based on the Epson M1221 thermal printer mechanism). It connects to a physical Psion Organiser II via a serial cable (using the browser's Web Serial API) and prints text or graphics onto an emulated scrolling paper roll in real-time.
+A modern, web-based thermal printer eumulator.  
+<BR>
+This web application emulates the Epson M1221 thermal printer mechanism used in many devices and for the **Psion Organiser II Printer II**. It connects to a physical device (such as a Psion Organiser device) via a serial cable using the browser's Web Serial API. Printing ASCII text or graphics onto an emulated scrolling paper roll in real-time.
 
-
+ 
 This repository is intended to be accessed at https://nofitnessforpurpose.github.io/WebTools/PRINTER2EMU/  
 
 <BR>
@@ -15,6 +16,8 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 <BR>
 
 
+[![Organiser](https://img.shields.io/badge/gadget-RS232-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/RS232)
+[![Organiser](https://img.shields.io/badge/gadget-Printer-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Printer_(computing))
 [![Organiser](https://img.shields.io/badge/gadget-Organiser_II-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Psion_Organiser)
 [![Organiser](https://img.shields.io/badge/gadget-Organiser_II_Printer_II-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Psion_Organiser)
 [![Static Badge](https://img.shields.io/badge/license-CC_BY_NC_SA_4.0-brightgreen/nofitnessforpurpose/WebTools/OPKEDITOR3?style=flat-square)](https://github.com/vitorsr/cc/blob/master/CC-BY-NC-4.0.md)
@@ -29,12 +32,14 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 - **Export Capabilities**: Clear the roll, feed paper, or download the entire print history as a single high-quality PNG image.
 - **Self-Test Mode**: Simulated test print to verify the rendering engine locally.
 
-If you wish to prepare graphics for printing, see the companion tool <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">PRINTER2TOOL</a>
 
 <BR>
-## OPL Stub
 
-If graphics print support is needed, use the helper stub routine below to allow the emulator to handle graphics printing (since the physical Printer II hardware's internal `GPRINT` routine is not available). The `GPRINT` routine is small and can be located on your internal **A:** storage location:
+## Organiser II Support - OPL Stub  
+
+If you wish to prepare graphics for printing, see the companion tool <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">PRINTER2TOOL</a>  
+
+If graphics print support is needed, use the helper stub routine below to allow the emulator to handle graphics printing (since the physical Printer II hardware's internal `GPRINT` routine is not available). The `GPRINT` routine is small and can be located on your internal **A:** storage location:  
 
 ### `GPRINT` Stub
 ```opl
@@ -51,6 +56,7 @@ GPRINT:(w%, addr%)
   ENDWH
 ```
 <BR>
+
 ## Physical Setup  
 
 1. Connect your Psion Organiser II SOMMS Link port to your PC using a Comms Link cable connected to a USB-to-Serial converter.  
@@ -60,6 +66,7 @@ GPRINT:(w%, addr%)
 4. Configure your Organiser COMMS Link settings to 9600 Baud, No Parity, 8 Data Bits, 1 Stop Bit, and set the printer device to serial output (Standard OPL `LPRINT` statements will then automatically route through the Comms Link interface).
 
 <BR>
+
 ### Hints   
 
  - Take care with any RAM Packs - COMMS links don't play nicely with COMMS Links!
