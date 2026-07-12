@@ -56,7 +56,7 @@ PSION Organiser II devices will ouput Standard OPL `LPRINT` statements automatic
  - A little patience is required for graphics as the Stub code has to send serial data   
  
  - PSION Organiser II user should take care with any RAM Packs !  
-. . . . COMMS links don't play nicely with COMMS Links!  
+. . . . COMMS links don't play nicely with RAM Packs !  
  
 <BR>
 
