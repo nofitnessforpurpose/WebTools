@@ -35,6 +35,31 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 
 <BR>
 
+## Physical Setup  
+
+1. Connect your device to the serial port of your PC. If your PC does not have an inbuilt COMM port you will need a USB-to-Serial converter.
+
+2. In the browser, click the **Connect** button, choose the serial port of your USB-to-Serial converter, and select Allow connection.
+   
+3. Configure your device settings to 9600 Baud, No Parity, 8 Data Bits, 1 Stop Bit
+
+PSION Organiser II devices will ouput Standard OPL `LPRINT` statements automatically routed through the Comms Link interface.
+
+<BR>
+
+### Hints   
+  
+ - Ensure your COMMS link settings are correct  
+    
+ - Ensure your web browser supports WEB Serial (Firefox 151 does now!!!!)  
+   
+ - A little patience is required for graphics as the Stub code has to send serial data   
+ 
+ - PSION Organiser II user should take care with any RAM Packs !  
+. . . . COMMS links don't play nicely with COMMS Links!  
+ 
+<BR>
+
 ## Organiser II Support - OPL Stub  
 
 If you wish to prepare graphics for printing, see the companion tool <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">PRINTER2TOOL</a>  
@@ -56,33 +81,9 @@ GPRINT:(w%, addr%)
   ENDWH
 ```
 <BR>
-
-## Physical Setup  
-
-1. Connect your Psion Organiser II SOMMS Link port to your PC using a Comms Link cable connected to a USB-to-Serial converter.  
-
-2. In the browser, click the **Connect** button, choose the serial port of your USB-to-Serial converter, and select Allow connection.
-   
-4. Configure your Organiser COMMS Link settings to 9600 Baud, No Parity, 8 Data Bits, 1 Stop Bit, and set the printer device to serial output (Standard OPL `LPRINT` statements will then automatically route through the Comms Link interface).
-
-<BR>
-
-### Hints   
-
- - Take care with any RAM Packs - COMMS links don't play nicely with COMMS Links!
-   
- - Ensure your COMMS link settings are correct
-   
- - Ensure your web browser supports WEB Serial (Firefox 151 does now!!!!)
-   
- - A little patience is required for graphics as the Stub code has to send serial data
-
-<BR>
-
-
 ## Background  
 
-The Psion Printer II uses an 8 pixel high thermal printhead and moving carriage to print over the pages width. It prints in slices of 8 vertical pixels per byte. The layout maps the top-most pixel of the 8-pixel strip to the Most Significant Bit (MSB = 128) and the bottom-most pixel to the Least Significant Bit (LSB = 1). The width of a line is 256 pixels over the printable area which gives a resolution of approximately 65 DPI.
+The Psion Printer II employed the EPSON M221 thermal printhead moving carriage to print over the pages width. Using 8 of the 9 thermal head pixels in graphics mode, it prints in slices of vertical pixels per byte 9 for character mode and 8 for graphics mode. In graphics mode the layout maps the top-most pixel of the 8-pixel strip to the Most Significant Bit (MSB = 128) and the bottom-most pixel to the Least Significant Bit (LSB = 1). The width of a line is 256 pixels over the printable area which gives a resolution of approximately 65 DPI. ASCII text characters received by the unit use the inbuilt character ROM, in common with most printers of its day, to convert a printable ASCII character code into a bit pattern that corresponds to the ASCII received character value.
 
 ### Additional Print Specifications  
 Print Mechanism:  
