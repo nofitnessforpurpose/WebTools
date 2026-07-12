@@ -81,6 +81,7 @@ GPRINT:(w%, addr%)
   ENDWH
 ```
 <BR>
+
 ## Background  
 
 The Psion Printer II employed the EPSON M221 thermal printhead moving carriage to print over the pages width. Using 8 of the 9 thermal head pixels in graphics mode, it prints in slices of vertical pixels per byte 9 for character mode and 8 for graphics mode. In graphics mode the layout maps the top-most pixel of the 8-pixel strip to the Most Significant Bit (MSB = 128) and the bottom-most pixel to the Least Significant Bit (LSB = 1). The width of a line is 256 pixels over the printable area which gives a resolution of approximately 65 DPI. ASCII text characters received by the unit use the inbuilt character ROM, in common with most printers of its day, to convert a printable ASCII character code into a bit pattern that corresponds to the ASCII received character value.
