@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Psion Printer 2 Web Emulator</title>
-    <meta name="description" content="A premium retro emulator that runs in the browser, communicating with a Psion Organiser II via Web Serial to simulate thermal printing in real-time.">
+    <meta name="description" content="A premium retro printer emulator that runs in the browser, communicating via Web Serial to simulate thermal printing in real-time. Ideal for use with a Psion Organiser II & COMMS / RS232 links.">
     <!-- Google Fonts & Font Awesome -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,7 +20,7 @@
                 <span class="retro-badge">PSION II</span>
                 <h1>Printer 2 Web Emulator</h1>
             </div>
-            <p class="subtitle">Real-time serial thermal printer emulation for Psion Organiser II</p>
+            <p class="subtitle">Real-time serial thermal printer emulation</p>
         </header>
 
         <!-- Left Side Slide-out Panel Trigger Tab -->
@@ -32,7 +32,7 @@
         <!-- Slide-out Guide Sidebar Panel -->
         <aside class="sidebar-panel-left" id="guide-panel">
             <div class="sidebar-header">
-                <h2><i class="fa-solid fa-book-open"></i> Guide & OPL Stub</h2>
+                <h2><i class="fa-solid fa-book-open"></i> Guide & Organiser OPL Stub</h2>
                 <button class="btn-close-sidebar" id="btn-close-guide" title="Close Panel">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -41,15 +41,19 @@
             <div class="sidebar-body">
                 <div class="guide-text note-box">
                     <i class="fa-solid fa-info-circle"></i>
-                    <span>For text printing no COMMS Link software extensions or stubs are needed. The COMMS link directs <code>LPRINT</code> commands to the serial interface link. <br><br>Check the baud rate settings are set to the default values (9600,N,8,1,XON,NONE)
+                    <span>For text printing ASCII characters are directly accepted via the host computers COM port.
                     <br><br>
-                    If you have a Bluetooth COMMS link, use the same serial settings and connect the emulated printer to the Bluetooth serial channel.</span>
+         			No COMMS Link software extensions or stubs are needed. The COMMS link directs <code>LPRINT</code> commands to the serial interface link. 
+					<br><br>
+					Check the baud rate settings are set to the defaults <i>(9600,N,8,1,XON,NONE)</i>
+                    <br><br>
+                    If you have a Bluetooth COMMS link, use the same serial settings, connect the printer emulation to the Bluetooth serial channel.</span>
                 </div>
 
                 <div class="guide-text note-box">
                     <i class="fa-solid fa-info-circle"></i>
-                    <p>If graphics print support is needed, use the helper stub routine below to allow the emulator to handle graphics printing (since the physical Printer II hardware's internal <code>GPRINT:</code> routine is not available). 
-                    <br><br>The <code>GPRINT:</code> routine is small and can be located on your internal <b>A:</b> storage location.</p>
+                    <p>For graphics on an Organiser II, use the helper stub routine <code>GPRINT:</code> to allow the Organiser to handle graphics printing <i>(it replaces the physical Printer's internal <code>GPRINT:</code> routine)</i>. 
+                    <br><br>The <code>GPRINT:</code> routine is small and can be located on your internal <b>A:</b> storage location. See the <i>CONTROL</i> tab <i>Emulator Operations</i> to download the stub code.</p>
                 </div>
 
                 <!-- GPRINT Stub -->
@@ -126,21 +130,33 @@
             </section>
         </div>
 
-        <!-- Right Side Help Tab Triggers -->
+        <!-- Right Side Sidebar Tab Triggers -->
         <button class="sidebar-tab-trigger" id="help-trigger" title="Open Help Reference">
             <i class="fa-solid fa-chevron-left" id="help-trigger-icon"></i>
             <span class="tab-label"><i class="fa-solid fa-circle-info"></i> HELP</span>
         </button>
 
+        <button class="sidebar-tab-trigger" id="print-modes-trigger" title="Open Print Modes">
+            <i class="fa-solid fa-chevron-left" id="print-modes-trigger-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-print"></i> PRINT MODES</span>
+        </button>
+
         <button class="sidebar-tab-trigger" id="controls-trigger" title="Open Serial Controls">
             <i class="fa-solid fa-chevron-left" id="controls-trigger-icon"></i>
+            <!-- Connected badge status dot inside CONTROLS tab -->
+            <span id="controls-status-dot" class="status-dot"></span>
             <span class="tab-label"><i class="fa-solid fa-sliders"></i> CONTROLS</span>
+        </button>
+
+        <button class="sidebar-tab-trigger" id="operations-trigger" title="Open Emulator Operations">
+            <i class="fa-solid fa-chevron-left" id="operations-trigger-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-gears"></i> OPERATIONS</span>
         </button>
 
         <!-- Slide-out Controls Sidebar Panel -->
         <aside class="sidebar-panel" id="controls-panel">
             <div class="sidebar-header">
-                <h2><i class="fa-solid fa-sliders"></i> Serial & Control</h2>
+                <h2><i class="fa-solid fa-sliders"></i> Serial & Control Settings</h2>
                 <button class="btn-close-sidebar" id="btn-close-controls" title="Close Panel">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -149,7 +165,7 @@
             <div class="sidebar-body">
                 <!-- Connection Card -->
                 <div class="control-group">
-                    <label class="control-label">Serial Interface (9600 Baud)</label>
+                    <label class="control-label">Serial Interface</label>
                     <div class="serial-status-container">
                         <button class="btn btn-primary" id="btnSerialConnect">
                             <i class="fa-solid fa-plug"></i> Connect Serial
@@ -178,66 +194,86 @@
                     </div>
                 </div>
 
-                <!-- Flow Control / Filter Settings -->
-                <div class="control-group" style="margin-top: 8px;">
-                    <div style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--color-text-muted);">
-                        <input type="checkbox" id="chkFilterHandshake" checked style="cursor: pointer; width: 14px; height: 14px;">
-                        <label for="chkFilterHandshake" style="cursor: pointer; user-select: none;">Ignore XON/XOFF flow control (ASCII 17/19)</label>
-                    </div>
-                </div>
-
-                <hr class="divider">
-
-                <!-- Actions -->
+                <!-- RS232 Comms Parameters -->
                 <div class="control-group">
-                    <label class="control-label">Emulator Operations</label>
-                    <div class="action-buttons">
-                        <button class="btn btn-action" id="btnPrintTest">
-                            <i class="fa-solid fa-vial"></i> Print Test Page
-                        </button>
-                        <button class="btn btn-action" id="btnTransferGprint" style="background: linear-gradient(135deg, rgba(0,242,254,0.15) 0%, rgba(0,245,212,0.15) 100%); border-color: rgba(0,242,254,0.3);">
-                            <i class="fa-solid fa-file-export"></i> Transfer GPRINT to Psion
-                        </button>
-                        <button class="btn btn-action" id="btnFeedPaper">
-                            <i class="fa-solid fa-arrow-up"></i> Feed Paper (3 Lines)
-                        </button>
-                        <button class="btn btn-action" id="btnDownloadPrint">
-                            <i class="fa-solid fa-download"></i> Save Printout (PNG)
-                        </button>
-                        <button class="btn btn-action" id="btnCopyPrint">
-                            <i class="fa-solid fa-copy"></i> Copy Printout (Image)
-                        </button>
-                        <button class="btn btn-action" id="btnPrintPaper">
-                            <i class="fa-solid fa-print"></i> Print Paper (System)
-                        </button>
-                        <button class="btn btn-action" id="btnDownloadText">
-                            <i class="fa-solid fa-file-arrow-down"></i> Save Text (TXT)
-                        </button>
-                        <button class="btn btn-action" id="btnCopyText">
-                            <i class="fa-solid fa-copy"></i> Copy Text
-                        </button>
-                        <button class="btn btn-danger" id="btnClearRoll">
-                            <i class="fa-solid fa-trash-can"></i> Clear Paper Roll
-                        </button>
-                    </div>
+                    <label class="control-label" for="selectBaudRate">Baud Rate</label>
+                    <select id="selectBaudRate" class="setting-select">
+                        <option value="300">300 bps</option>
+                        <option value="600">600 bps</option>
+                        <option value="1200">1200 bps</option>
+                        <option value="2400">2400 bps</option>
+                        <option value="4800">4800 bps</option>
+                        <option value="9600" selected>9600 bps</option>
+                        <option value="19200">19200 bps</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label" for="selectParity">Parity</label>
+                    <select id="selectParity" class="setting-select">
+                        <option value="none" selected>None</option>
+                        <option value="even">Even</option>
+                        <option value="odd">Odd</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label" for="selectDataBits">Data Bits</label>
+                    <select id="selectDataBits" class="setting-select">
+                        <option value="7">7 Bits</option>
+                        <option value="8" selected>8 Bits</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label" for="selectStopBits">Stop Bits</label>
+                    <select id="selectStopBits" class="setting-select">
+                        <option value="1" selected>1 Stop Bit</option>
+                        <option value="2">2 Stop Bits</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label" for="selectFlowControl">Handshake</label>
+                    <select id="selectFlowControl" class="setting-select">
+                        <option value="none">None (Ignore handshake)</option>
+                        <option value="xonxoff" selected>XON/XOFF (Software)</option>
+                        <option value="hardware">Hardware (RTS/CTS)</option>
+                    </select>
                 </div>
 
                 <hr class="divider">
 
+                <!-- Comms Actions -->
+                <div class="control-group">
+                    <label class="control-label">Comms Actions</label>
+                    <button class="btn btn-action" id="btnTransferGprint" style="background: linear-gradient(135deg, rgba(0,242,254,0.15) 0%, rgba(0,245,212,0.15) 100%); border-color: rgba(0,242,254,0.3);">
+                        <i class="fa-solid fa-file-export"></i> Transfer GPRINT to Psion
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Slide-out Print Modes Sidebar Panel -->
+        <aside class="sidebar-panel" id="print-modes-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-print"></i> Active Print Modes & Sim</h2>
+                <button class="btn-close-sidebar" id="btn-close-print-modes" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-body">
                 <!-- Mode Info & Controls -->
                 <div class="control-group font-status-card">
                     <label class="control-label">Active Printer Settings</label>
                     <table class="status-table">
                         <tr>
-                            <td>Baud Rate</td>
-                            <td>9600 bps</td>
-                        </tr>
-                        <tr>
                             <td>Text Columns</td>
                             <td>
                                 <select id="selectColumns" class="setting-select">
                                     <option value="20">20 Columns</option>
-                                    <option value="40">40 Columns</option>
+                                    <option value="40" selected>40 Columns</option>
                                     <option value="60">60 Columns</option>
                                     <option value="80">80 Columns</option>
                                 </select>
@@ -247,7 +283,7 @@
                             <td>Font Style</td>
                             <td>
                                 <select id="selectStyle" class="setting-select">
-                                    <option value="normal">Normal (5x7)</option>
+                                    <option value="normal" selected>Normal (5x7)</option>
                                     <option value="double-height">Double Height</option>
                                 </select>
                             </td>
@@ -256,7 +292,7 @@
                             <td>Underline</td>
                             <td>
                                 <select id="selectUnderline" class="setting-select">
-                                    <option value="disabled">Disabled</option>
+                                    <option value="disabled" selected>Disabled</option>
                                     <option value="enabled">Enabled</option>
                                 </select>
                             </td>
@@ -274,7 +310,7 @@
                             <td>Paper & Ink Preset</td>
                             <td>
                                 <select id="selectPaperPreset" class="setting-select">
-                                    <option value="standard">Standard (Black/White)</option>
+                                    <option value="standard" selected>Standard (Black/White)</option>
                                     <option value="blue">Blue (Blue/White)</option>
                                     <option value="aged">Aged (Charcoal/Yellow)</option>
                                 </select>
@@ -321,10 +357,52 @@
             </div>
         </aside>
 
+        <!-- Slide-out Operations Sidebar Panel -->
+        <aside class="sidebar-panel" id="operations-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-gears"></i> Emulator Operations</h2>
+                <button class="btn-close-sidebar" id="btn-close-operations" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-body">
+                <div class="control-group">
+                    <label class="control-label">Emulator Operations</label>
+                    <div class="action-buttons">
+                        <button class="btn btn-action" id="btnFeedPaper">
+                            <i class="fa-solid fa-arrow-up"></i> Feed Paper (3 Lines)
+                        </button>
+                        <button class="btn btn-action" id="btnPrintTest">
+                            <i class="fa-solid fa-vial"></i> Print Test Page
+                        </button>
+                        <button class="btn btn-action" id="btnDownloadPrint">
+                            <i class="fa-solid fa-download"></i> Save Printout (PNG)
+                        </button>
+                        <button class="btn btn-action" id="btnCopyPrint">
+                            <i class="fa-solid fa-copy"></i> Copy Printout (Image)
+                        </button>
+                        <button class="btn btn-action" id="btnPrintPaper">
+                            <i class="fa-solid fa-print"></i> Print Paper (System)
+                        </button>
+                        <button class="btn btn-action" id="btnDownloadText">
+                            <i class="fa-solid fa-file-arrow-down"></i> Save Text (TXT)
+                        </button>
+                        <button class="btn btn-action" id="btnCopyText">
+                            <i class="fa-solid fa-copy"></i> Copy Text
+                        </button>
+                        <button class="btn btn-danger" id="btnClearRoll">
+                            <i class="fa-solid fa-trash-can"></i> Clear Paper Roll
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
         <!-- Slide-out Help Sidebar Panel -->
         <aside class="sidebar-panel" id="help-panel">
             <div class="sidebar-header">
-                <h2><i class="fa-solid fa-circle-info"></i> How it Works & Psion Organiser II Deployment</h2>
+                <h2><i class="fa-solid fa-circle-info"></i> Help Topics</h2>
                 <button class="btn-close-sidebar" id="btn-close-help" title="Close Panel">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -332,22 +410,135 @@
             <div class="sidebar-body">
                 <div class="guide-grid-vertical" style="display: flex; flex-direction: column; gap: 15px;">
                     <div class="guide-card">
-                        <h4><i class="fa-solid fa-play"></i> How to Use</h4>
-                        <p>Ensure all connections and serial settings are correct. Connect the emulator using the Connect Serial button on the right panel. The virtual printer is now ready to receive print commands over the COMMS link. Standard OPL <code>LPRINT</code> commands will output directly to the scrolling thermal print roll. Use the custom <code>GPRINT</code> stub for graphics mode (i.e. to draw raw column graphics - see the Printer 2 companion app - Printer Graphics RLE Compressor)</p>
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-play"></i> How to Use</span>
+                                <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>With your device physically linked to the preferred COM port. Connect the emulator using the <b>Connect Serial</b> button in the <b>CONTROLS</b> tab on the right.</p>
+							<p>
+							It's key to ensure the COM port, connections and serial settings <b><u>match</u></b>!
+							</p>
+							<p>
+							When connected the status indicator will change from <b>OFFLINE</b> to <b>IDLE</b>, the virtual printer is now ready to receive serial print commands.</p>
+							<p>
+							Any serial RS232 device can be connected, including Organiser I' & II's and many other devices!
+							</p>
+                        </div>
                     </div>
-                    <div class="guide-card">
-                        <h4><i class="fa-solid fa-plug"></i> Hardware & Conflict Warnings</h4>
-                        <p>Connect your Organiser's COMMS Link to a serial port or Serial-to-USB convertor on the host computer. Web Serial will try to set the default baud rate settings. You may need to set your host computers serial port settings to match 9600 Baud, 8 Data Bits, No Parity, and 1 Stop Bit. <br><strong>Important:</strong> Ensure no other software (like Org-Link, terminal programs, or OPK Editor transfers) is holding the serial port open, as standard OS ports can only be accessed by one app at a time.</p>
+					
+                   <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-print"></i> Printing</span>
+                                <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                             <h4>Using<h4>
+                            <p>
+                            The emulator accepts plain ASCII text and classic control codes from any device on the connected serial port. See the <strong>Printer Control Codes</strong> section for a full list.
+                            </p>
+
+                            <h4>Printing Text</h4>
+                            <p>
+                            When using an Organiser II over a COMMS / RS232 Link, standard OPL <code>LPRINT</code> commands will output directly to the scrolling thermal print roll.
+                            </p>
+
+                            <h4>Printing Graphics</h4>
+                            <p>
+                            To design custom graphics for the Organiser II, use the companion-app: <strong>Printer Graphics RLE Compressor</strong>.
+                            </p>
+                            <p>
+                            To print your graphics from an Organiser II, use the custom OPL <code>GPRINT:</code> stub to replace the classic printer's <code>GPRINT</code> command (See <b>CONTROLS</b> to transfer it to an Organiser II). 
+                            </p>							
+						</div>
+					</div>
+					
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-plug"></i> Hardware & Conflict Warnings</span>
+                                <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+						    <p>
+							A serial COM port can only be connected to one application on the host machine. Such as a Serial-to-USB convertor or internal serial COM port. 
+							</p>
+                            <p>Connect your serial device e.g. the Organiser's serial COMMS Link to the selected serial COM port or Serial-to-USB convertor on the host computer. 
+							</p>
+							<p>
+							The browsers Web Serial will try to set the default baud rate settings. You may need to set your host computers serial port settings to match ( e.g. 9600 Baud, 8 Data Bits, No Parity, and 1 Stop Bit ).
+							<p>
+							<p><strong>Important:</strong> Ensure no other software (terminal programs, ORG-LINK or OPK transfers) is holding the serial port open, as standard OS ports can only be accessed by one app / program at a time.</p>
+                        </div>
                     </div>
-                    <div class="guide-card">
-                        <h4><i class="fa-solid fa-code"></i> Printer Control Codes</h4>
-                        <p>The emulator supports hardware command formatting:
-                           <br>• <code>CHR$(14)</code>: Double Width (20 columns)
-                           <br>• <code>CHR$(15)</code>: Normal (40 columns)
-                           <br>• <code>CHR$(23)</code>: Narrow (60 columns)
-                           <br>• <code>CHR$(22)</code>: Very Narrow (80 columns)
-                           <br>• <code>CHR$(21)</code>/<code>(24)</code>: Underline On/Off
-                           <br>• <code>CHR$(17)</code>/<code>(18)</code>: Double Height On/Off (if flow control filter is disabled)</p>
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-code"></i> Printer Control Codes</span>
+                                <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>The emulator supports hardware command formatting:
+							
+							   <br>• <code>CHR$(9)</code>: Tab (move to centre of page)
+							   <br>• <code>CHR$(10)</code>: New Line (\n)
+							   <br>• <code>CHR$(12)</code>: Form Feed (3 line)
+							   <br>• <code>CHR$(13)</code>: Carriage Return (\r)
+							   <br>
+                               <br>• <code>CHR$(14)</code>: Double Width (20 columns)
+                               <br>• <code>CHR$(15)</code>: Normal (40 columns)
+                               <br>• <code>CHR$(23)</code>: Narrow (60 columns)
+                               <br>• <code>CHR$(22)</code>: Very Narrow (80 columns)
+                               <br>• <code>CHR$(21)</code>/<code>(24)</code>: Underline On/Off
+                               <br>• <code>CHR$(17)</code>/<code>(18)</code>: Double Height On/Off (if flow control filter is disabled)</p>
+                        </div>
+                    </div>
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-keyboard"></i> Keyboard Shortcuts</span>
+                                <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p style="line-height: 1.5; font-size: 0.85rem;">
+                                • <code>Alt + G</code>: Toggle Guide Panel (Left)<br>
+                                • <code>Alt + C</code>: Toggle Controls Panel<br>
+                                • <code>Alt + M</code>: Toggle Print Modes Panel<br>
+                                • <code>Alt + O</code>: Toggle Operations Panel<br>
+                                • <code>Alt + H</code>: Toggle Help Panel<br>
+                                • <code>Alt + S</code>: Toggle Serial Connection<br>
+                                • <code>Alt + T</code>: Print Test Page<br>
+                                • <code>Alt + F</code>: Feed Paper roll<br>
+                                • <code>Delete</code>: Clear Paper Roll
+                            </p>
+                        </div>
+                    </div>
+					
+                   <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-plug"></i> PC Connections</span>
+                                <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+						  <p> Devices other than an Organiser II may need custom wiring. A classic Organiser II COMMS/RS232 link is designed for direct connection to a 25 way D-Type COM port connection.
+						  </p>
+						  <p>                      
+						  If using custom connections you will need to connect at least the following PC COM port pins:
+                          <br>25 Way - pins 2,3 & 7
+						  <br>
+						   or 
+						  <br> 9 Way - pins 2,3 & 5
+                          </p>
+						</div>  
                     </div>
                 </div>
                 <p class="copyright" style="margin-top: 25px; font-size: 0.75rem; text-align: center; color: var(--color-text-muted);">&copy; 2026 NFfP</p>

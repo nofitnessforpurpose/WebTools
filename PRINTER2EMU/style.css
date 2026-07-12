@@ -976,14 +976,38 @@ input:checked + .slider:before {
     transition: right 0.6s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.2s ease, border-color 0.2s ease;
 }
 
-#controls-trigger {
-    top: calc(50% + 10px);
+#help-trigger {
+    top: calc(50% - 220px);
     transform: translateY(0);
 }
 
-#help-trigger {
-    top: calc(50% - 90px);
+#print-modes-trigger {
+    top: calc(50% - 130px);
     transform: translateY(0);
+}
+
+#controls-trigger {
+    top: calc(50% + 20px);
+    transform: translateY(0);
+}
+
+#operations-trigger {
+    top: calc(50% + 145px);
+    transform: translateY(0);
+}
+
+.sidebar-tab-trigger .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--color-text-muted);
+    box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sidebar-tab-trigger .status-dot.online {
+    background-color: var(--color-secondary);
+    box-shadow: 0 0 8px var(--color-secondary);
 }
 
 .sidebar-tab-trigger:hover {
@@ -1132,18 +1156,56 @@ input:checked + .slider:before {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
-#help-panel .guide-card h4 {
+#help-panel .guide-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(0, 242, 254, 0.25);
+}
+
+#help-panel .guide-card .guide-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+#help-panel .guide-card .guide-header h4 {
     color: #fff;
     font-size: 0.9rem;
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: space-between;
+    width: 100%;
+    margin: 0;
+    transition: color 0.2s ease;
+}
+
+#help-panel .guide-card .guide-header:hover h4 {
+    color: var(--color-primary);
 }
 
 #help-panel .guide-card h4 i {
     color: var(--color-primary);
+}
+
+#help-panel .guide-card .toggle-icon {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+    transition: transform 0.25s ease;
+}
+
+#help-panel .guide-card.collapsed .toggle-icon {
+    transform: rotate(-90deg);
+}
+
+#help-panel .guide-card .guide-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#help-panel .guide-card.collapsed .guide-body {
+    display: none;
 }
 
 #help-panel .guide-card p {

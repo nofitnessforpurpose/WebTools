@@ -163,6 +163,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const helpPanel = document.getElementById('help-panel');
     const btnCloseHelp = document.getElementById('btn-close-help');
 
+    const printModesTrigger = document.getElementById('print-modes-trigger');
+    const printModesTriggerIcon = document.getElementById('print-modes-trigger-icon');
+    const printModesPanel = document.getElementById('print-modes-panel');
+    const btnClosePrintModes = document.getElementById('btn-close-print-modes');
+
+    const operationsTrigger = document.getElementById('operations-trigger');
+    const operationsTriggerIcon = document.getElementById('operations-trigger-icon');
+    const operationsPanel = document.getElementById('operations-panel');
+    const btnCloseOperations = document.getElementById('btn-close-operations');
+
+    // Serial parameters DOM mapping
+    const selectBaudRate = document.getElementById('selectBaudRate');
+    const selectParity = document.getElementById('selectParity');
+    const selectDataBits = document.getElementById('selectDataBits');
+    const selectStopBits = document.getElementById('selectStopBits');
+    const selectFlowControl = document.getElementById('selectFlowControl');
+
     // GPRINT Transfer modal elements
     const btnTransferGprint = document.getElementById('btnTransferGprint');
     const gprintModal = document.getElementById('gprintModal');
@@ -238,17 +255,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // LED States
     function updateConnectionStatus(isConnected) {
+        const statusDot = document.getElementById('controls-status-dot');
         if (isConnected) {
             btnSerialConnect.innerHTML = '<i class="fa-solid fa-unlink"></i> Disconnect';
             ledStatus.className = 'led led-status connected';
             printStats.textContent = 'Idle';
             printStats.classList.remove('offline');
+            if (statusDot) statusDot.classList.add('online');
             showToast('Serial Port Connected!', 'fa-plug-circle-check');
         } else {
             btnSerialConnect.innerHTML = '<i class="fa-solid fa-plug"></i> Connect Serial';
             ledStatus.className = 'led led-status disconnected';
             printStats.textContent = 'Offline';
             printStats.classList.add('offline');
+            if (statusDot) statusDot.classList.remove('online');
             showToast('Serial Port Disconnected', 'fa-plug-circle-xmark');
         }
     }
@@ -309,6 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
             activeStyles.narrowMode = 'very-narrow';
         }
         updateActiveStyleUI();
+        localStorage.setItem('emu_columns', val);
         showToast(`Text columns changed manually to ${val}`, 'fa-sliders');
     });
 
@@ -316,6 +337,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const val = e.target.value;
         activeStyles.doubleHeight = (val === 'double-height');
         updateActiveStyleUI();
+        localStorage.setItem('emu_style', val);
         showToast(`Font style changed manually to ${val === 'double-height' ? 'Double Height' : 'Normal'}`, 'fa-sliders');
     });
 
@@ -323,6 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const val = e.target.value;
         activeStyles.underline = (val === 'enabled');
         updateActiveStyleUI();
+        localStorage.setItem('emu_underline', val);
         showToast(`Underline changed manually to ${activeStyles.underline ? 'Enabled' : 'Disabled'}`, 'fa-sliders');
     });
 
@@ -335,6 +358,11 @@ document.addEventListener('DOMContentLoaded', () => {
             narrowMode: 'normal'
         });
         updateActiveStyleUI();
+
+        // Clear persisted active style configurations
+        localStorage.removeItem('emu_columns');
+        localStorage.removeItem('emu_style');
+        localStorage.removeItem('emu_underline');
 
         // Reset Thermal Print Simulation
         if (selectPaperPreset) {
@@ -518,6 +546,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 toggleGuideSidebar(false);
                 toggleControlsSidebar(false);
                 toggleHelpSidebar(false);
+                togglePrintModesSidebar(false);
+                toggleOperationsSidebar(false);
             } else {
                 document.body.classList.remove('focus-mode');
                 sessionStorage.setItem('printerFocusMode', 'false');
@@ -556,13 +586,21 @@ document.addEventListener('DOMContentLoaded', () => {
     async function connectSerial() {
         try {
             if (!port) {
+                const flowControlSetting = selectFlowControl ? selectFlowControl.value : 'xonxoff';
+                const baudRateSetting = selectBaudRate ? parseInt(selectBaudRate.value, 10) : 9600;
+                const dataBitsSetting = selectDataBits ? parseInt(selectDataBits.value, 10) : 8;
+                const stopBitsSetting = selectStopBits ? parseInt(selectStopBits.value, 10) : 1;
+                const paritySetting = selectParity ? selectParity.value : 'none';
+
+                const flowControlOpt = (flowControlSetting === 'hardware') ? 'hardware' : 'none';
+
                 port = await navigator.serial.requestPort();
                 await port.open({ 
-                    baudRate: 9600,
-                    dataBits: 8,
-                    stopBits: 1,
-                    parity: 'none',
-                    flowControl: 'none'
+                    baudRate: baudRateSetting,
+                    dataBits: dataBitsSetting,
+                    stopBits: stopBitsSetting,
+                    parity: paritySetting,
+                    flowControl: flowControlOpt
                 });
             }
             
@@ -726,14 +764,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateActiveStyleUI();
                 break;
             case 17: // Start double height mode
-                const filterXon = chkFilterHandshake ? chkFilterHandshake.checked : true;
+                const filterXon = selectFlowControl ? (selectFlowControl.value === 'xonxoff') : true;
                 if (!filterXon && !ignoreHandshake) {
                     activeStyles.doubleHeight = true;
                     updateActiveStyleUI();
                 }
                 break;
             case 18: // End double height mode
-                const filterXoff = chkFilterHandshake ? chkFilterHandshake.checked : true;
+                const filterXoff = selectFlowControl ? (selectFlowControl.value === 'xonxoff') : true;
                 if (!filterXoff && !ignoreHandshake) {
                     activeStyles.doubleHeight = false;
                     updateActiveStyleUI();
@@ -1461,8 +1499,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         if (isOpen) {
-            // Close Help if opening Controls
             toggleHelpSidebar(false);
+            togglePrintModesSidebar(false);
+            toggleOperationsSidebar(false);
         }
     }
 
@@ -1476,8 +1515,41 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         if (isOpen) {
-            // Close Controls if opening Help
             toggleControlsSidebar(false);
+            togglePrintModesSidebar(false);
+            toggleOperationsSidebar(false);
+        }
+    }
+
+    function togglePrintModesSidebar(forceState) {
+        const isOpen = forceState !== undefined ? forceState : !printModesPanel.classList.contains('open');
+        printModesPanel.classList.toggle('open', isOpen);
+        if (printModesTrigger) {
+            printModesTrigger.classList.toggle('panel-open', isOpen);
+            if (printModesTriggerIcon) {
+                printModesTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+            }
+        }
+        if (isOpen) {
+            toggleHelpSidebar(false);
+            toggleControlsSidebar(false);
+            toggleOperationsSidebar(false);
+        }
+    }
+
+    function toggleOperationsSidebar(forceState) {
+        const isOpen = forceState !== undefined ? forceState : !operationsPanel.classList.contains('open');
+        operationsPanel.classList.toggle('open', isOpen);
+        if (operationsTrigger) {
+            operationsTrigger.classList.toggle('panel-open', isOpen);
+            if (operationsTriggerIcon) {
+                operationsTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+            }
+        }
+        if (isOpen) {
+            toggleHelpSidebar(false);
+            toggleControlsSidebar(false);
+            togglePrintModesSidebar(false);
         }
     }
 
@@ -1490,6 +1562,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (helpTrigger) helpTrigger.addEventListener('click', () => toggleHelpSidebar());
     if (btnCloseHelp) btnCloseHelp.addEventListener('click', () => toggleHelpSidebar(false));
+
+    // Collapsible guide cards in Help panel
+    const helpGuideCards = document.querySelectorAll('#help-panel .guide-card');
+    helpGuideCards.forEach(card => {
+        const header = card.querySelector('.guide-header');
+        if (header) {
+            header.addEventListener('click', () => {
+                card.classList.toggle('collapsed');
+            });
+        }
+    });
+
+    if (printModesTrigger) printModesTrigger.addEventListener('click', () => togglePrintModesSidebar());
+    if (btnClosePrintModes) btnClosePrintModes.addEventListener('click', () => togglePrintModesSidebar(false));
+
+    if (operationsTrigger) operationsTrigger.addEventListener('click', () => toggleOperationsSidebar());
+    if (btnCloseOperations) btnCloseOperations.addEventListener('click', () => toggleOperationsSidebar(false));
 
     // GPRINT Transfer Modal wizard logic
     if (btnTransferGprint) {
@@ -1679,6 +1768,16 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             toggleHelpSidebar();
         }
+        // Alt + M: Toggle Print Modes Panel
+        else if (e.altKey && e.key.toLowerCase() === 'm') {
+            e.preventDefault();
+            togglePrintModesSidebar();
+        }
+        // Alt + O: Toggle Operations Panel
+        else if (e.altKey && e.key.toLowerCase() === 'o') {
+            e.preventDefault();
+            toggleOperationsSidebar();
+        }
         // Alt + S: Connect Serial
         else if (e.altKey && e.key.toLowerCase() === 's') {
             e.preventDefault();
@@ -1794,9 +1893,82 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Load persisted Serial Port Settings
+    function loadSerialSettings() {
+        if (selectFlowControl) {
+            selectFlowControl.value = localStorage.getItem('emu_flowControl') || 'xonxoff';
+        }
+        if (selectBaudRate) {
+            selectBaudRate.value = localStorage.getItem('emu_baudRate') || '9600';
+        }
+        if (selectDataBits) {
+            selectDataBits.value = localStorage.getItem('emu_dataBits') || '8';
+        }
+        if (selectParity) {
+            selectParity.value = localStorage.getItem('emu_parity') || 'none';
+        }
+        if (selectStopBits) {
+            selectStopBits.value = localStorage.getItem('emu_stopBits') || '1';
+        }
+    }
+
+    // Bind change listeners to save Serial Port Settings
+    if (selectFlowControl) {
+        selectFlowControl.addEventListener('change', (e) => {
+            localStorage.setItem('emu_flowControl', e.target.value);
+        });
+    }
+    if (selectBaudRate) {
+        selectBaudRate.addEventListener('change', (e) => {
+            localStorage.setItem('emu_baudRate', e.target.value);
+        });
+    }
+    if (selectDataBits) {
+        selectDataBits.addEventListener('change', (e) => {
+            localStorage.setItem('emu_dataBits', e.target.value);
+        });
+    }
+    if (selectParity) {
+        selectParity.addEventListener('change', (e) => {
+            localStorage.setItem('emu_parity', e.target.value);
+        });
+    }
+    if (selectStopBits) {
+        selectStopBits.addEventListener('change', (e) => {
+            localStorage.setItem('emu_stopBits', e.target.value);
+        });
+    }
+
+    // Load persisted Active Printer Settings
+    function loadActivePrinterSettings() {
+        const cols = localStorage.getItem('emu_columns') || '40';
+        const style = localStorage.getItem('emu_style') || 'normal';
+        const underline = localStorage.getItem('emu_underline') || 'disabled';
+
+        if (cols === '20') {
+            activeStyles.doubleWidth = true;
+            activeStyles.narrowMode = 'normal';
+        } else if (cols === '40') {
+            activeStyles.doubleWidth = false;
+            activeStyles.narrowMode = 'normal';
+        } else if (cols === '60') {
+            activeStyles.doubleWidth = false;
+            activeStyles.narrowMode = 'narrow';
+        } else if (cols === '80') {
+            activeStyles.doubleWidth = false;
+            activeStyles.narrowMode = 'very-narrow';
+        }
+
+        activeStyles.doubleHeight = (style === 'double-height');
+        activeStyles.underline = (underline === 'enabled');
+
+        updateActiveStyleUI();
+    }
+
     // Initial state setup
-    updateActiveStyleUI();
+    loadActivePrinterSettings();
     loadThermalSimulationSettings();
+    loadSerialSettings();
     updateConnectionStatus(false);
     updatePaperPadding();
 });
