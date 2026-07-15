@@ -856,31 +856,31 @@ input:checked + .slider-small:before {
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 40px; /* Left/Right sprocket margins */
+    width: 48px; /* Left/Right sprocket margins (0.5 inches) */
     z-index: 4;
     pointer-events: none;
 }
 
 #paperContentWrapper::before {
     left: 0;
-    /* Sprocket holes repeating every 24px vertical */
-    background-image: radial-gradient(circle, #0f172a 5.5px, transparent 6px);
+    /* Sprocket holes repeating every 48px vertical, centered at x=24px (0.25 inches) */
+    background-image: radial-gradient(circle at 24px 24px, #0f172a 4px, transparent 4.5px);
     background-repeat: repeat-y;
-    background-size: 40px 24px;
-    background-position: 50% 0px; /* Aligns tear-off perforation exactly between holes */
+    background-size: 48px 48px;
+    background-position: 0px 0px;
 }
 
 #paperContentWrapper::after {
     right: 0;
-    background-image: radial-gradient(circle, #0f172a 5.5px, transparent 6px);
+    background-image: radial-gradient(circle at 24px 24px, #0f172a 4px, transparent 4.5px);
     background-repeat: repeat-y;
-    background-size: 40px 24px;
-    background-position: 50% 0px;
+    background-size: 48px 48px;
+    background-position: 0px 0px;
 }
 
 /* Clean Cut Option - Sprocket Margins Removed */
 .paper-roll.margins-removed {
-    width: calc(var(--paper-width, 800px) - 80px); /* Shrinks container to printable area */
+    width: calc(var(--paper-width, 912px) - 96px); /* Shrinks container to printable area */
     transition: width var(--transition-normal);
 }
 
@@ -890,11 +890,11 @@ input:checked + .slider-small:before {
 }
 
 .paper-roll.margins-removed #paperContentWrapper {
-    background-position: -40px 0px;
+    background-position: -48px 0px;
 }
 
 .paper-roll.margins-removed .print-line-canvas {
-    margin-left: -40px; /* Shift printed pixels left to align */
+    margin-left: -48px; /* Shift printed pixels left to align */
 }
 
 /* Paper Stock Presets */
@@ -955,7 +955,7 @@ input:checked + .slider-small:before {
 }
 
 .print-line-canvas {
-    width: 800px;
+    width: 100%;
     height: auto;
     flex-shrink: 0;
     display: block;

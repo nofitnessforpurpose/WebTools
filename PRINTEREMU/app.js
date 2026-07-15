@@ -389,7 +389,7 @@ class EscpParser {
         this.lineBuffer = [];
         this.lastWasCr = false;
         this.currentX = 0; // Cumulative X position in pixels relative to leftMargin
-        this.lineSpacing = 24; // Default 1/6 inch (24px in our scale)
+        this.lineSpacing = 16; // Default 1/6 inch (16px in our 96 DPI scale)
     }
 
     reset() {
@@ -405,7 +405,7 @@ class EscpParser {
         this.lastWasCr = false;
         this.callbacks.onStatusChange('Idle');
         this.currentX = 0;
-        this.lineSpacing = 24;
+        this.lineSpacing = 16;
     }
 
     parse(bytes) {
@@ -449,7 +449,23 @@ class EscpParser {
                 this.state = 'TEXT';
                 break;
             case 'ESC_THREE':
-                this.lineSpacing = Math.round(b * (24 / 36)); // n/216 inch = n * (24/36) px
+                this.lineSpacing = Math.round(b * (16 / 36)); // n/216 inch = n * (16/36) px at 96 DPI
+                this.state = 'TEXT';
+                break;
+            case 'ESC_C':
+                if (b === 0) {
+                    this.state = 'ESC_C_INCHES';
+                } else {
+                    this.callbacks.onSetPageLengthLines?.(b);
+                    this.state = 'TEXT';
+                }
+                break;
+            case 'ESC_C_INCHES':
+                this.callbacks.onSetPageLengthInches?.(b);
+                this.state = 'TEXT';
+                break;
+            case 'ESC_N':
+                this.callbacks.onSetSkipOverPerforations?.(b);
                 this.state = 'TEXT';
                 break;
             case 'ESC_LOWER_J':
@@ -458,7 +474,7 @@ class EscpParser {
                 this.state = 'TEXT';
                 break;
             case 'ESC_LOWER_E':
-                const revLineAmount = b * 24; // Reverse feed n lines (24px line height)
+                const revLineAmount = b * 16; // Reverse feed n lines (16px line height)
                 this.callbacks.onReverseFeedPaper?.(revLineAmount);
                 this.state = 'TEXT';
                 break;
@@ -558,14 +574,14 @@ class EscpParser {
             }
             this.callbacks.onStatusChange('Printing');
             this.flushLineBuffer();
-            this.callbacks.onFeedPaper(this.lineSpacing / 24);
+            this.callbacks.onFeedPaper(this.lineSpacing / 16);
             this.callbacks.onStatusChange('Idle');
             this.lastWasCr = false;
         } else if (b === 13) {
             this.callbacks.onStatusChange('Printing');
             this.flushLineBuffer();
             if (this.autoLineFeed) {
-                this.callbacks.onFeedPaper(this.lineSpacing / 24);
+                this.callbacks.onFeedPaper(this.lineSpacing / 16);
             }
             this.callbacks.onStatusChange('Idle');
             this.lastWasCr = true;
@@ -602,11 +618,20 @@ class EscpParser {
             case 64:
                 this.reset();
                 break;
-            case 50: // ESC 2 (Restore line spacing to 1/6 inch = 24px)
-                this.lineSpacing = 24;
+            case 50: // ESC 2 (Restore line spacing to 1/6 inch = 16px at 96 DPI)
+                this.lineSpacing = 16;
                 break;
             case 51: // ESC 3 (Set line spacing to n/216 inch)
                 this.state = 'ESC_THREE';
+                break;
+            case 67: // ESC C (Set page length in lines or inches)
+                this.state = 'ESC_C';
+                break;
+            case 78: // ESC N (Set skip-over perforation)
+                this.state = 'ESC_N';
+                break;
+            case 79: // ESC O (Cancel skip-over perforation)
+                this.callbacks.onCancelSkipOverPerforations?.();
                 break;
             case 33:
                 this.state = 'ESC_BANG';
@@ -750,12 +775,13 @@ class PrinterRenderer {
         this.isLockedToBottom = true;
         this.scaleFactor = 2; // Default to 2x High-Res
 
-        this.paperWidth = 800;
-        this.printableWidth = 680; // 8.5 inches usable text page
-        this.leftMargin = 60;      // 0.5 inches sprocket + 0.25 inches default software margin = 0.75 inches (60px)
-        this.lineHeight = 24;
-        this.pageLength = 1056; 
+        this.paperWidth = 912;
+        this.printableWidth = 768; // 80 columns of pica (80 * 9.6px = 768px)
+        this.leftMargin = 72;      // 0.75" left margin (sprockets + padding)
+        this.lineHeight = 16;
+        this.pageLength = 1056; // 11.0 inches at 96 DPI (66 lines, 22 sprocket holes)
         this.totalHeightPrinted = 0;
+        this.skipOverPerforationLines = 0; // Bottom margin skip-over lines (default 0)
         this.textLinesBuffer = [];
         this.printQueue = [];
         this.isProcessingQueue = false;
@@ -919,8 +945,8 @@ class PrinterRenderer {
     drawBorderedForm(ctx, W, H, inkColor) {
         ctx.strokeStyle = inkColor;
         ctx.lineWidth = 1.5;
-        // Draws border around printable page limits (just inside the 40px tractor margins)
-        ctx.strokeRect(48, 10, W - 96, H - 20);
+        // Draws border around printable page limits (just inside the 48px tractor margins)
+        ctx.strokeRect(56, 10, W - 112, H - 20);
     }
 
     drawComputerMusicForm(ctx, W, H, inkColor) {
@@ -929,31 +955,31 @@ class PrinterRenderer {
         ctx.lineWidth = 1.5;
 
         // Page specific border
-        ctx.strokeRect(48, 10, W - 96, H - 20);
+        ctx.strokeRect(56, 10, W - 112, H - 20);
 
-        // Separate header section (horizontal line at y = 72)
+        // Separate header section (horizontal line at y = 48)
         ctx.beginPath();
-        ctx.moveTo(48, 72);
-        ctx.lineTo(W - 48, 72);
+        ctx.moveTo(56, 48);
+        ctx.lineTo(W - 56, 48);
         
-        // Vertical line separating line numbers from body (at x = 75)
-        ctx.moveTo(75, 72);
-        ctx.lineTo(75, H - 10);
+        // Vertical line separating line numbers from body (at x = 88)
+        ctx.moveTo(88, 48);
+        ctx.lineTo(88, H - 10);
         ctx.stroke();
 
         // Print header metadata
         ctx.font = 'bold 9px Courier New, Courier, monospace';
-        ctx.fillText('COMPUTER MUSIC SHEET', 60, 30);
+        ctx.fillText('COMPUTER MUSIC SHEET', 108, 20);
         ctx.font = '8px Courier New, Courier, monospace';
-        ctx.fillText('FORM #CM-80', W - 140, 30);
-        ctx.fillText('LPI: 6 / 8', W - 140, 45);
-        ctx.fillText('NFfP SYSTEMS', W - 140, 60);
+        ctx.fillText('FORM #CM-80', W - 160, 20);
+        ctx.fillText('LPI: 6 / 8', W - 160, 30);
+        ctx.fillText('NFfP SYSTEMS', W - 160, 40);
 
-        // Side column line counts (1, 2, 3...) spaced every 24px
+        // Side column line counts (1, 2, 3...) spaced every 16px
         ctx.font = '8px Courier New, Courier, monospace';
         let lineNum = 1;
-        for (let y = 72 + 16; y < H - 20; y += 24) {
-            ctx.fillText(lineNum.toString().padStart(2, '0'), 55, y);
+        for (let y = 48 + 12; y < H - 20; y += 16) {
+            ctx.fillText(lineNum.toString().padStart(2, '0'), 64, y);
             lineNum++;
         }
     }
@@ -964,31 +990,31 @@ class PrinterRenderer {
         ctx.lineWidth = 1.5;
 
         // Page specific border
-        ctx.strokeRect(48, 10, W - 96, H - 20);
+        ctx.strokeRect(56, 10, W - 112, H - 20);
 
-        // Separate header section (horizontal line at y = 72)
+        // Separate header section (horizontal line at y = 48)
         ctx.beginPath();
-        ctx.moveTo(48, 72);
-        ctx.lineTo(W - 48, 72);
+        ctx.moveTo(56, 48);
+        ctx.lineTo(W - 56, 48);
         
-        // Vertical line separating line numbers from body (at x = 75)
-        ctx.moveTo(75, 72);
-        ctx.lineTo(75, H - 10);
+        // Vertical line separating line numbers from body (at x = 88)
+        ctx.moveTo(88, 48);
+        ctx.lineTo(88, H - 10);
         ctx.stroke();
 
         // Print header metadata
         ctx.font = 'bold 9px Courier New, Courier, monospace';
-        ctx.fillText('REPORT ANALYSIS SHEET', 60, 30);
+        ctx.fillText('REPORT ANALYSIS SHEET', 108, 20);
         ctx.font = '8px Courier New, Courier, monospace';
-        ctx.fillText('FORM A 1234', W - 140, 30);
-        ctx.fillText('1-LINE ALTERNATING', W - 140, 45);
-        ctx.fillText('NFfP SYSTEMS', W - 140, 60);
+        ctx.fillText('FORM A 1234', W - 160, 20);
+        ctx.fillText('1-LINE ALTERNATING', W - 160, 30);
+        ctx.fillText('NFfP SYSTEMS', W - 160, 40);
 
-        // Side column line counts (1, 2, 3...) spaced every 24px
+        // Side column line counts (1, 2, 3...) spaced every 16px
         ctx.font = '8px Courier New, Courier, monospace';
         let lineNum = 1;
-        for (let y = 72 + 16; y < H - 20; y += 24) {
-            ctx.fillText(lineNum.toString().padStart(2, '0'), 55, y);
+        for (let y = 48 + 12; y < H - 20; y += 16) {
+            ctx.fillText(lineNum.toString().padStart(2, '0'), 64, y);
             lineNum++;
         }
     }
@@ -1110,19 +1136,19 @@ class PrinterRenderer {
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
-        ctx.moveTo(40, 0);
-        ctx.lineTo(40, H);
-        ctx.moveTo(W - 40, 0);
-        ctx.lineTo(W - 40, H);
+        ctx.moveTo(48, 0);
+        ctx.lineTo(48, H);
+        ctx.moveTo(W - 48, 0);
+        ctx.lineTo(W - 48, H);
         ctx.stroke();
         ctx.setLineDash([]); // Reset line dash
 
-        // Circular sprocket holes repeating every 24px vertical
+        // Circular sprocket holes repeating every 48px vertical (centered exactly between page perforations)
         ctx.fillStyle = '#0f172a';
-        for (let y = 12; y < H; y += 24) {
+        for (let y = 24; y < H; y += 48) {
             ctx.beginPath();
-            ctx.arc(20, y, 5.5, 0, Math.PI * 2);
-            ctx.arc(W - 20, y, 5.5, 0, Math.PI * 2);
+            ctx.arc(24, y, 4, 0, Math.PI * 2);
+            ctx.arc(W - 24, y, 4, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -1136,22 +1162,22 @@ class PrinterRenderer {
 
         // Vertical branding inside left tractor strip
         if (this.paperFormat === 'music-sheet-1234') {
-            this.drawDirectionalArrowEmblem(ctx, 8, 120, metaInk);
+            this.drawDirectionalArrowEmblem(ctx, 12, 120, metaInk);
             
             ctx.save();
-            ctx.translate(8, H / 2 + 100);
+            ctx.translate(12, H / 2 + 100);
             ctx.rotate(-Math.PI / 2);
             ctx.fillText('NFfP BUSINESS FORMS', -60, 0);
             ctx.restore();
 
             ctx.save();
-            ctx.translate(8, H / 2 - 100);
+            ctx.translate(12, H / 2 - 100);
             ctx.rotate(-Math.PI / 2);
             ctx.fillText('FORM A 1234', -35, 0);
             ctx.restore();
         } else {
             ctx.save();
-            ctx.translate(8, H / 2); // Moved to 8px (outboard) to clear sprockets at 20px
+            ctx.translate(12, H / 2); // Centered in left sprocket margin (24px)
             ctx.rotate(-Math.PI / 2);
             ctx.fillText('NFfP BUSINESS FORMS  *  STOCK-1980  *  MADE IN UK', -120, 0);
             ctx.restore();
@@ -1163,20 +1189,20 @@ class PrinterRenderer {
         
         // 1. Draw the larger upward alignment arrows outboard (centered between paper edge and sprockets)
         ctx.font = '14px Arial, sans-serif';
-        ctx.fillText('↑', 10, 16);
-        ctx.fillText('↑', W - 10, 16);
+        ctx.fillText('↑', 12, 48);
+        ctx.fillText('↑', W - 12, 48);
         
-        // 2. Draw the TOF labels centered between sprockets and perforation, vertically between holes (y=12 and y=36)
+        // 2. Draw the TOF labels centered between sprockets and perforation, vertically between holes (y=24 and y=72)
         ctx.font = 'bold 9px Arial, sans-serif';
-        ctx.fillText('TOF', 30, 24);
-        ctx.fillText('TOF', W - 30, 24);
+        ctx.fillText('TOF', 36, 48);
+        ctx.fillText('TOF', W - 36, 48);
         
         ctx.textAlign = 'left'; // Reset alignment
         ctx.textBaseline = 'alphabetic'; // Reset baseline
 
         // Directional Indicators "FEED THIS WAY" in tractor margins
         ctx.save();
-        ctx.translate(W - 8, H / 2); // Moved to W - 8px (outboard) to clear sprockets at W - 20px
+        ctx.translate(W - 12, H / 2);
         ctx.rotate(Math.PI / 2);
         ctx.font = '8px Courier New, Courier, monospace';
         ctx.fillText('FEED THIS WAY >>>', -50, 0);
@@ -1185,10 +1211,10 @@ class PrinterRenderer {
         // Alignment crosshairs in the printable corners
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.18)';
         ctx.lineWidth = 0.5;
-        this.drawCrosshair(ctx, 30, 12);
-        this.drawCrosshair(ctx, W - 30, 12);
-        this.drawCrosshair(ctx, 30, H - 12);
-        this.drawCrosshair(ctx, W - 30, H - 12);
+        this.drawCrosshair(ctx, 36, 24);
+        this.drawCrosshair(ctx, W - 36, 24);
+        this.drawCrosshair(ctx, 36, H - 24);
+        this.drawCrosshair(ctx, W - 36, H - 24);
     }
 
     drawCrosshair(ctx, x, y) {
@@ -1273,16 +1299,16 @@ class PrinterRenderer {
         let totalLinePrintWidth = 0;
         
         for (const item of charList) {
-            let cellWidth = 9.0;
+            let cellWidth = 9.6; // 10 CPI default (96 / 10 = 9.6px)
             let totalCols = 12;
             
             if (item.pitch === 'elite') {
-                cellWidth = 7.5;
+                cellWidth = 8.0; // 12 CPI (96 / 12 = 8.0px)
                 totalCols = 10;
             }
 
             if (item.condensed) {
-                cellWidth = item.pitch === 'elite' ? 4.5 : 5.25;
+                cellWidth = item.pitch === 'elite' ? 4.8 : 5.6; // 20 CPI (4.8px) vs 17.14 CPI (5.6px)
                 totalCols = 9;
             }
 
@@ -1358,12 +1384,12 @@ class PrinterRenderer {
         let targetClip = '';
         if (direction === 1) {
             // L-to-R: starts clipped to the left margin
-            initialClip = `inset(0px ${rightM}px 0px 0px)`;
-            targetClip = `inset(0px ${this.paperWidth - (leftM + width)}px 0px 0px)`;
+            initialClip = `inset(0px ${this.paperWidth - leftM}px 0px ${leftM}px)`;
+            targetClip = `inset(0px ${this.paperWidth - (leftM + width)}px 0px ${leftM}px)`;
         } else {
             // R-to-L: starts clipped to the printed width boundary
-            initialClip = `inset(0px 0px 0px ${leftM + width}px)`;
-            targetClip = `inset(0px 0px 0px ${leftM}px)`;
+            initialClip = `inset(0px ${this.paperWidth - (leftM + width)}px 0px ${leftM + width}px)`;
+            targetClip = `inset(0px ${this.paperWidth - (leftM + width)}px 0px ${leftM}px)`;
         }
 
         canvas.style.transition = 'none';
@@ -1378,6 +1404,12 @@ class PrinterRenderer {
 
         this.animatePrintHead(totalLinePrintWidth, durationMs);
         this.soundSynth?.playPrintSweep(durationMs, false);
+        
+        setTimeout(() => {
+            canvas.style.clipPath = 'none';
+            canvas.style.transition = 'none';
+        }, durationMs + 50);
+
         setTimeout(callback, durationMs);
     }
 
@@ -1448,11 +1480,11 @@ class PrinterRenderer {
         let initialClip = '';
         let targetClip = '';
         if (direction === 1) {
-            initialClip = `inset(0px ${rightM}px 0px 0px)`;
-            targetClip = `inset(0px ${this.paperWidth - (leftM + width)}px 0px 0px)`;
+            initialClip = `inset(0px ${this.paperWidth - leftM}px 0px ${leftM}px)`;
+            targetClip = `inset(0px ${this.paperWidth - (leftM + width)}px 0px ${leftM}px)`;
         } else {
-            initialClip = `inset(0px 0px 0px ${leftM + width}px)`;
-            targetClip = `inset(0px 0px 0px ${leftM}px)`;
+            initialClip = `inset(0px ${this.paperWidth - (leftM + width)}px 0px ${leftM + width}px)`;
+            targetClip = `inset(0px ${this.paperWidth - (leftM + width)}px 0px ${leftM}px)`;
         }
 
         canvas.style.transition = 'none';
@@ -1467,6 +1499,12 @@ class PrinterRenderer {
 
         this.animatePrintHead(printWidth, durationMs);
         this.soundSynth?.playPrintSweep(durationMs, true);
+        
+        setTimeout(() => {
+            canvas.style.clipPath = 'none';
+            canvas.style.transition = 'none';
+        }, durationMs + 50);
+
         setTimeout(callback, durationMs);
     }
 
@@ -1542,6 +1580,24 @@ class PrinterRenderer {
 
     appendCanvas(canvas, scrollDuration = 0) {
         const scale = this.scaleFactor || 2;
+        
+        // Automatic skip-over perforation logic
+        if (this.skipOverPerforationLines > 0 && !canvas.classList.contains('perforation-skip')) {
+            const currentOffset = (this.totalHeightPrinted - 96) % this.pageLength;
+            const printableHeight = this.pageLength - this.skipOverPerforationLines * this.lineHeight;
+            if (currentOffset >= printableHeight) {
+                const skipHeight = this.pageLength - currentOffset;
+                if (skipHeight > 0) {
+                    const skipScale = this.scaleFactor || 2;
+                    const skipCanvas = document.createElement('canvas');
+                    skipCanvas.width = this.paperWidth * skipScale;
+                    skipCanvas.height = skipHeight * skipScale;
+                    skipCanvas.className = 'print-line-canvas blank-line perforation-skip';
+                    this.appendCanvas(skipCanvas, 0);
+                }
+            }
+        }
+
         const canvasHeightUserSpace = canvas.height / scale;
         
         // Check if the scroll position is currently locked to the bottom
@@ -1787,7 +1843,25 @@ document.addEventListener('DOMContentLoaded', () => {
         onFormFeed: () => renderer.formFeed(),
         onStatusChange: (status) => updatePrintStats(status),
         onLedRxFlash: () => flashRxLed(),
-        onStyleChange: () => updateActiveStyleUI()
+        onStyleChange: () => updateActiveStyleUI(),
+        onSetPageLengthLines: (lines) => {
+            renderer.pageLength = lines * renderer.lineHeight;
+            renderer.updatePaperStyling();
+            showToast(`Page length set to ${lines} lines via escape code`, 'fa-arrows-up-down');
+        },
+        onSetPageLengthInches: (inches) => {
+            renderer.pageLength = inches * 96;
+            renderer.updatePaperStyling();
+            showToast(`Page length set to ${inches} inches via escape code`, 'fa-arrows-up-down');
+        },
+        onSetSkipOverPerforations: (lines) => {
+            renderer.skipOverPerforationLines = lines;
+            showToast(`Perforation skip set to ${lines} lines via escape code`, 'fa-arrows-up-down');
+        },
+        onCancelSkipOverPerforations: () => {
+            renderer.skipOverPerforationLines = 0;
+            showToast('Perforation skip cancelled via escape code', 'fa-arrows-up-down');
+        }
     };
     const parser = new EscpParser(parserCallbacks);
     
@@ -2064,15 +2138,25 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('efx_paperFormat', format);
             renderer.paperFormat = format;
             if (format === 'mini' || format === 'mini-bordered') {
-                renderer.paperWidth = 716;
-                renderer.pageLength = 672;
-                renderer.printableWidth = 596;
-                renderer.leftMargin = 60;
+                renderer.paperWidth = 816; // 8.5" paper
+                renderer.pageLength = 672; // 7.0" page (42 lines, 14 holes)
+                renderer.printableWidth = 768; // 8.0" print width
+                renderer.leftMargin = 24;   // 0.25" margins
+            } else if (format === 'dp-12') {
+                renderer.paperWidth = 912; // 9.5" paper
+                renderer.pageLength = 1152; // 12.0" page (72 lines, 24 holes)
+                renderer.printableWidth = 768;
+                renderer.leftMargin = 72;
+            } else if (format === 'legal-14') {
+                renderer.paperWidth = 816; // 8.5" paper
+                renderer.pageLength = 1344; // 14.0" page (84 lines, 28 holes)
+                renderer.printableWidth = 768;
+                renderer.leftMargin = 24;
             } else {
-                renderer.paperWidth = 800;
-                renderer.pageLength = 1056;
-                renderer.printableWidth = 680;
-                renderer.leftMargin = 60;
+                renderer.paperWidth = 912; // 9.5" paper
+                renderer.pageLength = 1056; // 11.0" page (66 lines, 22 holes)
+                renderer.printableWidth = 768;
+                renderer.leftMargin = 72;
             }
             renderer.clear();
             parser.reset();
@@ -2247,7 +2331,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const bytes = encoder.encode(formatted);
         parser.parse(bytes);
         updateBufferLed();
-        rawInputText.value = '';
         showToast('Bytes sent to parser', 'fa-paper-plane');
     });
 
@@ -2684,15 +2767,25 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectPaperFormat) selectPaperFormat.value = savedFormat;
         renderer.paperFormat = savedFormat;
         if (savedFormat === 'mini' || savedFormat === 'mini-bordered') {
-            renderer.paperWidth = 716;
-            renderer.pageLength = 672;
-            renderer.printableWidth = 596;
-            renderer.leftMargin = 60;
+            renderer.paperWidth = 816; // 8.5" paper
+            renderer.pageLength = 672; // 7.0" page (42 lines, 14 holes)
+            renderer.printableWidth = 768;
+            renderer.leftMargin = 24;
+        } else if (savedFormat === 'dp-12') {
+            renderer.paperWidth = 912; // 9.5" paper
+            renderer.pageLength = 1152; // 12.0" page (72 lines, 24 holes)
+            renderer.printableWidth = 768;
+            renderer.leftMargin = 72;
+        } else if (savedFormat === 'legal-14') {
+            renderer.paperWidth = 816; // 8.5" paper
+            renderer.pageLength = 1344; // 14.0" page (84 lines, 28 holes)
+            renderer.printableWidth = 768;
+            renderer.leftMargin = 24;
         } else {
-            renderer.paperWidth = 800;
-            renderer.pageLength = 1056;
-            renderer.printableWidth = 680;
-            renderer.leftMargin = 60;
+            renderer.paperWidth = 912; // 9.5" paper
+            renderer.pageLength = 1056; // 11.0" page (66 lines, 22 holes)
+            renderer.printableWidth = 768;
+            renderer.leftMargin = 72;
         }
 
         const preset = localStorage.getItem('efx_paperPreset') || 'green-bar';
