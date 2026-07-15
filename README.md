@@ -1,6 +1,6 @@
 ## NFfP Tools
 
-This repository contains a number of web browser tools supporting the PSION Organiser II 
+This repository contains a number of web browser tools, comprising classic device eumlations of printers and plotters supporting web serial (RS232) and targetted tools suitable for the PSION Organiser II series of PDA's. 
 
 ### Tool Summary 
 
