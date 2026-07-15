@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EFX-80s Web Dot Matrix Emulator</title>
+    <meta name="description" content="A premium 9-pin impact dot matrix printer emulator running in the browser. Replicates ESC/P, user-defined characters, bit image graphics, and sprocket-feed paper.">
+    <!-- Google Fonts & Font Awesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-logo">
+                <span class="retro-badge">EFX-80s</span>
+                <h1>9-Pin Impact Web Emulator</h1>
+            </div>
+            <p class="subtitle">Real-time dot-matrix print & escape sequence simulation</p>
+        </header>
+
+        <!-- Left Side Slide-out Panel Trigger Tab -->
+        <button class="sidebar-tab-trigger-left" id="guide-trigger" data-panel="guide-panel" title="Open Guide">
+            <i class="fa-solid fa-chevron-right toggle-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-book-open"></i> GUIDE</span>
+        </button>
+
+        <!-- Slide-out Guide Sidebar Panel -->
+        <aside class="sidebar-panel-left" id="guide-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-book-open"></i> OPL & Emulation Guide</h2>
+                <button class="btn-close-sidebar" id="btn-close-guide" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-body">
+                <div class="guide-text note-box">
+                    <i class="fa-solid fa-info-circle"></i>
+                    <span>This emulator acts as a faithful 9-pin impact printer using the industry standard ESC/P control set. Any system that outputs ASCII characters can print text directly.</span>
+                </div>
+
+                <div class="guide-text note-box">
+                    <i class="fa-solid fa-circle-nodes"></i>
+                    <span>For graphics and custom characters, you can redefine fonts dynamically using <code>ESC &amp;</code> or draw bit-images using <code>ESC K</code> (Draft/60 DPI), <code>ESC L</code> (120 DPI), or <code>ESC Z</code> (240 DPI).</span>
+                </div>
+
+                <!-- OPL Stub Code -->
+                <div class="code-section">
+                    <div class="code-header">
+                        <span>OPL Print Demo Stub</span>
+                    </div>
+                    <textarea class="code-area" id="oplCode" readonly style="height: 150px;">PRNTDEMO:
+  REM By NFfP
+  REM EFX-80s ESC/P Text Demo
+  LPRINT CHR$(27);CHR$(64); :REM Reset
+  LPRINT "Normal Pica Pitch"
+  LPRINT CHR$(27);CHR$(77); :REM Elite
+  LPRINT "Elite Pitch 12 CPI"
+  LPRINT CHR$(27);CHR$(69); :REM Bold On
+  LPRINT "Emphasized Bold text"
+  LPRINT CHR$(27);CHR$(70);CHR$(27);CHR$(80);
+  LPRINT "Back to normal."
+  LPRINT CHR$(12); :REM Form Feed</textarea>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace -->
+        <div class="workspace-grid">
+
+            <!-- Center Column: Physical Printer Mock & Roll -->
+            <section class="panel panel-printer">
+                <div class="panel-header">
+                    <div style="display: flex; align-items: center; gap: 10px; flex-grow: 1;">
+                        <i class="fa-solid fa-print"></i>
+                        <h2 style="flex-grow: 0; margin-right: 8px;">Tractor-Feed Paper Path</h2>
+                        <span id="printStats" class="badge offline">Offline</span>
+                    </div>
+                    <div class="toggle-container" title="Show only the paper roll">
+                        <span class="toggle-label"><i class="fa-solid fa-expand"></i> Focus Mode</span>
+                        <label class="switch">
+                            <input type="checkbox" id="chkFocusMode">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="panel-body printer-viewport">
+                    <!-- Physical Printer Body mockup wrapper -->
+                    <div class="printer-body">
+                        <div class="printer-mouth-shadow"></div>
+                        <div class="printer-tear-bar"></div>
+                        
+                        <!-- Paper Roll Area -->
+                        <div class="paper-roll-container" id="paperRollContainer">
+                            <div class="paper-roll preset-green-bar" id="paperRoll">
+                                <div id="paperTopSpacer" style="flex-shrink: 0;"></div>
+                                <div id="paperContentWrapper">
+                                    <div id="paperTextureOverlay"></div>
+                                    <!-- Print canvases will be appended here dynamically -->
+                                </div>
+                                <div id="paperBottomSpacer" style="flex-shrink: 0;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Animated Print Head Carriage -->
+                        <div id="printHead" class="print-head-carriage">
+                            <div class="print-head-nozzle"></div>
+                            <div class="print-head-fins"></div>
+                            <div class="print-head-needle-light"></div>
+                        </div>
+
+                        <!-- Smoky transparent plastic cover -->
+                        <div class="printer-smoky-cover">
+                            <span class="cover-logo">EFX-80s</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Floating return to bottom button -->
+                    <button class="btn-return-bottom" id="btnReturnBottom" title="Scroll to bottom (Live Print)">
+                        <i class="fa-solid fa-arrow-down-long"></i> Live View
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Right Side Sidebar Tab Triggers -->
+        <button class="sidebar-tab-trigger" id="help-trigger" data-panel="help-panel" style="top: 80px;" title="Open Help Reference">
+            <i class="fa-solid fa-chevron-left toggle-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-circle-info"></i> HELP</span>
+        </button>
+
+        <button class="sidebar-tab-trigger" id="print-modes-trigger" data-panel="print-modes-panel" style="top: 190px;" title="Open Print Modes">
+            <i class="fa-solid fa-chevron-left toggle-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-print"></i> PRINT MODES</span>
+        </button>
+
+        <button class="sidebar-tab-trigger" id="controls-trigger" data-panel="controls-panel" style="top: 300px;" title="Open Serial Controls">
+            <i class="fa-solid fa-chevron-left toggle-icon"></i>
+            <span id="controls-status-dot" class="status-dot"></span>
+            <span class="tab-label"><i class="fa-solid fa-sliders"></i> CONTROLS</span>
+        </button>
+
+        <button class="sidebar-tab-trigger" id="operations-trigger" data-panel="operations-panel" style="top: 410px;" title="Open Printer Operations">
+            <i class="fa-solid fa-chevron-left toggle-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-gears"></i> OPERATIONS</span>
+        </button>
+
+        <!-- Slide-out Help Sidebar Panel -->
+        <aside class="sidebar-panel" id="help-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-circle-info"></i> Help Reference</h2>
+                <button class="btn-close-sidebar" id="btn-close-help" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="sidebar-body">
+                <div class="guide-grid-vertical" style="display: flex; flex-direction: column; gap: 15px;">
+                    <div class="guide-card">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-play"></i> Getting Started</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>Connect your hardware or link the emulator using the <b>CONSOLE</b> tab. If using Web Serial, ensure baud rates match.</p>
+                            <p>Use the <b>CONSOLE</b> text box to quickly test characters, or type escape sequences like <code>\eE</code> (Bold On) or <code>\eF</code> (Bold Off).</p>
+                        </div>
+                    </div>
+					
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-code"></i> ESC/P Control Codes</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>The EFX-80 supports standard ESC/P commands:</p>
+                            <ul class="code-list" style="margin-left: 15px; font-size: 0.8rem; line-height: 1.5;">
+                                <li><code>ESC @</code> : Reset</li>
+                                <li><code>ESC ! n</code> : Master Select</li>
+                                <li><code>ESC E / F</code> : Bold On/Off</li>
+                                <li><code>ESC 4 / 5</code> : Italic On/Off</li>
+                                <li><code>ESC G / H</code> : Double Strike On/Off</li>
+                                <li><code>ESC - n</code> : Underline On/Off</li>
+                                <li><code>SI / DC2</code> : Condensed On/Off</li>
+                                <li><code>ESC P / M</code> : Pica / Elite Pitch</li>
+                                <li><code>ESC &amp;</code> : Download font character</li>
+                                <li><code>ESC K/L/Z</code> : 8-Pin Graphics</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Slide-out Settings/Print Modes Sidebar Panel -->
+        <aside class="sidebar-panel" id="print-modes-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-print"></i> Active Print Modes & Sim</h2>
+                <button class="btn-close-sidebar" id="btn-close-print-modes" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-body">
+                <!-- Active Printer Settings -->
+                <div class="control-group font-status-card">
+                    <label class="control-label">Active Printer Settings</label>
+                    <table class="status-table">
+                        <tr>
+                            <td>Pitch</td>
+                            <td>
+                                <select id="selectPitch" class="setting-select">
+                                    <option value="pica" selected>Pica (10 CPI)</option>
+                                    <option value="elite">Elite (12 CPI)</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Condensed</td>
+                            <td>
+                                <select id="selectCondensed" class="setting-select">
+                                    <option value="disabled" selected>Disabled</option>
+                                    <option value="enabled">Enabled</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Bold (Emphasized)</td>
+                            <td>
+                                <select id="selectBold" class="setting-select">
+                                    <option value="disabled" selected>Disabled</option>
+                                    <option value="enabled">Enabled</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Italic</td>
+                            <td>
+                                <select id="selectItalic" class="setting-select">
+                                    <option value="disabled" selected>Disabled</option>
+                                    <option value="enabled">Enabled</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Underline</td>
+                            <td>
+                                <select id="selectUnderline" class="setting-select">
+                                    <option value="disabled" selected>Disabled</option>
+                                    <option value="enabled">Enabled</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Double-Strike</td>
+                            <td>
+                                <select id="selectDoubleStrike" class="setting-select">
+                                    <option value="disabled" selected>Disabled</option>
+                                    <option value="enabled">Enabled</option>
+                                </select>
+                            </td>
+                        </tr>
+                    </table>
+                    <button class="btn btn-action" id="btnResetSettings" style="margin-top: 10px; font-size: 0.8rem; padding: 6px 12px; width: 100%;">
+                        <i class="fa-solid fa-arrow-rotate-left"></i> Reset to Defaults
+                    </button>
+                </div>
+                <!-- Simulation Params -->
+                <div class="control-group font-status-card">
+                    <label class="control-label">Visual Simulation</label>
+                    <table class="status-table">
+                        <tr>
+                            <td>Ribbon Colour</td>
+                            <td>
+                                <select id="selectRibbonColor" class="setting-select">
+                                    <option value="true-black">True Black</option>
+                                    <option value="fresh-black" selected>Fresh Black</option>
+                                    <option value="fresh-violet">Fresh Violet</option>
+                                    <option value="fresh-green">Fresh Green</option>
+                                    <option value="fresh-red">Fresh Red</option>
+                                    <option value="fresh-brown">Fresh Brown</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Paper Format</td>
+                            <td>
+                                <select id="selectPaperFormat" class="setting-select">
+                                    <option value="correspondence" selected>Correspondence (9.5" x 11")</option>
+                                    <option value="correspondence-bordered">Correspondence Bordered (9.5" x 11")</option>
+                                    <option value="mini">Data Processing Mini (8.5" x 7")</option>
+                                    <option value="mini-bordered">DP Mini Bordered (8.5" x 7")</option>
+                                    <option value="music-sheet">Computer Music Paper (9.5" x 11")</option>
+                                    <option value="music-sheet-1234">Computer Music Sheet (Form A 1234)</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Paper Stock</td>
+                            <td>
+                                <select id="selectPaperPreset" class="setting-select">
+                                    <option value="green-bar" selected>Green Bar (3-Line)</option>
+                                    <option value="green-bar-2">Green Bar (2-Line)</option>
+                                    <option value="blue-bar">Blue Bar (3-Line)</option>
+                                    <option value="blue-bar-2">Blue Bar (2-Line)</option>
+                                    <option value="grey-bar">Grey Bar (3-Line)</option>
+                                    <option value="grey-bar-2">Grey Bar (2-Line)</option>
+                                    <option value="standard">White Continuous</option>
+                                    <option value="aged">Aged Sepia Paper</option>
+                                    <option value="perforated">Perforated Continuous</option>
+                                    <option value="invoice">Generic Invoice Form</option>
+                                    <option value="carbonless-yellow">Carbonless Yellow (CFB)</option>
+                                    <option value="carbonless-pink">Carbonless Pink (CFB)</option>
+                                    <option value="carbonless-goldenrod">Carbonless Goldenrod (CF)</option>
+                                    <option value="carbonless-blue">Carbonless Blue (CF)</option>
+                                    <option value="music-sheet-1234-stock">Form K 1234 (Mint Green / Cream)</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Export Resolution</td>
+                            <td>
+                                <select id="selectExportRes" class="setting-select">
+                                    <option value="1">Standard (1x)</option>
+                                    <option value="2" selected>High-Res (2x)</option>
+                                    <option value="3">Ultra-Res (3x)</option>
+                                </select>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Auto Scroll</td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" id="checkAutoScroll" checked style="accent-color: var(--color-primary);">
+                                    <label for="checkAutoScroll" style="font-size: 11px; user-select: none;">Scroll on Print</label>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Sound Effects</td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" id="checkSoundEnabled" style="accent-color: var(--color-primary);">
+                                    <label for="checkSoundEnabled" style="font-size: 11px; user-select: none;">Enable Sound</label>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Paper Creases</td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" id="checkPaperCreases" style="accent-color: var(--color-primary);">
+                                    <label for="checkPaperCreases" style="font-size: 11px; user-select: none;">Simulate Page Folds</label>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Paper Texture</td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <input type="checkbox" id="checkPaperTexture" style="accent-color: var(--color-primary);">
+                                    <label for="checkPaperTexture" style="font-size: 11px; user-select: none;">Simulate Fibrous Grain</label>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Ribbon Wear</td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                    <input type="range" id="sliderRibbonWear" min="0" max="100" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                    <span id="labelRibbonWear" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 28px; text-align: right;">0%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Pin Jitter</td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                    <input type="range" id="sliderJitter" min="0" max="3" step="0.1" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                    <span id="labelJitter" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 36px; text-align: right;">0.0px</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- Hardware DIP Switches -->
+                <div class="control-group font-status-card" style="margin-top: 15px;">
+                    <label class="control-label">Hardware DIP Switches</label>
+                    <div class="dip-switch-bank">
+                        <div class="dip-switch-item">
+                            <span class="dip-num">1</span>
+                            <label class="switch-small">
+                                <input type="checkbox" id="dipSw1">
+                                <span class="slider-small"></span>
+                            </label>
+                            <span class="dip-label">Auto LF</span>
+                        </div>
+                        <div class="dip-switch-item">
+                            <span class="dip-num">2</span>
+                            <label class="switch-small">
+                                <input type="checkbox" id="dipSw2">
+                                <span class="slider-small"></span>
+                            </label>
+                            <span class="dip-label">Elite Pitch</span>
+                        </div>
+                        <div class="dip-switch-item">
+                            <span class="dip-num">3</span>
+                            <label class="switch-small">
+                                <input type="checkbox" id="dipSw3">
+                                <span class="slider-small"></span>
+                            </label>
+                            <span class="dip-label">12" Page</span>
+                        </div>
+                        <div class="dip-switch-item">
+                            <span class="dip-num">4</span>
+                            <label class="switch-small">
+                                <input type="checkbox" id="dipSw4">
+                                <span class="slider-small"></span>
+                            </label>
+                            <span class="dip-label">Italic Default</span>
+                        </div>
+                        <div class="dip-switch-item disabled-dip">
+                            <span class="dip-num">5</span>
+                            <label class="switch-small">
+                                <input type="checkbox" id="dipSw5" disabled>
+                                <span class="slider-small"></span>
+                            </label>
+                            <span class="dip-label">Buzzer</span>
+                        </div>
+                        <div class="dip-switch-item disabled-dip">
+                            <span class="dip-num">6</span>
+                            <label class="switch-small">
+                                <input type="checkbox" id="dipSw6" disabled>
+                                <span class="slider-small"></span>
+                            </label>
+                            <span class="dip-label">Uni-Dir</span>
+                        </div>
+                        <div class="dip-switch-item disabled-dip">
+                            <span class="dip-num">7</span>
+                            <label class="switch-small">
+                                <input type="checkbox" id="dipSw7" disabled>
+                                <span class="slider-small"></span>
+                            </label>
+                            <span class="dip-label">USA Set</span>
+                        </div>
+                        <div class="dip-switch-item disabled-dip">
+                            <span class="dip-num">8</span>
+                            <label class="switch-small">
+                                <input type="checkbox" id="dipSw8" disabled>
+                                <span class="slider-small"></span>
+                            </label>
+                            <span class="dip-label">Paper Sensor</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Slide-out Controls Sidebar Panel -->
+        <aside class="sidebar-panel" id="controls-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-sliders"></i> Serial & Control Settings</h2>
+                <button class="btn-close-sidebar" id="btn-close-controls" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-body">
+                <!-- Serial Connection -->
+                <div class="control-group">
+                    <label class="control-label">Physical Interface</label>
+                    <div class="serial-status-container">
+                        <button class="btn btn-primary" id="btnSerialConnect">
+                            <i class="fa-solid fa-plug"></i> Connect Serial
+                        </button>
+                        <span id="serialAlert" class="unsupported-alert" style="display: none;">
+                            <i class="fa-solid fa-exclamation-triangle"></i> Web Serial not supported in this browser.
+                        </span>
+                    </div>
+                </div>
+
+                <!-- LEDs -->
+                <div class="led-card">
+                    <div class="led-row">
+                        <div class="led-item">
+                            <div class="led led-status" id="ledStatus"></div>
+                            <span class="led-label">Serial On</span>
+                        </div>
+                        <div class="led-item">
+                            <div class="led led-rx" id="ledRx"></div>
+                            <span class="led-label">Active Rx</span>
+                        </div>
+                        <div class="led-item">
+                            <div class="led led-buffer" id="ledBuffer"></div>
+                            <span class="led-label">Line Active</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- RS232 Comms Parameters -->
+                <div class="control-group">
+                    <label class="control-label" for="selectBaudRate">Baud Rate</label>
+                    <select id="selectBaudRate" class="setting-select">
+                        <option value="300">300 bps</option>
+                        <option value="600">600 bps</option>
+                        <option value="1200">1200 bps</option>
+                        <option value="2400">2400 bps</option>
+                        <option value="4800">4800 bps</option>
+                        <option value="9600" selected>9600 bps</option>
+                        <option value="19200">19200 bps</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label" for="selectParity">Parity</label>
+                    <select id="selectParity" class="setting-select">
+                        <option value="none" selected>None</option>
+                        <option value="even">Even</option>
+                        <option value="odd">Odd</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label" for="selectDataBits">Data Bits</label>
+                    <select id="selectDataBits" class="setting-select">
+                        <option value="7">7 Bits</option>
+                        <option value="8" selected>8 Bits</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label" for="selectStopBits">Stop Bits</label>
+                    <select id="selectStopBits" class="setting-select">
+                        <option value="1" selected>1 Stop Bit</option>
+                        <option value="2">2 Stop Bits</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label class="control-label" for="selectFlowControl">Handshake</label>
+                    <select id="selectFlowControl" class="setting-select">
+                        <option value="none">None (Ignore handshake)</option>
+                        <option value="xonxoff" selected>XON/XOFF (Software)</option>
+                        <option value="hardware">Hardware (RTS/CTS)</option>
+                    </select>
+                </div>
+
+                <hr class="divider">
+
+                <!-- Raw Send Console -->
+                <div class="control-group">
+                    <label class="control-label">ASCII / Escape Command Console</label>
+                    <textarea class="code-area" id="rawInputText" placeholder="Type text here... Use \e for ESC, \n for LF, \r for CR. E.g.: \eEBold Text\eF\r\n" style="height: 100px; color: var(--color-primary);"></textarea>
+                    <button class="btn btn-action" id="btnSendRawText">
+                        <i class="fa-solid fa-paper-plane"></i> Send to Emulator
+                    </button>
+                </div>
+
+                <div class="control-group" style="margin-top: 10px;">
+                    <label class="control-label">Upload Binary Print File (.prn / .bin)</label>
+                    <input type="file" id="fileInputRaw" accept=".bin,.prn,.txt" style="font-size:0.8rem; color:var(--color-text-muted);">
+                </div>
+            </div>
+        </aside>
+
+        <!-- Slide-out Operations Sidebar Panel -->
+        <aside class="sidebar-panel" id="operations-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-gears"></i> Emulator Operations</h2>
+                <button class="btn-close-sidebar" id="btn-close-operations" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="sidebar-body">
+                <div class="control-group">
+                    <label class="control-label">Operations</label>
+                    <div class="action-buttons">
+                        <button class="btn btn-action" id="btnFeedPaper">
+                            <i class="fa-solid fa-arrow-up"></i> Feed Paper (3 Lines) [F]
+                        </button>
+                        <button class="btn btn-action" id="btnAlignTear" style="background: linear-gradient(135deg, rgba(0,242,254,0.08) 0%, rgba(245,212,0,0.08) 100%); border-color: rgba(245,212,0,0.25);">
+                            <i class="fa-solid fa-arrows-up-down"></i> Align to Tear Bar
+                        </button>
+                        <button class="btn btn-action" id="btnPrintTest">
+                            <i class="fa-solid fa-vial"></i> Print Self-Test Page [S]
+                        </button>
+                        <button class="btn btn-action" id="btnTearOff" style="background: linear-gradient(135deg, rgba(0,242,254,0.1) 0%, rgba(0,245,212,0.1) 100%); border-color: rgba(0,242,254,0.3);">
+                            <i class="fa-solid fa-scissors"></i> Tear Off Paper [T] / [Delete]
+                        </button>
+                        <button class="btn btn-action" id="btnTearMargins" style="background: linear-gradient(135deg, rgba(0,242,254,0.08) 0%, rgba(244,63,94,0.08) 100%); border-color: rgba(244,63,94,0.25);">
+                            <i class="fa-solid fa-border-none"></i> Strip Tractor Margins [M]
+                        </button>
+                        <button class="btn btn-action" id="btnDownloadPrint">
+                            <i class="fa-solid fa-file-arrow-down"></i> Save Printout (PNG)
+                        </button>
+                        <button class="btn btn-action" id="btnDownloadText">
+                            <i class="fa-solid fa-file-lines"></i> Save Raw Text (TXT)
+                        </button>
+                        <button class="btn btn-action" id="btnCopyPrint">
+                            <i class="fa-solid fa-copy"></i> Copy Printout (Image)
+                        </button>
+                        <button class="btn btn-action" id="btnCopyText">
+                            <i class="fa-solid fa-copy"></i> Copy Text
+                        </button>
+                        <button class="btn btn-danger" id="btnClearRoll">
+                            <i class="fa-solid fa-trash-can"></i> Clear Printer Paper [C]
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Toast notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
