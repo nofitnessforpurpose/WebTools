@@ -1,6 +1,6 @@
 # PLOTTEREMU  
 
-A modern, web-based Plotter emulator tool for Psion Organiser II family of devices.  
+A modern, web-based Plotter emulator tool for RS232 serial devices including the  Psion Organiser II family of devices.  
 This web application emulates the **HPGL** plotter command languge. It connects to a physical Psion Organiser II via a serial cable (using the browser's Web Serial API) or accepts files directly. It plots prints text or graphics onto an emulated plotter bed in real-time.
 
 
