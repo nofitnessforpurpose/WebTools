@@ -898,14 +898,14 @@ class PrinterRenderer {
             else if (basePreset.startsWith('grey-bar')) barColor = '#ecece8';
             
             pCtx.fillStyle = barColor;
-            const stripeHeight = basePreset.endsWith('-2') ? 48 : 72; // 2-line (48px) vs 3-line (72px)
+            const stripeHeight = basePreset.endsWith('-2') ? this.lineHeight * 2 : this.lineHeight * 3; // 2-line vs 3-line bars
             for (let y = stripeHeight; y < this.pageLength; y += stripeHeight * 2) {
                 pCtx.fillRect(0, y, this.paperWidth, stripeHeight);
             }
         } else if (basePreset === 'music-sheet-1234-stock') {
             pCtx.fillStyle = '#d8eae0'; // Desaturated mint green
-            const stripeHeight = 24; // Alternating single-line bands (24px)
-            for (let y = 72 + stripeHeight; y < this.pageLength; y += stripeHeight * 2) {
+            const stripeHeight = this.lineHeight; // Alternating single-line bands (16px)
+            for (let y = 48 + stripeHeight; y < this.pageLength; y += stripeHeight * 2) {
                 pCtx.fillRect(0, y, this.paperWidth, stripeHeight);
             }
         } else if (basePreset === 'invoice') {
@@ -1066,15 +1066,15 @@ class PrinterRenderer {
         ctx.lineWidth = 1;
 
         // Draw border boxes
-        ctx.strokeRect(50, 10, W - 100, H - 30);
+        ctx.strokeRect(56, 10, W - 112, H - 30);
         
         const headerH = H > 800 ? 192 : 120;
         const bottomH = H > 800 ? H - 70 : H - 50;
 
         ctx.beginPath();
         // Header separator
-        ctx.moveTo(50, headerH);
-        ctx.lineTo(W - 50, headerH);
+        ctx.moveTo(56, headerH);
+        ctx.lineTo(W - 56, headerH);
         // SOLD TO / SHIP TO separator
         ctx.moveTo(W / 2, 10);
         ctx.lineTo(W / 2, headerH);
@@ -1082,27 +1082,27 @@ class PrinterRenderer {
         ctx.moveTo(W - 220, 10);
         ctx.lineTo(W - 220, 96);
         ctx.moveTo(W - 220, 96);
-        ctx.lineTo(W - 50, 96);
+        ctx.lineTo(W - 56, 96);
         ctx.moveTo(W - 220, 53);
-        ctx.lineTo(W - 50, 53);
+        ctx.lineTo(W - 56, 53);
         ctx.moveTo(W - 135, 53);
         ctx.lineTo(W - 135, 96);
         ctx.stroke();
 
         // Screened highlighting on TOTAL box (12% tint)
         ctx.fillStyle = 'rgba(80, 90, 100, 0.12)';
-        ctx.fillRect(W - 170, bottomH, 120, H - bottomH - 20);
+        ctx.fillRect(W - 176, bottomH, 120, H - bottomH - 20);
 
         // Grid horizontal & vertical lines
         ctx.strokeStyle = inkColor;
         ctx.beginPath();
         // Item grid columns
-        ctx.moveTo(100, headerH); ctx.lineTo(100, bottomH);
-        ctx.moveTo(210, headerH); ctx.lineTo(210, bottomH);
-        ctx.moveTo(W - 270, headerH); ctx.lineTo(W - 270, bottomH);
-        ctx.moveTo(W - 170, headerH); ctx.lineTo(W - 170, H - 20);
+        ctx.moveTo(106, headerH); ctx.lineTo(106, bottomH);
+        ctx.moveTo(216, headerH); ctx.lineTo(216, bottomH);
+        ctx.moveTo(W - 276, headerH); ctx.lineTo(W - 276, bottomH);
+        ctx.moveTo(W - 176, headerH); ctx.lineTo(W - 176, H - 20);
         // Bottom block grid
-        ctx.moveTo(50, bottomH); ctx.lineTo(W - 50, bottomH);
+        ctx.moveTo(56, bottomH); ctx.lineTo(W - 56, bottomH);
         ctx.stroke();
 
         // Print Text Labels
