@@ -2,7 +2,7 @@
 
 A modern, web-based dot matrix printer eumulator.  
 <BR>
-This web application emulates a classic 9 pin dot matrix printer mechanism used in many serial RS232 printer devices connected to a range of classic personal computer and PDA devices including the **Psion Organiser II** series of PDA's. It connects to a physical device via a serial cable using the browser's Web Serial API. Printing ASCII text or graphics onto an emulated scrolling paper roll in real-time.
+This web application emulates a classic 9 pin dot matrix printer mechanism used in many serial RS232 printer devices connected to a range of classic personal computer and PDA devices including the **Psion Organiser II** series of PDA's. It connects to a physical device via a serial cable using the browser's Web Serial API. Printing ASCII text or graphics onto an emulated scrolling paper sheet and fan fold in real-time.
 
  
 This repository is intended to be accessed at https://nofitnessforpurpose.github.io/WebTools/PRINTEREMU/  
