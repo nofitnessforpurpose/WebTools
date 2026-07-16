@@ -10,7 +10,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 <BR>
 <div align="center">
   <div style="display: flex; align-items: flex-start;">
-  <img src="https://github.com/nofitnessforpurpose/WebTools/blob/main/PRINTER2TOOL/images/PGRLEC-01.png" width="200px" alt="PSION Organiser II Printer II With NFfP Logo. Image copyright (c) 18 June 2026 nofitnessforpurpose All Rights Reserved">
+  <img src="https://github.com/nofitnessforpurpose/WebTools/blob/main/PRINTEREMU/images/2026-07-16%2016-45-08.gif" width="400px" alt="Dot Matrix Printer Emulator. Image copyright (c) 16 July 2026 nofitnessforpurpose All Rights Reserved">
   </div>
 </div>
 <BR>
