@@ -963,6 +963,7 @@ input:checked + .slider-small:before {
     image-rendering: crisp-edges;
     z-index: 2;
     mix-blend-mode: multiply; /* Simulated ribbon ink blend over background tint bands */
+    opacity: var(--efx-ink-opacity, 1);
 }
 
 #paperTopSpacer {

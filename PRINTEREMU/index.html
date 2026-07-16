@@ -67,6 +67,7 @@
   LPRINT "Back to normal."
   LPRINT CHR$(12); :REM Form Feed</textarea>
                 </div>
+                <p class="copyright" style="margin-top: 25px; font-size: 0.75rem; text-align: center; color: var(--color-text-muted);">© 2026 NFfP</p>
             </div>
         </aside>
 
@@ -192,12 +193,82 @@
                                 <li><code>ESC - n</code> : Underline On/Off</li>
                                 <li><code>SI / DC2</code> : Condensed On/Off</li>
                                 <li><code>ESC P / M</code> : Pica / Elite Pitch</li>
+                                <li><code>ESC 2 / 3 n</code> : Set Line Spacing (1/6" / n/216")</li>
+                                <li><code>ESC C n / 0 n</code> : Page Length (Lines / Inches)</li>
+                                <li><code>ESC N n / O</code> : Skip-Over Perforations On/Off</li>
                                 <li><code>ESC &amp;</code> : Download font character</li>
-                                <li><code>ESC K/L/Z</code> : 8-Pin Graphics</li>
+                                <li><code>ESC % n</code> : User-defined Font On/Off</li>
+                                <li><code>ESC : 0 0 0</code> : Copy ROM characters to RAM</li>
+                                <li><code>ESC K/L/Y/Z</code> : 8-Pin Bit Graphics (60/120/120-HS/240 DPI)</li>
+                                <li><code>LF / CR / FF</code> : Line Feed / Carriage Return / Form Feed</li>
+                                <li><code>HT / CAN</code> : Horizontal Tab / Cancel Line</li>
                             </ul>
                         </div>
                     </div>
+					
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-keyboard"></i> Keyboard Shortcuts</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>Global emulator control hotkeys (when text fields are not focused):</p>
+                            <ul class="code-list" style="margin-left: 15px; font-size: 0.8rem; line-height: 1.5;">
+                                <li><code>F</code> : Feed paper 3 lines</li>
+                                <li><code>T</code> or <code>Delete</code> : Tear off paper</li>
+                                <li><code>M</code> : Strip tractor margins (Perforated stock)</li>
+                                <li><code>S</code> : Run self-test diagnostics page</li>
+                                <li><code>C</code> : Clear paper roll & reset buffer</li>
+                                <li><code>↑</code> / <code>↓</code> : Scroll paper roll (24px steps)</li>
+                                <li><code>W</code> (Hold) + <code>↑</code> / <code>↓</code> : Micro-scrolling (1px step)</li>
+                            </ul>
+                        </div>
+                    </div>
+					
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-plug"></i> PC Connections</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>Classic serial devices may need custom wiring to connect the P.C. serial port connector.</p>
+                            <p>If using custom connections you will need to connect at least the following PC COM port pins to the classic serial device (e.g. another classic P.C.):</p>
+                            <ul style="margin-left: 15px; font-size: 0.8rem; line-height: 1.5; margin-bottom: 10px;">
+                                <li><strong>25 Way</strong>: pins 2, 3 &amp; 7</li>
+                                <li><em>or</em></li>
+                                <li><strong>9 Way</strong>: pins 2, 3 &amp; 5</li>
+                            </ul>
+                            <p>Depending on the arrangement of the device being connected you may need 'a cross over' connection. e.g. pin 2 of one device is connected to pin 3 of the other device.</p>
+                            <div class="note-box" style="margin-top: 10px; font-size: 0.75rem; border-left-color: var(--color-primary);">
+                                <i class="fa-solid fa-circle-info" style="color: var(--color-primary);"></i>
+                                <span><strong>Note:</strong> A classic Organiser II COMMS/RS232 link is designed for direct connection to a 25 way D-Type COM port connection.</span>
+                            </div>
+                        </div>
+                    </div>
+					
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-triangle-exclamation"></i> Hardware &amp; Conflict Warnings</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>A serial COM port i.e. a Serial-to-USB convertor or internal serial COM port hardware can only be connected to one application on the host machine.</p>
+                            <p>Connect your legacy serial device e.g. the Organiser's serial COMMS Link to the selected serial COM port or Serial-to-USB convertor on the host computer.</p>
+                            <p>The browsers Web Serial will try to set the default baud rate settings. You may need to set your host computers serial port settings to match ( e.g. 9600 Baud, 8 Data Bits, No Parity, and 1 Stop Bit ).</p>
+                            <div class="note-box" style="margin-top: 10px; font-size: 0.75rem; border-left-color: var(--color-warning);">
+                                <i class="fa-solid fa-circle-exclamation" style="color: var(--color-warning);"></i>
+                                <span><strong>Important:</strong> Ensure no other software (terminal programs, ORG-LINK or OPK transfers) is holding the serial port open, as standard P.C. port hardware can only be accessed by one app / program at a time.</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
+                <p class="copyright" style="margin-top: 25px; font-size: 0.75rem; text-align: center; color: var(--color-text-muted);">© 2026 NFfP</p>
             </div>
         </aside>
 
@@ -380,6 +451,15 @@
                                 <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
                                     <input type="range" id="sliderRibbonWear" min="0" max="100" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
                                     <span id="labelRibbonWear" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 28px; text-align: right;">0%</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Paper Age</td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                    <input type="range" id="sliderPaperAge" min="0" max="100" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                    <span id="labelPaperAge" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 28px; text-align: right;">0%</span>
                                 </div>
                             </td>
                         </tr>

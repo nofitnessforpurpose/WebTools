@@ -763,6 +763,103 @@ class EscpParser {
 // MODULE 4: Printer Canvas Renderer (formerly printer-renderer.js)
 // ==========================================================================
 
+// Paper aging visual effects helpers
+const drawEdgeBrowning = (ctx, W, H, factor) => {
+    if (factor <= 0) return;
+    ctx.save();
+    
+    // Left edge browning
+    const leftGrad = ctx.createLinearGradient(0, 0, 60, 0);
+    leftGrad.addColorStop(0, `rgba(180, 140, 90, ${factor * 0.25})`);
+    leftGrad.addColorStop(0.3, `rgba(180, 140, 90, ${factor * 0.15})`);
+    leftGrad.addColorStop(1, 'rgba(180, 140, 90, 0)');
+    ctx.fillStyle = leftGrad;
+    ctx.fillRect(0, 0, 60, H);
+    
+    // Right edge browning
+    const rightGrad = ctx.createLinearGradient(W - 60, 0, W, 0);
+    rightGrad.addColorStop(0, 'rgba(180, 140, 90, 0)');
+    rightGrad.addColorStop(0.7, `rgba(180, 140, 90, ${factor * 0.15})`);
+    rightGrad.addColorStop(1, `rgba(180, 140, 90, ${factor * 0.25})`);
+    ctx.fillStyle = rightGrad;
+    ctx.fillRect(W - 60, 0, 60, H);
+    
+    ctx.restore();
+};
+
+const drawFoldBrowning = (ctx, W, pageY, H, factor) => {
+    if (factor <= 0) return;
+    ctx.save();
+    
+    // Top perforation edge
+    const topGrad = ctx.createLinearGradient(0, pageY, 0, pageY + 30);
+    topGrad.addColorStop(0, `rgba(180, 140, 90, ${factor * 0.2})`);
+    topGrad.addColorStop(1, 'rgba(180, 140, 90, 0)');
+    ctx.fillStyle = topGrad;
+    ctx.fillRect(0, pageY, W, 30);
+    
+    // Bottom perforation edge
+    const bottomGrad = ctx.createLinearGradient(0, pageY + H - 30, 0, pageY + H);
+    bottomGrad.addColorStop(0, 'rgba(180, 140, 90, 0)');
+    bottomGrad.addColorStop(1, `rgba(180, 140, 90, ${factor * 0.2})`);
+    ctx.fillStyle = bottomGrad;
+    ctx.fillRect(0, pageY + H - 30, W, 30);
+    
+    ctx.restore();
+};
+
+const drawFoxing = (ctx, W, H, factor) => {
+    if (factor <= 0) return;
+    ctx.save();
+    const spots = [
+        { x: W * 0.15, y: H * 0.25, r: 8, o: 0.12 },
+        { x: W * 0.72, y: H * 0.12, r: 5, o: 0.15 },
+        { x: W * 0.45, y: H * 0.65, r: 12, o: 0.08 },
+        { x: W * 0.88, y: H * 0.45, r: 6, o: 0.10 },
+        { x: W * 0.28, y: H * 0.82, r: 9, o: 0.09 }
+    ];
+    spots.forEach(s => {
+        const radGrad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r);
+        const op = s.o * factor;
+        radGrad.addColorStop(0, `rgba(139, 90, 43, ${op})`);
+        radGrad.addColorStop(0.5, `rgba(139, 90, 43, ${op * 0.5})`);
+        radGrad.addColorStop(1, 'rgba(139, 90, 43, 0)');
+        ctx.fillStyle = radGrad;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+    });
+    ctx.restore();
+};
+
+const drawFibers = (ctx, W, H, factor) => {
+    if (factor <= 0) return;
+    ctx.save();
+    ctx.strokeStyle = `rgba(80, 60, 40, ${0.25 * factor})`;
+    ctx.fillStyle = `rgba(80, 60, 40, ${0.3 * factor})`;
+    const fibers = [
+        { x: W * 0.35, y: H * 0.18, type: 'line', dx: 3, dy: -2 },
+        { x: W * 0.62, y: H * 0.78, type: 'dot' },
+        { x: W * 0.20, y: H * 0.55, type: 'line', dx: -2, dy: 4 },
+        { x: W * 0.78, y: H * 0.32, type: 'dot' },
+        { x: W * 0.50, y: H * 0.90, type: 'line', dx: 4, dy: 1 },
+        { x: W * 0.12, y: H * 0.08, type: 'dot' },
+        { x: W * 0.90, y: H * 0.70, type: 'line', dx: -3, dy: -3 }
+    ];
+    fibers.forEach(f => {
+        if (f.type === 'dot') {
+            ctx.fillRect(f.x, f.y, 1.5, 1.5);
+        } else {
+            ctx.beginPath();
+            ctx.lineWidth = 0.8;
+            ctx.moveTo(f.x, f.y);
+            ctx.lineTo(f.x + f.dx, f.y + f.dy);
+            ctx.stroke();
+        }
+    });
+    ctx.restore();
+};
+
 class PrinterRenderer {
     constructor(paperContentWrapper, paperRollContainer, soundSynth) {
         this.wrapper = paperContentWrapper;
@@ -829,6 +926,11 @@ class PrinterRenderer {
         this.jitter = parseFloat(jitterVal) || 0;
     }
 
+    setPaperAge(age) {
+        this.paperAge = parseInt(age, 10) || 0;
+        this.updatePaperStyling();
+    }
+
     updatePaperStyling() {
         const paperElement = this.container.querySelector('#paperRoll');
         if (!paperElement) return;
@@ -872,6 +974,17 @@ class PrinterRenderer {
         
         document.documentElement.style.setProperty('--efx-ink-color', inkColor);
 
+        // Color interpolation helper functions
+        const hexToRgb = (hex) => {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : { r: 251, g: 251, b: 247 };
+        };
+        const rgbToHex = (r, g, b) => "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+
         // Generate repeating background pattern on paperContentWrapper
         const patternCanvas = document.createElement('canvas');
         patternCanvas.width = this.paperWidth;
@@ -886,7 +999,20 @@ class PrinterRenderer {
         else if (basePreset === 'carbonless-goldenrod') paperBg = '#fed7aa';
         else if (basePreset === 'carbonless-blue') paperBg = '#dbeafe';
         else if (basePreset === 'music-sheet-1234-stock' || this.paperFormat === 'music-sheet-1234') paperBg = '#fafaf6';
+
+        // Apply Paper Aging to background color
+        const ageVal = this.paperAge || 0;
+        const factor = ageVal / 100;
+        if (factor > 0) {
+            const baseRgb = hexToRgb(paperBg);
+            const targetRgb = hexToRgb('#e2cd9c'); // Warm vintage aged sepia
+            const r = Math.round(baseRgb.r + (targetRgb.r - baseRgb.r) * factor);
+            const g = Math.round(baseRgb.g + (targetRgb.g - baseRgb.g) * factor);
+            const b = Math.round(baseRgb.b + (targetRgb.b - baseRgb.b) * factor);
+            paperBg = rgbToHex(r, g, b);
+        }
         
+        paperElement.style.backgroundColor = paperBg;
         pCtx.fillStyle = paperBg;
         pCtx.fillRect(0, 0, this.paperWidth, this.pageLength);
 
@@ -897,13 +1023,31 @@ class PrinterRenderer {
             if (basePreset.startsWith('blue-bar')) barColor = '#e1ecf4';
             else if (basePreset.startsWith('grey-bar')) barColor = '#ecece8';
             
+            if (factor > 0) {
+                const barRgb = hexToRgb(barColor);
+                const targetRgb = hexToRgb('#c4ae8a'); // Aged desaturated stripe color
+                const r = Math.round(barRgb.r + (targetRgb.r - barRgb.r) * factor);
+                const g = Math.round(barRgb.g + (targetRgb.g - barRgb.g) * factor);
+                const b = Math.round(barRgb.b + (targetRgb.b - barRgb.b) * factor);
+                barColor = rgbToHex(r, g, b);
+            }
+            
             pCtx.fillStyle = barColor;
             const stripeHeight = basePreset.endsWith('-2') ? this.lineHeight * 2 : this.lineHeight * 3; // 2-line vs 3-line bars
             for (let y = stripeHeight; y < this.pageLength; y += stripeHeight * 2) {
                 pCtx.fillRect(0, y, this.paperWidth, stripeHeight);
             }
         } else if (basePreset === 'music-sheet-1234-stock') {
-            pCtx.fillStyle = '#d8eae0'; // Desaturated mint green
+            let barColor = '#d8eae0'; // Desaturated mint green
+            if (factor > 0) {
+                const barRgb = hexToRgb(barColor);
+                const targetRgb = hexToRgb('#cecbab'); // Aged music band
+                const r = Math.round(barRgb.r + (targetRgb.r - barRgb.r) * factor);
+                const g = Math.round(barRgb.g + (targetRgb.g - barRgb.g) * factor);
+                const b = Math.round(barRgb.b + (targetRgb.b - barRgb.b) * factor);
+                barColor = rgbToHex(r, g, b);
+            }
+            pCtx.fillStyle = barColor;
             const stripeHeight = this.lineHeight; // Alternating single-line bands (16px)
             for (let y = 48 + stripeHeight; y < this.pageLength; y += stripeHeight * 2) {
                 pCtx.fillRect(0, y, this.paperWidth, stripeHeight);
@@ -925,6 +1069,15 @@ class PrinterRenderer {
         if (!isClean) {
             this.drawTractorMetadata(pCtx, this.paperWidth, this.pageLength);
         }
+
+        // Apply edge oxidation, folds, foxing, and fibers to patternCanvas
+        drawEdgeBrowning(pCtx, this.paperWidth, this.pageLength, factor);
+        drawFoldBrowning(pCtx, this.paperWidth, 0, this.pageLength, factor);
+        drawFoxing(pCtx, this.paperWidth, this.pageLength, factor);
+        drawFibers(pCtx, this.paperWidth, this.pageLength, factor);
+
+        const inkOpacity = 1 - (factor * 0.35);
+        document.documentElement.style.setProperty('--efx-ink-opacity', inkOpacity);
 
         // Draw page perforation lines
         pCtx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
@@ -1315,7 +1468,13 @@ class PrinterRenderer {
             ctx.save();
             const startX = this.leftMargin + totalLinePrintWidth;
             
-            // Render selection clip boundaries
+            if (item.italic) {
+                ctx.translate(startX + cellWidth / 2, 0);
+                ctx.transform(1, 0, -0.22, 1, 0, 0);
+                ctx.translate(-(startX + cellWidth / 2), 0);
+            }
+
+            // Render selection clip boundaries (slanted if italic)
             ctx.beginPath();
             ctx.rect(startX, 0, cellWidth, this.lineHeight);
             ctx.clip();
@@ -1323,11 +1482,6 @@ class PrinterRenderer {
             const baselineY = 4;
             const stepX = cellWidth / totalCols;
             const stepY = 1.6;
-
-            if (item.italic) {
-                ctx.transform(1, 0, -0.22, 1, startX + cellWidth/2, 0);
-                ctx.translate(-(startX + cellWidth/2), 0);
-            }
 
             let fontMatrix = [];
             if (item.userDefined) {
@@ -1829,6 +1983,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const soundSynth = new SoundSynth();
     let isWPressed = false;
     
+
+    
     const paperRoll = document.getElementById('paperRoll');
     const paperRollContainer = document.getElementById('paperRollContainer');
     const paperContentWrapper = document.getElementById('paperContentWrapper');
@@ -1894,6 +2050,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkPaperTexture = document.getElementById('checkPaperTexture');
     const sliderRibbonWear = document.getElementById('sliderRibbonWear');
     const labelRibbonWear = document.getElementById('labelRibbonWear');
+    const sliderPaperAge = document.getElementById('sliderPaperAge');
+    const labelPaperAge = document.getElementById('labelPaperAge');
     const sliderJitter = document.getElementById('sliderJitter');
     const labelJitter = document.getElementById('labelJitter');
 
@@ -2223,6 +2381,15 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('efx_ribbonWear', val);
     });
 
+    if (sliderPaperAge) {
+        sliderPaperAge.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (labelPaperAge) labelPaperAge.textContent = `${val}%`;
+            renderer.setPaperAge(val);
+            localStorage.setItem('efx_paperAge', val);
+        });
+    }
+
     sliderJitter.addEventListener('input', (e) => {
         const val = e.target.value;
         labelJitter.textContent = `${parseFloat(val).toFixed(1)}px`;
@@ -2415,6 +2582,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const isClean = renderer.paperPreset.endsWith('-clean');
         const basePreset = isClean ? renderer.paperPreset.replace('-clean', '') : renderer.paperPreset;
 
+        // Color interpolation helper functions
+        const hexToRgb = (hex) => {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16),
+                g: parseInt(result[2], 16),
+                b: parseInt(result[3], 16)
+            } : { r: 251, g: 251, b: 247 };
+        };
+        const rgbToHex = (r, g, b) => "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+
         // Fill background color
         let paperBg = '#fbfbf7';
         if (basePreset === 'aged') paperBg = '#fef08a';
@@ -2423,6 +2601,18 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (basePreset === 'carbonless-goldenrod') paperBg = '#fed7aa';
         else if (basePreset === 'carbonless-blue') paperBg = '#dbeafe';
         else if (basePreset === 'music-sheet-1234-stock' || renderer.paperFormat === 'music-sheet-1234') paperBg = '#fafaf6';
+
+        // Apply Paper Aging to background color
+        const ageVal = renderer.paperAge || 0;
+        const factor = ageVal / 100;
+        if (factor > 0) {
+            const baseRgb = hexToRgb(paperBg);
+            const targetRgb = hexToRgb('#e2cd9c'); // Warm vintage aged sepia
+            const r = Math.round(baseRgb.r + (targetRgb.r - baseRgb.r) * factor);
+            const g = Math.round(baseRgb.g + (targetRgb.g - baseRgb.g) * factor);
+            const b = Math.round(baseRgb.b + (targetRgb.b - baseRgb.b) * factor);
+            paperBg = rgbToHex(r, g, b);
+        }
 
         ctx.fillStyle = paperBg;
         ctx.fillRect(0, 0, logicalWidth, logicalHeight);
@@ -2445,13 +2635,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (basePreset.startsWith('blue-bar')) barColor = '#e1ecf4';
                 else if (basePreset.startsWith('grey-bar')) barColor = '#ecece8';
                 
+                if (factor > 0) {
+                    const barRgb = hexToRgb(barColor);
+                    const targetRgb = hexToRgb('#c4ae8a'); // Aged desaturated stripe color
+                    const r = Math.round(barRgb.r + (targetRgb.r - barRgb.r) * factor);
+                    const g = Math.round(barRgb.g + (targetRgb.g - barRgb.g) * factor);
+                    const b = Math.round(barRgb.b + (targetRgb.b - barRgb.b) * factor);
+                    barColor = rgbToHex(r, g, b);
+                }
+                
                 ctx.fillStyle = barColor;
                 const stripeHeight = basePreset.endsWith('-2') ? 48 : 72; // 2-line vs 3-line
                 for (let y = stripeHeight; y < renderer.pageLength; y += stripeHeight * 2) {
                     ctx.fillRect(0, y, logicalWidth, stripeHeight);
                 }
             } else if (basePreset === 'music-sheet-1234-stock') {
-                ctx.fillStyle = '#d8eae0'; // Desaturated mint green
+                let barColor = '#d8eae0'; // Desaturated mint green
+                if (factor > 0) {
+                    const barRgb = hexToRgb(barColor);
+                    const targetRgb = hexToRgb('#cecbab'); // Aged music band
+                    const r = Math.round(barRgb.r + (targetRgb.r - barRgb.r) * factor);
+                    const g = Math.round(barRgb.g + (targetRgb.g - barRgb.g) * factor);
+                    const b = Math.round(barRgb.b + (targetRgb.b - barRgb.b) * factor);
+                    barColor = rgbToHex(r, g, b);
+                }
+                ctx.fillStyle = barColor;
                 const stripeHeight = 24; // Alternating single-line bands (24px)
                 for (let y = 72 + stripeHeight; y < renderer.pageLength; y += stripeHeight * 2) {
                     ctx.fillRect(0, y, logicalWidth, stripeHeight);
@@ -2473,6 +2681,12 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!isClean) {
                 renderer.drawTractorMetadata(ctx, logicalWidth, renderer.pageLength);
             }
+
+            // Apply aging effects to this page background on the export canvas
+            drawEdgeBrowning(ctx, logicalWidth, renderer.pageLength, factor);
+            drawFoldBrowning(ctx, logicalWidth, 0, renderer.pageLength, factor);
+            drawFoxing(ctx, logicalWidth, renderer.pageLength, factor);
+            drawFibers(ctx, logicalWidth, renderer.pageLength, factor);
 
             // Draw page perforation lines
             ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
@@ -2516,6 +2730,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         ctx.restore();
 
+        const inkOpacity = 1 - (factor * 0.35);
+        ctx.save();
+        ctx.globalAlpha = inkOpacity;
         children.forEach(child => {
             if (child.id === 'paperTextureOverlay') return;
             if (child.tagName === 'CANVAS') {
@@ -2525,6 +2742,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+        ctx.restore();
 
         if (isClean) {
             const croppedW = renderer.paperWidth - 80;
@@ -2800,6 +3018,13 @@ document.addEventListener('DOMContentLoaded', () => {
         sliderRibbonWear.value = wear;
         labelRibbonWear.textContent = `${wear}%`;
         renderer.setRibbonWear(wear);
+
+        const age = localStorage.getItem('efx_paperAge') || '0';
+        if (sliderPaperAge) {
+            sliderPaperAge.value = age;
+            if (labelPaperAge) labelPaperAge.textContent = `${age}%`;
+        }
+        renderer.setPaperAge(age);
 
         const jitter = localStorage.getItem('efx_jitter') || '0.0';
         sliderJitter.value = jitter;
