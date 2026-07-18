@@ -2495,7 +2495,10 @@ document.addEventListener('DOMContentLoaded', () => {
             .replace(/\\f/g, '\f')
             .replace(/\\x([0-9A-Fa-f]{2})/g, (match, p1) => String.fromCharCode(parseInt(p1, 16)));
 
-        const bytes = encoder.encode(formatted);
+        const bytes = new Uint8Array(formatted.length);
+        for (let i = 0; i < formatted.length; i++) {
+            bytes[i] = formatted.charCodeAt(i) & 0xFF;
+        }
         parser.parse(bytes);
         updateBufferLed();
         showToast('Bytes sent to parser', 'fa-paper-plane');
@@ -2832,7 +2835,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         seq.push([27, 64]);
         seq.push(s('EFX-80s 9-PIN IMPACT PRINTER EMULATOR\r\n'));
-        seq.push(s('====================================\r\n'));
+        seq.push(s('=====================================\r\n'));
         seq.push([10]);
 
         seq.push(s('Standard Font Printable Characters (ASCII 32-126):\r\n'));
