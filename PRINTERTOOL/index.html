@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EFX-80 Image-to-Printer Graphics Encoder</title>
+    <meta name="description" content="Convert images to ESC/P bit-image escape sequences for dot matrix printers & the EFX-80 emulator. Supports ESC K, L, Y and Z graphics modes with dithering, threshold and edge detection.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-logo">
+                <span class="retro-badge">EFX-80</span>
+                <h1>Image-to-Printer Graphics Encoder</h1>
+            </div>
+            <p class="subtitle">Convert images into ESC/P bit-image escape sequences for ESC/P printers & EFX-80 dot matrix emulator</p>
+        </header>
+
+        <!-- Main Workspace -->
+        <div class="workspace-grid">
+
+            <!-- Left Panel: Image Input & Controls -->
+            <section class="panel panel-controls">
+                <div class="panel-header">
+                    <i class="fa-solid fa-sliders"></i>
+                    <h2>Image Input &amp; Settings</h2>
+                </div>
+                <div class="panel-body">
+
+                    <!-- Drop Zone -->
+                    <div id="dropBox" class="drop-zone">
+                        <div class="drop-zone-content">
+                            <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+                            <p class="drop-text-primary">Drag &amp; drop image here</p>
+                            <p class="drop-text-secondary">or click to browse local files</p>
+                        </div>
+                        <input type="file" id="fileInput" accept="image/*" style="display:none;">
+                    </div>
+
+                    <!-- Image thumbnail once loaded
+                    <div id="sourcePreviewGroup" style="display:none;">
+                        <div class="source-thumb-wrapper">
+                            <canvas id="sourceThumb" class="source-thumb"></canvas>
+                            <div class="source-thumb-overlay">
+                                <span id="sourceInfo" class="badge">--</span>
+                            </div>
+                        </div>
+                    </div>
+                    -->
+
+                    <hr class="divider">
+
+                    <!-- Collapsible ESC/P Graphics Mode -->
+                    <details class="collapsible-card" style="margin-bottom:12px;">
+                        <summary class="collapsible-header">
+                            <span class="section-title"><i class="fa-solid fa-print"></i> ESC/P Graphics Mode</span>
+                            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                        </summary>
+                        <div class="collapsible-content">
+                            <div class="mode-cards" style="margin-bottom: 16px;">
+                                <input type="radio" id="modeK" name="graphicsMode" value="K" checked>
+                                <label for="modeK" class="mode-card">
+                                    <span class="mode-code">ESC K</span>
+                                    <span class="mode-name">Single Density</span>
+                                    <span class="mode-dpi">60 DPI · 480 cols</span>
+                                </label>
+
+                                <input type="radio" id="modeL" name="graphicsMode" value="L">
+                                <label for="modeL" class="mode-card">
+                                    <span class="mode-code">ESC L</span>
+                                    <span class="mode-name">Double Density</span>
+                                    <span class="mode-dpi">120 DPI · 960 cols</span>
+                                </label>
+
+                                <input type="radio" id="modeY" name="graphicsMode" value="Y">
+                                <label for="modeY" class="mode-card">
+                                    <span class="mode-code">ESC Y</span>
+                                    <span class="mode-name">Hi-Speed Dbl</span>
+                                    <span class="mode-dpi">120 DPI · 960 cols</span>
+                                </label>
+
+                                <input type="radio" id="modeZ" name="graphicsMode" value="Z">
+                                <label for="modeZ" class="mode-card">
+                                    <span class="mode-code">ESC Z</span>
+                                    <span class="mode-name">Quad Density</span>
+                                    <span class="mode-dpi">240 DPI · 1920 cols</span>
+                                </label>
+                            </div>
+
+                            <!-- Aspect Ratio DPI Correction (Moved here) -->
+                            <div class="control-group checkbox-group" style="margin-bottom: 12px;">
+                                <input type="checkbox" id="correctAspect" class="checkbox-input" checked>
+                                <label for="correctAspect" class="checkbox-label">
+                                    <span class="custom-checkbox"></span>
+                                    Correct Aspect Ratio for Printer DPI
+                                </label>
+                            </div>
+                            <div class="dpi-note">
+                                <i class="fa-solid fa-circle-info"></i>
+                                <span>Each mode's horizontal DPI differs from the fixed 72 DPI vertical pin pitch, distorting the image. Correction scales the output height by <em>72&divide;H&#8209;DPI</em> so circles stay circles on paper.
+                                <br><span class="dpi-table">
+                                    <b>ESC K</b> 60 H-DPI &rarr; &times;1.20&ensp;
+                                    <b>ESC L/Y</b> 120 &rarr; &times;0.60&ensp;
+                                    <b>ESC Z</b> 240 &rarr; &times;0.30
+                                </span></span>
+                            </div>
+                        </div>
+                    </details>
+
+                    <hr class="divider">
+
+                    <!-- Output Width -->
+                    <div class="control-group">
+                        <div class="slider-header">
+                            <label for="widthRange" class="control-label">Output Width (columns):</label>
+                            <span id="widthVal" class="badge">480</span>
+                        </div>
+                        <input type="range" id="widthRange" min="8" max="480" value="480" step="8" class="slider">
+                        <p class="control-hint">Max columns: <span id="maxColsHint">480</span> for selected mode</p>
+                    </div>
+
+                    <!-- Scale Source Image -->
+                    <div class="control-group">
+                        <div class="slider-header">
+                            <label for="scaleRange" class="control-label">Source Scale:</label>
+                            <span id="scaleVal" class="badge">100%</span>
+                        </div>
+                        <input type="range" id="scaleRange" min="10" max="200" value="100" class="slider">
+                    </div>
+
+                    <hr class="divider">
+
+                    <!-- B&W Conversion Mode -->
+                    <div class="control-group">
+                        <label class="control-label">B&amp;W Conversion Mode:</label>
+                        <div class="segmented-control">
+                            <input type="radio" id="modeNone" name="monoMode" value="none">
+                            <label for="modeNone" class="segmented-item">None</label>
+
+                            <input type="radio" id="modeDither" name="monoMode" value="dither" checked>
+                            <label for="modeDither" class="segmented-item">Dither</label>
+
+                            <input type="radio" id="modeThreshold" name="monoMode" value="threshold">
+                            <label for="modeThreshold" class="segmented-item">Threshold</label>
+
+                            <input type="radio" id="modeCanny" name="monoMode" value="canny">
+                            <label for="modeCanny" class="segmented-item">Edge</label>
+                        </div>
+                    </div>
+
+                    <!-- Threshold Slider (conditional) -->
+                    <div class="control-group" id="thresholdGroup" style="display:none;">
+                        <div class="slider-header">
+                            <label for="thresholdRange" class="control-label">B&amp;W Threshold:</label>
+                            <span id="thresholdVal" class="badge">128</span>
+                        </div>
+                        <input type="range" id="thresholdRange" min="0" max="255" value="128" class="slider">
+                    </div>
+
+                    <!-- Canny Sliders (conditional) -->
+                    <div id="cannyGroup" style="display:none;">
+                        <div class="control-group">
+                            <div class="slider-header">
+                                <label for="cannyLowRange" class="control-label">Canny Low Threshold:</label>
+                                <span id="cannyLowVal" class="badge">20</span>
+                            </div>
+                            <input type="range" id="cannyLowRange" min="0" max="255" value="20" class="slider">
+                        </div>
+                        <div class="control-group" style="margin-top:12px;">
+                            <div class="slider-header">
+                                <label for="cannyHighRange" class="control-label">Canny High Threshold:</label>
+                                <span id="cannyHighVal" class="badge">50</span>
+                            </div>
+                            <input type="range" id="cannyHighRange" min="0" max="255" value="50" class="slider">
+                        </div>
+                    </div>
+
+                    <!-- Rotation -->
+                    <div class="control-group">
+                        <label class="control-label">Rotate Image:</label>
+                        <div class="rotation-control">
+                            <input type="radio" id="rot0" name="rotation" value="0" checked>
+                            <label for="rot0" class="rot-item" title="0 degrees">0°</label>
+                            <input type="radio" id="rot90" name="rotation" value="90">
+                            <label for="rot90" class="rot-item" title="90 degrees">90°</label>
+                            <input type="radio" id="rot180" name="rotation" value="180">
+                            <label for="rot180" class="rot-item" title="180 degrees">180°</label>
+                            <input type="radio" id="rot270" name="rotation" value="270">
+                            <label for="rot270" class="rot-item" title="270 degrees">270°</label>
+                        </div>
+                    </div>
+
+                    <!-- Invert Colors -->
+                    <div class="control-group checkbox-group">
+                        <input type="checkbox" id="invertColors" class="checkbox-input">
+                        <label for="invertColors" class="checkbox-label">
+                            <span class="custom-checkbox"></span>
+                            Invert Output (Black &harr; White)
+                        </label>
+                    </div>
+
+
+
+                    <hr class="divider">
+
+                    <!-- Encode Button -->
+                    <button class="btn btn-primary btn-encode" id="btnEncode" disabled>
+                        <i class="fa-solid fa-microchip"></i> Encode Image
+                    </button>
+
+                </div>
+            </section>
+
+            <!-- Centre Panel: Print Preview -->
+            <section class="panel panel-preview">
+                <div class="panel-header">
+                    <i class="fa-solid fa-print"></i>
+                    <h2>EFX-80 Print Preview</h2>
+                    <div class="header-badges">
+                        <span id="modeBadge" class="mode-badge">ESC K</span>
+                        <span id="statusBadge" class="status-badge status-idle">
+                            <i class="fa-solid fa-circle-dot"></i> Idle
+                        </span>
+                    </div>
+                </div>
+
+                <div class="panel-body preview-body">
+                    <!-- EFX-80 Printer Mockup -->
+                    <div class="printer-device efx-printer">
+                        <div class="printer-top-bar">
+                            <div class="printer-led-row">
+                                <div class="led led-power" id="ledPower" title="Power"></div>
+                                <div class="led led-paper" id="ledPaper" title="Paper Out"></div>
+                                <div class="led led-busy" id="ledBusy" title="Busy"></div>
+                            </div>
+                            <div class="printer-label">NFfP EFX-80</div>
+                        </div>
+                        <div class="printer-feed-slot"></div>
+
+                        <!-- Paper feed area -->
+                        <div class="tractor-feed-wrapper">
+                            <div class="tractor-hole-strip left-strip">
+                                <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+                                <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+                                <div class="hole"></div><div class="hole"></div>
+                            </div>
+
+                            <div class="paper-area-wrapper" id="paperAreaWrapper">
+                                <div class="paper-header">
+                                    <div class="paper-dashed-line"></div>
+                                    <p class="paper-title">EFX-80 DOT MATRIX</p>
+                                    <p class="paper-subtitle">PRINTER EMULATOR</p>
+                                    <div class="paper-dashed-line"></div>
+                                </div>
+                                <div id="previewPaper" class="preview-paper">
+                                    <canvas id="previewCanvas" width="480" height="8"></canvas>
+                                </div>
+                                <div class="paper-footer">
+                                    <div class="paper-dashed-line"></div>
+                                    <p id="paperMeta">No image encoded yet</p>
+                                    <div class="paper-dashed-line"></div>
+                                </div>
+                            </div>
+
+                            <div class="tractor-hole-strip right-strip">
+                                <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+                                <div class="hole"></div><div class="hole"></div><div class="hole"></div>
+                                <div class="hole"></div><div class="hole"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Output & Stats -->
+            <section class="panel panel-output">
+                <div class="panel-header">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <i class="fa-solid fa-terminal"></i>
+                        <h2>Encoded Output</h2>
+                    </div>
+                    <button class="btn btn-primary btn-sm" id="btnSendToEmulator" title="Open EFX-80 emulator in a new tab">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Emulator
+                    </button>
+                </div>
+
+                <div class="panel-body output-body">
+
+                    <!-- Stats Dashboard -->
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <span class="stat-label">Dimensions</span>
+                            <span id="statDimensions" class="stat-value">-- × --</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">Graphics Lines</span>
+                            <span id="statLines" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">Total Columns</span>
+                            <span id="statColumns" class="stat-value">--</span>
+                        </div>
+                        <div class="stat-card highlight">
+                            <span class="stat-label">Stream Size</span>
+                            <span id="statBytes" class="stat-value">-- bytes</span>
+                        </div>
+                    </div>
+
+                    <!-- Console Escape String -->
+                    <div class="code-section-header">
+                        <h3 class="section-title"><i class="fa-solid fa-code"></i> Console Escape String</h3>
+                        <div class="action-buttons-mini">
+                            <button class="btn btn-action btn-sm" id="btnCopyEsc" title="Copy escape sequence to clipboard">
+                                <i class="fa-solid fa-copy"></i> Copy
+                            </button>
+                        </div>
+                    </div>
+                    <div class="code-container">
+                        <div class="code-header">
+                            <span class="code-lang">PASTE INTO EFX-80 COMMAND CONSOLE</span>
+                            <span class="code-dots">
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                                <span class="dot"></span>
+                            </span>
+                        </div>
+                        <textarea id="escOutput" readonly placeholder="Encode an image to generate the console escape sequence..."></textarea>
+                    </div>
+
+                    <hr class="divider">
+
+                    <!-- Binary .prn Download -->
+                    <div class="code-section-header">
+                        <h3 class="section-title"><i class="fa-solid fa-file-binary"></i> Binary Print File</h3>
+                        <div class="action-buttons-mini">
+                            <button class="btn btn-action btn-sm" id="btnDownloadPrn" disabled>
+                                <i class="fa-solid fa-download"></i> Download .prn
+                            </button>
+                        </div>
+                    </div>
+                    <div class="info-box">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <div>
+                            Upload the <strong>.prn</strong> file via the <em>Upload Binary Print File</em> button in the EFX-80 emulator's Controls panel for pixel-perfect binary delivery — bypassing text encoding entirely.
+                        </div>
+                    </div>
+
+                    <!-- Collapsible ESC/P Mode Reference -->
+                    <details class="collapsible-card" style="margin-top:8px;">
+                        <summary class="collapsible-header">
+                            <span class="section-title"><i class="fa-solid fa-book"></i> ESC/P Mode Reference</span>
+                            <i class="fa-solid fa-chevron-down toggle-icon"></i>
+                        </summary>
+                        <div class="collapsible-content">
+                            <div class="mode-reference">
+                                <div class="ref-row">
+                                    <span class="ref-cmd">ESC K</span>
+                                    <span class="ref-desc">Single density · 60 DPI · max 480 cols · <code>nL nH</code></span>
+                                </div>
+                                <div class="ref-row">
+                                    <span class="ref-cmd">ESC L</span>
+                                    <span class="ref-desc">Double density · 120 DPI · max 960 cols · <code>nL nH</code></span>
+                                </div>
+                                <div class="ref-row">
+                                    <span class="ref-cmd">ESC Y</span>
+                                    <span class="ref-desc">Hi-speed double · 120 DPI · max 960 cols · <code>nL nH</code></span>
+                                </div>
+                                <div class="ref-row">
+                                    <span class="ref-cmd">ESC Z</span>
+                                    <span class="ref-desc">Quad density · 240 DPI · max 1920 cols · <code>nL nH</code></span>
+                                </div>
+                                <div class="ref-row ref-row-note">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <span>Each graphics line prints 8 vertical pins. Multi-line images send one ESC command per 8-row band.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                </div>
+            </section>
+        </div>
+
+        <p class="copyright">&copy; 2026 EFX-80 Image Encoder &mdash; ESC/P Bit Image Generator for the ESC/P Printers & EFX-80 Emulator</p>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toastFeedback" class="toast-feedback">
+        <i id="toastIcon" class="fa-solid fa-check-circle"></i>
+        <span id="toastMessage">Done</span>
+    </div>
+
+    <!-- Hidden offscreen canvases for image processing -->
+    <canvas id="processCanvas" style="display:none;"></canvas>
+
+    <script src="app.js"></script>
+</body>
+</html>
