@@ -7,6 +7,7 @@ Serial Tools
 | Tool          | Sources | 
 |------------------|---------| 
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTEREMU/">PrinterEmu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTEREMU">Emulates a dot matric printer with support for RS232 communication<a/> |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">PrinterTool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTERTOOL">Allows prepraration of graphics intended for ESC/P & EFX-80s Printers</a> |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2EMU/">Printer2Emu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2EMU">Emulates the PSION Printer II with support for RS232 communication<a/> |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">Printer2Tool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2TOOL">Allows prepraration of graphics intended for the PSION Printer II</a> |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PLOTTEREMU/">PlotterEmu</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PLOTTEREMU">Emulates a Pen Plotter with support for RS232 communication</a> |
