@@ -1300,8 +1300,8 @@ class PrinterRenderer {
         ctx.fillStyle = '#0f172a';
         for (let y = 24; y < H; y += 48) {
             ctx.beginPath();
-            ctx.arc(24, y, 4, 0, Math.PI * 2);
-            ctx.arc(W - 24, y, 4, 0, Math.PI * 2);
+            ctx.arc(24, y, 7.5, 0, Math.PI * 2);
+            ctx.arc(W - 24, y, 7.5, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -1364,10 +1364,10 @@ class PrinterRenderer {
         // Alignment crosshairs in the printable corners
         ctx.strokeStyle = 'rgba(15, 23, 42, 0.18)';
         ctx.lineWidth = 0.5;
-        this.drawCrosshair(ctx, 36, 24);
-        this.drawCrosshair(ctx, W - 36, 24);
-        this.drawCrosshair(ctx, 36, H - 24);
-        this.drawCrosshair(ctx, W - 36, H - 24);
+        this.drawCrosshair(ctx, 40, 8);
+        this.drawCrosshair(ctx, W - 40, 8);
+        this.drawCrosshair(ctx, 40, H - 8);
+        this.drawCrosshair(ctx, W - 40, H - 8);
     }
 
     drawCrosshair(ctx, x, y) {

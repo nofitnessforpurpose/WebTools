@@ -864,7 +864,7 @@ input:checked + .slider-small:before {
 #paperContentWrapper::before {
     left: 0;
     /* Sprocket holes repeating every 48px vertical, centered at x=24px (0.25 inches) */
-    background-image: radial-gradient(circle at 24px 24px, #0f172a 4px, transparent 4.5px);
+    background-image: radial-gradient(circle at 24px 24px, #0f172a 7.5px, transparent 8px);
     background-repeat: repeat-y;
     background-size: 48px 48px;
     background-position: 0px 0px;
@@ -872,7 +872,7 @@ input:checked + .slider-small:before {
 
 #paperContentWrapper::after {
     right: 0;
-    background-image: radial-gradient(circle at 24px 24px, #0f172a 4px, transparent 4.5px);
+    background-image: radial-gradient(circle at 24px 24px, #0f172a 7.5px, transparent 8px);
     background-repeat: repeat-y;
     background-size: 48px 48px;
     background-position: 0px 0px;
