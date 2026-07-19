@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EFX-80 Image-to-Printer Graphics Encoder</title>
-    <meta name="description" content="Convert images to ESC/P bit-image escape sequences for dot matrix printers & the EFX-80 emulator. Supports ESC K, L, Y and Z graphics modes with dithering, threshold and edge detection.">
+    <title>EFX-80s Image-to-Printer Graphics Encoder</title>
+    <meta name="description" content="Convert images to ESC/P bit-image escape sequences for dot matrix printers & the EFX-80s emulator. Supports ESC K, L, Y and Z graphics modes with dithering, threshold and edge detection.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -17,10 +17,10 @@
         <!-- Header -->
         <header class="app-header">
             <div class="header-logo">
-                <span class="retro-badge">EFX-80</span>
+                <span class="retro-badge">EFX-80s</span>
                 <h1>Image-to-Printer Graphics Encoder</h1>
             </div>
-            <p class="subtitle">Convert images into ESC/P bit-image escape sequences for ESC/P printers & EFX-80 dot matrix emulator</p>
+            <p class="subtitle">Convert images into ESC/P bit-image escape sequences for ESC/P printers & EFX-80s dot matrix emulator</p>
         </header>
 
         <!-- Main Workspace -->
@@ -222,7 +222,7 @@
             <section class="panel panel-preview">
                 <div class="panel-header">
                     <i class="fa-solid fa-print"></i>
-                    <h2>EFX-80 Print Preview</h2>
+                    <h2>EFX-80s Print Preview</h2>
                     <div class="header-badges">
                         <span id="modeBadge" class="mode-badge">ESC K</span>
                         <span id="statusBadge" class="status-badge status-idle">
@@ -232,7 +232,7 @@
                 </div>
 
                 <div class="panel-body preview-body">
-                    <!-- EFX-80 Printer Mockup -->
+                    <!-- EFX-80s Printer Mockup -->
                     <div class="printer-device efx-printer">
                         <div class="printer-top-bar">
                             <div class="printer-led-row">
@@ -240,7 +240,7 @@
                                 <div class="led led-paper" id="ledPaper" title="Paper Out"></div>
                                 <div class="led led-busy" id="ledBusy" title="Busy"></div>
                             </div>
-                            <div class="printer-label">NFfP EFX-80</div>
+                            <div class="printer-label">NFfP EFX-80s</div>
                         </div>
                         <div class="printer-feed-slot"></div>
 
@@ -255,7 +255,7 @@
                             <div class="paper-area-wrapper" id="paperAreaWrapper">
                                 <div class="paper-header">
                                     <div class="paper-dashed-line"></div>
-                                    <p class="paper-title">EFX-80 DOT MATRIX</p>
+                                    <p class="paper-title">EFX-80s DOT MATRIX</p>
                                     <p class="paper-subtitle">PRINTER EMULATOR</p>
                                     <div class="paper-dashed-line"></div>
                                 </div>
@@ -286,9 +286,6 @@
                         <i class="fa-solid fa-terminal"></i>
                         <h2>Encoded Output</h2>
                     </div>
-                    <button class="btn btn-primary btn-sm" id="btnSendToEmulator" title="Open EFX-80 emulator in a new tab">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Emulator
-                    </button>
                 </div>
 
                 <div class="panel-body output-body">
@@ -324,7 +321,7 @@
                     </div>
                     <div class="code-container">
                         <div class="code-header">
-                            <span class="code-lang">PASTE INTO EFX-80 COMMAND CONSOLE</span>
+                            <span class="code-lang">PASTE INTO EFX-80s COMMAND CONSOLE</span>
                             <span class="code-dots">
                                 <span class="dot"></span>
                                 <span class="dot"></span>
@@ -348,7 +345,7 @@
                     <div class="info-box">
                         <i class="fa-solid fa-circle-info"></i>
                         <div>
-                            Upload the <strong>.prn</strong> file via the <em>Upload Binary Print File</em> button in the EFX-80 emulator's Controls panel for pixel-perfect binary delivery — bypassing text encoding entirely.
+                            Upload the <strong>.prn</strong> file via the <em>Upload Binary Print File</em> button in the EFX-80s emulator's Controls panel for pixel-perfect binary delivery — bypassing text encoding entirely.
                         </div>
                     </div>
 
@@ -388,7 +385,7 @@
             </section>
         </div>
 
-        <p class="copyright">&copy; 2026 EFX-80 Image Encoder &mdash; ESC/P Bit Image Generator for the ESC/P Printers & EFX-80 Emulator</p>
+        <p class="copyright">&copy; 2026 EFX-80s Image Encoder &mdash; ESC/P Bit Image Generator for the ESC/P Printers & EFX-80s Emulator</p>
     </div>
 
     <!-- Toast Notification -->
