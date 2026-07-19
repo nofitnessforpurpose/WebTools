@@ -736,7 +736,7 @@ input:checked + .slider-small:before {
 /* Printer Chassis */
 .printer-body {
     width: 100%;
-    max-width: 900px; /* Expanded for wide 80-column carriage */
+    max-width: 960px; /* Expanded for wide 80-column carriage and scrollbar clearance */
     height: 100%;
     min-height: 0;
     background-color: #334155; /* Slate grey plastic chassis */
@@ -847,7 +847,7 @@ input:checked + .slider-small:before {
     display: flex;
     flex-direction: column;
     /* Perforation line is handled dynamically via JS to match page heights */
-    background-position: center 0px;
+    background-position: left 0px;
 }
 
 /* Continuous Paper Sprocket Margins */
