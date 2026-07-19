@@ -217,10 +217,12 @@
                             <p>Global emulator control hotkeys (when text fields are not focused):</p>
                             <ul class="code-list" style="margin-left: 15px; font-size: 0.8rem; line-height: 1.5;">
                                 <li><code>F</code> : Feed paper 3 lines</li>
-                                <li><code>T</code> or <code>Delete</code> : Tear off paper</li>
-                                <li><code>M</code> : Strip tractor margins (Perforated stock)</li>
-                                <li><code>S</code> : Run self-test diagnostics page</li>
-                                <li><code>C</code> : Clear paper roll & reset buffer</li>
+                                <li><code>T</code> : Tear off paper</li>
+                                <li><code>M</code> : Strip tractor margins</li>
+                                <li><code>D</code> : Run self-test diagnostics page</li>
+                                <li><code>Delete</code> : Clear paper roll & reset buffer</li>
+                                <li><code>S</code> : Save Printout (PNG)</li>
+                                <li><code>C</code> : Copy Printout (Image to Clipboard)</li>
                                 <li><code>↑</code> / <code>↓</code> : Scroll paper roll (24px steps)</li>
                                 <li><code>W</code> (Hold) + <code>↑</code> / <code>↓</code> : Micro-scrolling (1px step)</li>
                             </ul>
@@ -671,28 +673,28 @@
                             <i class="fa-solid fa-arrows-up-down"></i> Align to Tear Bar
                         </button>
                         <button class="btn btn-action" id="btnPrintTest">
-                            <i class="fa-solid fa-vial"></i> Print Self-Test Page [S]
+                            <i class="fa-solid fa-vial"></i> Print Self-Test Page [D]
                         </button>
                         <button class="btn btn-action" id="btnTearOff" style="background: linear-gradient(135deg, rgba(0,242,254,0.1) 0%, rgba(0,245,212,0.1) 100%); border-color: rgba(0,242,254,0.3);">
-                            <i class="fa-solid fa-scissors"></i> Tear Off Paper [T] / [Delete]
+                            <i class="fa-solid fa-scissors"></i> Tear Off Paper [T]
                         </button>
                         <button class="btn btn-action" id="btnTearMargins" style="background: linear-gradient(135deg, rgba(0,242,254,0.08) 0%, rgba(244,63,94,0.08) 100%); border-color: rgba(244,63,94,0.25);">
                             <i class="fa-solid fa-border-none"></i> Strip Tractor Margins [M]
                         </button>
                         <button class="btn btn-action" id="btnDownloadPrint">
-                            <i class="fa-solid fa-file-arrow-down"></i> Save Printout (PNG)
+                            <i class="fa-solid fa-file-arrow-down"></i> Save Printout (PNG) [S]
                         </button>
                         <button class="btn btn-action" id="btnDownloadText">
                             <i class="fa-solid fa-file-lines"></i> Save Raw Text (TXT)
                         </button>
                         <button class="btn btn-action" id="btnCopyPrint">
-                            <i class="fa-solid fa-copy"></i> Copy Printout (Image)
+                            <i class="fa-solid fa-copy"></i> Copy Printout (Image) [C]
                         </button>
                         <button class="btn btn-action" id="btnCopyText">
                             <i class="fa-solid fa-copy"></i> Copy Text
                         </button>
                         <button class="btn btn-danger" id="btnClearRoll">
-                            <i class="fa-solid fa-trash-can"></i> Clear Printer Paper [C]
+                            <i class="fa-solid fa-trash-can"></i> Clear Printer Paper [Delete]
                         </button>
                     </div>
                 </div>

@@ -1092,7 +1092,7 @@ class PrinterRenderer {
         const dataUrl = patternCanvas.toDataURL();
         this.wrapper.style.backgroundImage = `url(${dataUrl})`;
         this.wrapper.style.backgroundRepeat = 'repeat-y';
-        this.wrapper.style.backgroundSize = `100% ${this.pageLength}px`;
+        this.wrapper.style.backgroundSize = `${this.paperWidth}px ${this.pageLength}px`;
     }
 
     drawBorderedForm(ctx, W, H, inkColor) {
@@ -2535,20 +2535,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (btnTearMargins) {
         btnTearMargins.addEventListener('click', () => {
-            const currentPreset = selectPaperPreset.value;
-            if (currentPreset === 'perforated') {
-                const paperRoll = document.getElementById('paperRoll');
-                if (paperRoll) {
-                    if (paperRoll.classList.contains('margins-removed')) {
-                        showToast('Margins are already stripped!', 'fa-circle-info');
-                    } else {
-                        soundSynth.playTear();
-                        paperRoll.classList.add('margins-removed');
-                        showToast('Tractor margins stripped!', 'fa-border-none');
-                    }
+            const paperRoll = document.getElementById('paperRoll');
+            if (paperRoll) {
+                if (paperRoll.classList.contains('margins-removed')) {
+                    showToast('Margins are already stripped!', 'fa-circle-info');
+                } else {
+                    soundSynth.playTear();
+                    paperRoll.classList.add('margins-removed');
+                    showToast('Tractor margins stripped!', 'fa-border-none');
                 }
-            } else {
-                showToast('This paper stock has no vertical micro-perforations!', 'fa-triangle-exclamation');
             }
         });
     }
@@ -3098,6 +3093,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         switch (e.key.toLowerCase()) {
+            case 's':
+                e.preventDefault();
+                if (btnDownloadPrint) btnDownloadPrint.click();
+                break;
+            case 'd':
+                e.preventDefault();
+                if (btnPrintTest) btnPrintTest.click();
+                break;
+            case 'c':
+                e.preventDefault();
+                if (btnCopyPrint) btnCopyPrint.click();
+                break;
+            case 'delete':
+                e.preventDefault();
+                if (btnClearRoll) btnClearRoll.click();
+                break;
             case 't':
                 e.preventDefault();
                 if (btnTearOff) btnTearOff.click();
@@ -3106,21 +3117,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.preventDefault();
                 if (btnFeedPaper) btnFeedPaper.click();
                 break;
-            case 'c':
-                e.preventDefault();
-                if (btnClearRoll) btnClearRoll.click();
-                break;
-            case 's':
-                e.preventDefault();
-                if (btnPrintTest) btnPrintTest.click();
-                break;
             case 'm':
                 e.preventDefault();
                 if (btnTearMargins) btnTearMargins.click();
-                break;
-            case 'delete':
-                e.preventDefault();
-                if (btnTearOff) btnTearOff.click();
                 break;
             case 'arrowup':
                 e.preventDefault();
