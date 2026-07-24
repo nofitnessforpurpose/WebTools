@@ -24,7 +24,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 <BR>
 
 ## Features
-- **Web Serial Interface**: Receives data directly at standard baud rates.
+- **Web Serial Interface**: Receives data directly at standard baud rates from any serial device.
 - **HPGL**: Supports HPGL language for clasisc and Rev 2 commands.
 - **Graphics Printing**: HPGL-2 supports box, arc and poly lines.
 - **Hardware Simulation**: Retro style status LEDs (Rx active, Buffer status, Connection state) and simulated paper.
@@ -35,24 +35,32 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 <BR>
 
 ## Physical Setup
-1. Connect your Psion Organiser II Comms Link port to your PC using a Comms Link cable connected to a USB-to-Serial converter.
-2. In the browser, click the **Connect** button, choose the serial port of your USB-to-Serial converter, and select connect.
-3. Configure your Organiser Comms Link settings to 9600 Baud, No Parity, 8 Data Bits, 1 Stop Bit, and set the printer device to serial output (Standard OPL `LPRINT` statements will then automatically route through the Comms Link interface).
+1. Connect your device to the PC's Serial Port  
+   (Psion Organiser II COMMS Link port to your PC using a COMMS Link cable connected to a Serial Port or USB-to-Serial converter.)  
+2. In the browser, click the **Connect** button, choose the Serial Port, Bluetooth or your USB-to-Serial converter, and select connect.  
+3. Configure your devices communication settiongs to 9600 Baud, No Parity, 8 Data Bits, 1 Stop Bit  
+   (Organiser COMMS | SETUP settings to 9600 Baud, No Parity, 8 Data Bits, 1 Stop Bit)
+4. Set the printer device to serial output  
+   (Organiser standard OPL `LPRINT` statements will automatically route through the COMMS Link interface).
 
 ** NOTE: Any serial RS232 device can be used with the emualtor (Raspberyy PI, Arduino, PC, ESP32 etc.).
 
 <BR>
 
-### Hints   
- - Take care with any RAM Packs - COMMS links don't play nicely with them
- - Ensure your COMMS link settings are correct
- - Ensure your web browser supports WEB Serial (Firefox 151 does now!!!!)
+### Hints 
+  - Ensure your COMMS link settings are correct  
+  - Ensure your web browser supports WEB Serial (Firefox 151 does now!!!!)
+    
+  PSION Organiser
+  - Take care with any RAM Packs - COMMS links don't play nicely with them
 
 <BR>
 
 ## Background  
 
-The Psion Organiser II was often connected to a range of serial devices. This emulation supports one of those device families i.e. a pen plotter. 
+Obtaining ouptut from legacy devices was typically limited. Perhaps a hardware terminal or line printer. Later, devices such as the PSION Organiser II, were often connected to a range of serial devices. This project emulation supports emulation of one of those device families i.e. a pen plotter. 
+
+As the project uses Web Serial, you can connect a huge range of devices such as RP2040, RP2350's, Raspberyy PI's, Arduino, PC, ESP32 etc. as these all have serial support. Where your hardware does not, it's trivial to implement bit banged support.  
 
 ### Additional Plot Specifications  
 TBC
