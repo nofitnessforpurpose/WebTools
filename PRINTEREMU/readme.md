@@ -65,6 +65,11 @@ PSION Organiser II devices will ouput Standard OPL `LPRINT` statements automatic
 
 Following deployment of printers using fixed type, the 1980's saw introduction of dot matrix printers which employed small solenoids to transfer dots of ink from a moving ribbon to paper. Using typically 9 solenoids, the print in slices of vertical pixels per byte 9 for character mode and 8 for graphics mode. In graphics mode the layout maps the top-most pixel of the 8-pixel strip to the Most Significant Bit (MSB = 128) and the bottom-most pixel to the Least Significant Bit (LSB = 1). ASCII text characters received by the unit use the inbuilt character ROM, in common with most printers of its day, to convert a printable ASCII character code into a bit pattern that corresponds to the ASCII received character value.
 
+
+As the emulation supports Web Serial (RS232), you can connect a huge range of devices including Raspberry Pi's, ESP32's Arduino's, STM32 Discovery / Nucleo Boards, Teensy Boards or bit bang RS232 from any hardware.
+
+<BR>
+
 ### Additional Print Specifications  
 Print Mechanism:  
  - Arragement: Moving head single column mechanism, sprocket feed paper.  
