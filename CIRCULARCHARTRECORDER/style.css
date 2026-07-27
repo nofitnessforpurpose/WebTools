@@ -1,0 +1,1359 @@
+/* ==========================================================================
+   Chart Recorder Emulator — Visual System & Styles
+   Matches the design language of the efx80-printer-emulator project.
+   ========================================================================== */
+
+/* Theme Variables (Slate Dark & Amber Industrial) */
+:root {
+    --bg-app: #080c14;
+    --bg-panel: rgba(17, 25, 40, 0.75);
+    --bg-panel-solid: #0f172a;
+    --border-glow: rgba(251, 191, 36, 0.15);
+    --border-color: rgba(255, 255, 255, 0.08);
+
+    --color-primary:   #fbbf24;   /* Amber — industrial instrument */
+    --color-secondary: #f97316;   /* Warm Orange                   */
+    --color-text-main: #f8fafc;
+    --color-text-muted: #94a3b8;
+    --color-accent-red: #f43f5e;
+    --color-warning:    #f59e0b;
+
+    /* Pen trace colours */
+    --color-pen1: #ff4060;        /* Pen 1 — red                   */
+    --color-pen2: #00b4d8;        /* Pen 2 — cyan/blue             */
+
+    --glass-blur: blur(12px);
+    --shadow-soft: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+    --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+    --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'Fira Code', 'Courier New', monospace;
+
+    --transition-fast:   0.15s ease;
+    --transition-normal: 0.3s ease;
+}
+
+/* Reset */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-app);
+    background-image:
+        radial-gradient(at 0% 0%,   rgba(251, 191, 36, 0.07) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(249, 115, 22, 0.05) 0px, transparent 50%);
+    color: var(--color-text-main);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    padding: 24px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+    position: relative;
+}
+
+.app-container {
+    max-width: 1600px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    flex-grow: 1;
+}
+
+/* ============================================================
+   Header
+============================================================ */
+.app-header { margin-bottom: 4px; }
+
+.header-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.retro-badge {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    color: #000;
+    font-weight: 800;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 1.5px;
+    text-shadow: 0 1px 2px rgba(255,255,255,0.2);
+}
+
+h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(to right, #fff, var(--color-primary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+    margin-top: 4px;
+}
+
+/* ============================================================
+   Workspace Layout
+============================================================ */
+.workspace-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    align-items: stretch;
+    flex-grow: 1;
+}
+
+.panel-chart {
+    width: 100%;
+    max-width: 1100px;
+    justify-self: center;
+}
+
+@media (min-width: 1201px) {
+    body {
+        height: 100vh;
+        overflow: hidden;
+    }
+    .workspace-grid {
+        height: calc(100vh - 130px);
+        min-height: 600px;
+    }
+    .panel { height: 100%; }
+}
+
+/* ============================================================
+   Panels (shared glass card style)
+============================================================ */
+.panel {
+    background: var(--bg-panel);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow-soft);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: border-color var(--transition-normal);
+}
+
+.panel:hover { border-color: rgba(251, 191, 36, 0.25); }
+
+.panel-header {
+    padding: 14px 20px;
+    background: rgba(15, 23, 42, 0.45);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.panel-header i {
+    color: var(--color-primary);
+    font-size: 1.1rem;
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+}
+
+.panel-header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fff;
+    flex-grow: 1;
+}
+
+.panel-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+/* ============================================================
+   Live Readout Stack (header badges)
+============================================================ */
+.live-readouts-stack {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 3px 6px;
+    margin-left: auto;
+    margin-right: 4px;
+}
+
+.live-readout {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    padding: 2px 5px;
+    font-size: 0.70rem;
+    transition: border-color var(--transition-fast);
+}
+
+.live-readout:hover { border-color: rgba(251,191,36,0.3); }
+
+.readout-label {
+    color: var(--color-text-muted);
+    font-size: 0.65rem;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.readout-value {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.75rem;
+    min-width: 28px;
+    text-align: right;
+}
+
+.readout-unit {
+    font-size: 0.65rem;
+    color: var(--color-text-muted);
+}
+
+/* Coloured pen indicator dots */
+.pen-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+.pen-dot-1 {
+    background: #ff4060;
+    box-shadow: 0 0 6px #ff4060;
+}
+.pen-dot-2 {
+    background: #00b4d8;
+    box-shadow: 0 0 6px #00b4d8;
+}
+.pen-dot-3 {
+    background: #10b981;
+    box-shadow: 0 0 6px #10b981;
+}
+.pen-dot-4 {
+    background: #f59e0b;
+    box-shadow: 0 0 6px #f59e0b;
+}
+
+/* ============================================================
+   Vintage Filament Bulb Drive Radio Button Cluster (Start / Stop)
+============================================================ */
+.drive-btn-cluster {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.btn-drive-toggle {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-text-muted);
+    background: rgba(30, 41, 59, 0.4);
+    cursor: pointer;
+    user-select: none;
+    transition: all var(--transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Inactive button hover */
+.btn-drive-toggle:not(.active):hover {
+    background: rgba(51, 65, 85, 0.6);
+    color: #cbd5e1;
+}
+
+/* Active STOP button state */
+.btn-drive-toggle#btnDriveStop.active {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.45);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Active START button state — Subtle warm incandescent bulb glow behind plastic cover */
+.btn-drive-toggle#btnDriveStart.active {
+    color: #fef08a;
+    font-weight: 600;
+    text-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+    border-color: rgba(245, 158, 11, 0.6);
+    background:
+        radial-gradient(ellipse at 35% 40%, rgba(254, 240, 138, 0.35) 0%, rgba(245, 158, 11, 0.25) 50%, rgba(180, 83, 9, 0.20) 100%);
+    box-shadow:
+        0 0 8px rgba(245, 158, 11, 0.35),
+        inset 0 1px 2px rgba(255, 255, 255, 0.25);
+}
+
+/* ============================================================
+   Badges
+============================================================ */
+.badge {
+    background: rgba(251, 191, 36, 0.1);
+    color: var(--color-primary);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.badge.offline {
+    background: rgba(244, 63, 94, 0.1);
+    color: var(--color-accent-red);
+    border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.badge.online {
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* ============================================================
+   Chart Viewport
+============================================================ */
+.chart-viewport {
+    display: flex;
+    flex-direction: row;
+    gap: 0;
+    align-items: stretch;
+    padding: 0;
+    overflow: hidden;
+    background: #070b12;
+    flex-grow: 1;
+}
+
+/* Instrument housing wrapper */
+.chart-instrument-shell {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    position: relative;
+    background:
+        radial-gradient(ellipse at center, rgba(251,191,36,0.04) 0%, transparent 70%);
+}
+
+/* Circular bezel */
+.chart-bezel {
+    position: relative;
+    width: min(720px, 90vw, 75vh);
+    height: min(720px, 90vw, 75vh);
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 30% 20%, #3a3a3a, #1a1a1a 60%, #0d0d0d);
+    box-shadow:
+        0 0 0 6px #2a2a2a,
+        0 0 0 10px #1a1a1a,
+        0 0 0 12px rgba(251,191,36,0.15),
+        0 30px 80px rgba(0,0,0,0.8),
+        inset 0 2px 6px rgba(255,255,255,0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Chart paper canvas */
+#chartCanvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    display: block;
+    position: relative;
+    z-index: 1;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+}
+
+/* SVG pen arms overlay (sits on top of canvas) */
+.pen-arms-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 5;
+    pointer-events: none;
+}
+
+/* Chart motor LED */
+.chart-motor-status {
+    position: absolute;
+    bottom: 18px;
+    right: 32px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Trend Strip */
+.trend-strip-panel {
+    width: 220px;
+    flex-shrink: 0;
+    border-left: 1px solid var(--border-color);
+    background: #0a0f1a;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.trend-strip-header {
+    padding: 10px 14px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(15, 23, 42, 0.4);
+    flex-shrink: 0;
+}
+
+.trend-strip-header i { color: var(--color-primary); }
+
+#trendCanvas {
+    display: block;
+    flex-grow: 1;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+/* ============================================================
+   Sidebars & Triggers
+============================================================ */
+.sidebar-tab-trigger-left {
+    position: fixed;
+    left: 0;
+    top: 100px;
+    z-index: 100;
+    background: var(--bg-panel-solid);
+    border: 1px solid var(--border-color);
+    border-left: none;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    color: var(--color-text-muted);
+    padding: 12px 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: left var(--transition-normal), background-color var(--transition-fast),
+                border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar-tab-trigger {
+    position: fixed;
+    right: 0;
+    z-index: 100;
+    background: var(--bg-panel-solid);
+    border: 1px solid var(--border-color);
+    border-right: none;
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+    color: var(--color-text-muted);
+    padding: 12px 8px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: right var(--transition-normal), background-color var(--transition-fast),
+                border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar-tab-trigger-left:hover,
+.sidebar-tab-trigger:hover {
+    color: var(--color-primary);
+    border-color: rgba(251, 191, 36, 0.35);
+}
+
+.sidebar-tab-trigger.panel-open {
+    right: 380px;
+    color: var(--color-primary);
+    background: rgba(251, 191, 36, 0.05);
+    border-color: rgba(251, 191, 36, 0.4);
+}
+
+.sidebar-tab-trigger-left.panel-open {
+    left: 380px;
+    color: var(--color-primary);
+    background: rgba(251, 191, 36, 0.05);
+    border-color: rgba(251, 191, 36, 0.4);
+}
+
+.toggle-icon {
+    transition: transform var(--transition-fast);
+}
+
+/* Rotate chevron icon when tab is open:
+   - Right sidebars (chevron-left) rotate 180deg to chevron-right (>)
+   - Left sidebar (chevron-right) rotate 180deg to chevron-left (<)
+*/
+.sidebar-tab-trigger.panel-open .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.sidebar-tab-trigger-left.panel-open .toggle-icon {
+    transform: rotate(180deg);
+}
+
+.tab-label {
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+/* Startup Tab Attention Grabbing (Pulse & Peek matching psion-printer-emulator) */
+.sidebar-tab-trigger.pulse-glow {
+    animation: tabPulseGlow 1.5s ease-in-out 4; /* Pulse 4 times (6 seconds total) */
+}
+
+@keyframes tabPulseGlow {
+    0%, 100% {
+        box-shadow: -4px 0 15px rgba(0, 0, 0, 0.5);
+    }
+    50% {
+        box-shadow: -4px 0 25px var(--color-primary), 0 0 10px var(--color-primary);
+        border-color: var(--color-primary);
+    }
+}
+
+/* Peek drawer hint styles */
+.sidebar-panel.peek {
+    right: -320px !important;
+}
+
+.sidebar-tab-trigger.peek {
+    right: 60px !important;
+}
+
+/* Sidebar Panels */
+.sidebar-panel-left {
+    position: fixed;
+    left: -400px;
+    top: 0;
+    width: 380px;
+    height: 100%;
+    background: var(--bg-panel-solid);
+    border-right: 1px solid var(--border-color);
+    box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    transition: left var(--transition-normal);
+}
+
+.sidebar-panel {
+    position: fixed;
+    right: -400px;
+    top: 0;
+    width: 380px;
+    height: 100%;
+    background: var(--bg-panel-solid);
+    border-left: 1px solid var(--border-color);
+    box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    transition: right var(--transition-normal);
+}
+
+.sidebar-panel-left.open { left: 0; }
+.sidebar-panel.open { right: 0; }
+
+.sidebar-header {
+    padding: 20px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.4);
+    flex-shrink: 0;
+}
+
+.sidebar-header h2 {
+    font-size: 1.1rem;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sidebar-header h2 i { color: var(--color-primary); }
+
+.btn-close-sidebar {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: color var(--transition-fast);
+}
+
+.btn-close-sidebar:hover { color: var(--color-accent-red); }
+
+.sidebar-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+/* ============================================================
+   Guide Cards (collapsible)
+============================================================ */
+.guide-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.guide-header {
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.04);
+    cursor: pointer;
+}
+
+.guide-header h4 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+    color: #fff;
+}
+
+.guide-header h4 i { color: var(--color-primary); }
+
+.guide-body {
+    padding: 14px 16px;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.guide-card.collapsed .guide-body { display: none; }
+.guide-card.collapsed .fold-icon { transform: rotate(-90deg); }
+.fold-icon { transition: transform var(--transition-fast); }
+
+/* ============================================================
+   Note Box
+============================================================ */
+.note-box {
+    display: flex;
+    gap: 12px;
+    background: rgba(251, 191, 36, 0.04);
+    border: 1px solid rgba(251, 191, 36, 0.15);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+}
+
+.note-box i {
+    color: var(--color-primary);
+    font-size: 1rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+/* ============================================================
+   Register Map Table
+============================================================ */
+.reg-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+}
+
+.reg-table th {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--color-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 6px 4px;
+    border-bottom: 1px solid rgba(251,191,36,0.2);
+    text-align: left;
+}
+
+.reg-table td {
+    padding: 5px 4px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: top;
+}
+
+.reg-table td:first-child {
+    font-family: var(--font-mono);
+    color: var(--color-primary);
+    white-space: nowrap;
+}
+
+.reg-table tr:last-child td { border-bottom: none; }
+
+/* ============================================================
+   Code Area (hex frame injector)
+============================================================ */
+.code-area {
+    width: 100%;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+    color: var(--color-primary);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    resize: none;
+    line-height: 1.4;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.code-area:focus { border-color: rgba(251, 191, 36, 0.4); }
+
+/* ============================================================
+   Buttons
+============================================================ */
+.btn {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all var(--transition-fast);
+    outline: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+    color: #000;
+    box-shadow: 0 0 12px rgba(251, 191, 36, 0.2);
+    width: 100%;
+}
+
+.btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.45);
+}
+
+.btn-opl-transfer {
+    background: linear-gradient(135deg, #00f2fe 0%, #00f5d4 100%) !important;
+    color: #070b12 !important;
+    font-weight: 700 !important;
+    border: none !important;
+    box-shadow: 0 0 14px rgba(0, 242, 254, 0.35) !important;
+    opacity: 1;
+}
+
+.btn-opl-transfer:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 0 22px rgba(0, 242, 254, 0.65) !important;
+}
+
+.btn:disabled,
+.btn-opl-transfer:disabled {
+    opacity: 0.4 !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: none !important;
+    filter: grayscale(60%);
+}
+
+.btn-action {
+    background: rgba(255,255,255,0.03);
+    border-color: var(--border-color);
+    color: var(--color-text-main);
+    width: 100%;
+}
+
+.btn-action:hover {
+    border-color: var(--color-primary);
+    background: rgba(251, 191, 36, 0.06);
+    color: var(--color-primary);
+}
+
+/* Stepper button group for fine 0.1° angle adjustments */
+.stepper-btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-left: 2px;
+    flex-shrink: 0;
+}
+
+.btn-step {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+    color: var(--color-primary);
+    border-radius: 3px;
+    width: 18px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    transition: all 0.15s ease;
+}
+
+.btn-step:hover {
+    background: var(--color-primary);
+    color: #000;
+    border-color: var(--color-primary);
+}
+
+.btn-step:active {
+    transform: scale(0.90);
+}
+
+.btn-danger {
+    background: rgba(244, 63, 94, 0.1);
+    border: 1px solid rgba(244, 63, 94, 0.3);
+    color: var(--color-accent-red);
+    width: 100%;
+}
+
+.btn-danger:hover {
+    background: rgba(244, 63, 94, 0.25);
+    border-color: var(--color-accent-red);
+}
+
+/* ============================================================
+   Control Groups / Tables
+============================================================ */
+.control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.control-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.font-status-card {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 0;
+    overflow: hidden;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+/* Dedicated CSS class for Card Header (independent of table labels) */
+.font-status-card .card-header-label {
+    padding: 14px 18px;
+    min-height: 48px;
+    box-sizing: border-box;
+    background: rgba(255,255,255,0.04);
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text-main, #f8fafc);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+    transition: background var(--transition-fast), color var(--transition-fast);
+    line-height: 1.4;
+}
+
+.font-status-card .card-header-label span {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    word-break: break-word;
+}
+
+.font-status-card .card-header-label i:not(.fold-icon) {
+    font-size: 1rem;
+}
+
+.font-status-card .fold-icon {
+    font-size: 0.95rem;
+    color: var(--color-primary);
+    transition: transform var(--transition-fast);
+}
+
+.font-status-card .card-header-label:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--color-primary);
+}
+
+.font-status-card.collapsed {
+    border-color: rgba(255,255,255,0.1);
+    min-height: 50px; /* Explicit minimum card height when collapsed */
+}
+
+.font-status-card.collapsed .card-header-label {
+    background: rgba(255,255,255,0.025);
+    color: var(--color-text-muted);
+}
+
+.font-status-card.collapsed .card-header-label:hover {
+    background: rgba(255,255,255,0.06);
+    color: var(--color-primary);
+}
+
+.font-status-card .card-body {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.font-status-card.collapsed .card-body {
+    display: none;
+}
+
+.font-status-card.collapsed .fold-icon {
+    transform: rotate(-90deg);
+}
+
+.status-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+    color: var(--color-text-muted);
+}
+
+.status-table tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.status-table tr:last-child { border-bottom: none; }
+.status-table td {
+    padding: 10px 4px;
+    vertical-align: middle;
+}
+.status-table td:first-child {
+    width: 44%;
+    padding-right: 8px;
+    color: var(--color-text-muted);
+    font-size: 0.84rem;
+}
+.status-table td:last-child {
+    text-align: right;
+    color: #fff;
+    font-weight: 600;
+    width: 56%;
+}
+
+.setting-select {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: #fff;
+    font-size: 0.84rem;
+    text-overflow: ellipsis;
+    outline: none;
+    cursor: pointer;
+    transition: border-color var(--transition-fast);
+}
+
+.setting-select:focus { border-color: rgba(251, 191, 36, 0.4); }
+
+.inline-number-input {
+    width: 90px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 5px 8px;
+    color: #fff;
+    font-family: var(--font-mono);
+    font-size: 0.86rem;
+    text-align: right;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.inline-number-input:focus { border-color: rgba(251, 191, 36, 0.4); }
+
+/* ============================================================
+   LED Indicators
+============================================================ */
+.led-card {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.led-row {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+}
+
+.led-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.led {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #334155;
+    transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-shadow: inset 0 2px 3px rgba(0,0,0,0.6);
+    border: 1px solid rgba(0,0,0,0.3);
+}
+
+.led-label {
+    font-size: 0.68rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+/* LED states */
+.led-status.connected {
+    background-color: #10b981;
+    box-shadow: 0 0 10px #10b981, inset 0 1px 2px rgba(255,255,255,0.4);
+}
+.led-status.disconnected {
+    background-color: #f43f5e;
+    box-shadow: 0 0 10px #f43f5e, inset 0 1px 2px rgba(255,255,255,0.4);
+}
+.led-rx.active {
+    background-color: #06b6d4;
+    box-shadow: 0 0 12px #06b6d4, inset 0 1px 2px rgba(255,255,255,0.4);
+}
+.led-tx.active {
+    background-color: var(--color-primary);
+    box-shadow: 0 0 12px var(--color-primary), inset 0 1px 2px rgba(255,255,255,0.4);
+}
+.led-alarm.active {
+    background-color: #f43f5e;
+    box-shadow: 0 0 14px #f43f5e, inset 0 1px 2px rgba(255,255,255,0.4);
+    animation: alarmPulse 0.8s infinite alternate;
+}
+.led-chart-motor.running {
+    background-color: #10b981;
+    box-shadow: 0 0 10px #10b981, inset 0 1px 2px rgba(255,255,255,0.4);
+    animation: motorPulse 2s infinite alternate;
+}
+
+@keyframes alarmPulse {
+    from { box-shadow: 0 0 6px #f43f5e; }
+    to   { box-shadow: 0 0 18px #f43f5e, 0 0 30px rgba(244,63,94,0.4); }
+}
+
+@keyframes motorPulse {
+    from { box-shadow: 0 0 5px #10b981; }
+    to   { box-shadow: 0 0 14px #10b981, 0 0 24px rgba(16,185,129,0.3); }
+}
+
+/* ============================================================
+   Status Dot (trigger tab)
+============================================================ */
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #f43f5e;
+    display: inline-block;
+    transition: background-color 0.3s;
+}
+
+.status-dot.online {
+    background-color: #10b981;
+    box-shadow: 0 0 8px #10b981;
+}
+
+/* ============================================================
+   Serial Status Container
+============================================================ */
+.serial-status-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.unsupported-alert {
+    font-size: 0.8rem;
+    color: var(--color-accent-red);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* ============================================================
+   Divider / Action Buttons
+============================================================ */
+.divider {
+    border: 0;
+    border-top: 1px solid var(--border-color);
+    margin: 4px 0;
+}
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* ============================================================
+   Toast Notifications
+============================================================ */
+.toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.toast-feedback {
+    background: var(--bg-panel-solid);
+    border: 1px solid var(--color-primary);
+    border-radius: 8px;
+    padding: 12px 20px;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: var(--shadow-soft);
+    font-size: 0.88rem;
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all var(--transition-normal);
+    pointer-events: auto;
+}
+
+.toast-feedback.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.toast-feedback i {
+    color: var(--color-primary);
+    font-size: 1.1rem;
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+}
+
+.toast-feedback.toast-error {
+    border-color: var(--color-accent-red);
+}
+.toast-feedback.toast-error i { color: var(--color-accent-red); }
+
+/* ============================================================
+   Copyright link
+============================================================ */
+.copyright a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+.copyright a:hover { color: var(--color-primary); }
+
+/* ============================================================
+   Code list (guide body)
+============================================================ */
+.code-list { list-style: disc; }
+.code-list code,
+.guide-body code {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    background: rgba(251,191,36,0.1);
+    color: var(--color-primary);
+    border-radius: 3px;
+    padding: 1px 4px;
+}
+
+/* ============================================================
+   Scrollbar customisation
+============================================================ */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ============================================================
+   Toggle Switch  (used for Focus Mode in panel header)
+============================================================ */
+.toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+}
+
+.toggle-label {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    user-select: none;
+}
+
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.switch input { opacity: 0; width: 0; height: 0; }
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.18);
+    transition: background-color var(--transition-fast);
+}
+
+.slider::before {
+    content: '';
+    position: absolute;
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: #fff;
+    transition: transform var(--transition-fast);
+}
+
+.switch input:checked + .slider {
+    background-color: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.switch input:checked + .slider::before {
+    transform: translate(15px, -50%);
+}
+
+.slider.round { border-radius: 34px; }
+.slider.round::before { border-radius: 50%; }
+
+/* ============================================================
+   Focus Mode  — hides all chrome except the chart panel
+============================================================ */
+body.focus-mode {
+    padding: 0;
+}
+body.focus-mode .app-header,
+body.focus-mode #guide-trigger,
+body.focus-mode .sidebar-panel,
+body.focus-mode .sidebar-tab-trigger {
+    display: none !important;
+}
+body.focus-mode .app-container {
+    max-width: 100%;
+    padding: 0;
+}
+body.focus-mode .workspace-grid {
+    padding: 0;
+    gap: 0;
+    height: 100vh;
+}
+body.focus-mode .panel-chart {
+    border-radius: 0;
+    border: none;
+    height: 100vh;
+    max-height: 100vh;
+}
+body.focus-mode .panel-header {
+    padding: 8px 16px;
+}
+/* Keep focus toggle visible in focus mode so user can exit */
+body.focus-mode .toggle-container { display: flex !important; }
+
+/* ============================================================
+   Trend strip — hidden state (toggled by Device Configuration)
+============================================================ */
+.trend-strip-panel.hidden {
+    display: none !important;
+}
+
+/* ============================================================
+   Motor Activity Indicator (Split Red/Blue Rotating Disc)
+============================================================ */
+.motor-activity-indicator {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: conic-gradient(#ff385c 0deg 180deg, #00b4d8 180deg 360deg);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+    margin-left: 6px;
+    flex-shrink: 0;
+    opacity: 0.35;
+}
+
+.motor-activity-indicator.running {
+    opacity: 1;
+    animation: spinMotorIndicator 1.2s linear infinite;
+}
+
+@keyframes spinMotorIndicator {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}

@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Industrial Circular Chart Recorder Emulator</title>
+    <meta name="description" content="A web-based Modbus RTU industrial circular chart recorder emulator using the Web Serial API. Supports FC 03/06/16, CRC-16, floating-point registers, and a live animated chart display.">
+    <!-- Google Fonts & Font Awesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-logo">
+                <span class="retro-badge">CR-EMU</span>
+                <h1>Circular Chart Recorder Emulator</h1>
+            </div>
+            <p class="subtitle">Modbus RTU — Real-time process variable emulation via Web Serial</p>
+        </header>
+
+        <!-- Left Side Slide-out Panel Trigger -->
+        <button class="sidebar-tab-trigger-left" id="guide-trigger" data-panel="guide-panel" title="Open Guide">
+            <i class="fa-solid fa-chevron-right toggle-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-book-open"></i> GUIDE</span>
+        </button>
+
+        <!-- Slide-out Guide Sidebar Panel -->
+        <aside class="sidebar-panel-left" id="guide-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-book-open"></i> Protocol & Usage Guide</h2>
+                <button class="btn-close-sidebar" id="btn-close-guide" title="Close Panel">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="sidebar-body">
+                <div class="guide-text note-box">
+                    <i class="fa-solid fa-info-circle"></i>
+                    <span>This emulator acts as a faithful Modbus RTU slave device. Connect a Modbus RTU master (PLC, SCADA, or test tool) at 9600 baud, 8N1. The emulator responds to Function Codes 0x03, 0x06, and 0x10.</span>
+                </div>
+                <div class="guide-text note-box">
+                    <i class="fa-solid fa-microchip"></i>
+                    <span>All process variables are held in a virtual 16-bit register bank. 32-bit IEEE 754 floats are stored across two consecutive holding registers (high word first).</span>
+                </div>
+
+                <!-- Register Map Card -->
+                <div class="guide-card">
+                    <div class="guide-header">
+                        <h4>
+                            <span><i class="fa-solid fa-table-list"></i> Register Map (FC 03/06/10)</span>
+                            <i class="fa-solid fa-chevron-down fold-icon"></i>
+                        </h4>
+                    </div>
+                    <div class="guide-body">
+                        <table class="reg-table">
+                            <thead><tr><th>Reg</th><th>Type</th><th>Description</th></tr></thead>
+                            <tbody>
+                                <tr><td>40001</td><td>UINT16</td><td>Device Status Word</td></tr>
+                                <tr><td>40002–40003</td><td>FLOAT32</td><td>Pen 1 Process Value</td></tr>
+                                <tr><td>40004–40005</td><td>FLOAT32</td><td>Pen 2 Process Value</td></tr>
+                                <tr><td>40006</td><td>UINT16</td><td>Chart Speed (mm/h × 10)</td></tr>
+                                <tr><td>40007</td><td>UINT16</td><td>Pen 1 Alarm Hi Threshold (EU × 10)</td></tr>
+                                <tr><td>40008</td><td>UINT16</td><td>Pen 1 Alarm Lo Threshold (EU × 10)</td></tr>
+                                <tr><td>40009</td><td>UINT16</td><td>Pen 2 Alarm Hi Threshold (EU × 10)</td></tr>
+                                <tr><td>40010</td><td>UINT16</td><td>Pen 2 Alarm Lo Threshold (EU × 10)</td></tr>
+                                <tr><td>40011</td><td>UINT16</td><td>Engineering Units (0=°C 1=°F 2=%RH 3=bar)</td></tr>
+                                <tr><td>40012</td><td>UINT16</td><td>Full-scale Range Hi (EU × 10)</td></tr>
+                                <tr><td>40013</td><td>UINT16</td><td>Full-scale Range Lo (EU × 10)</td></tr>
+                                <tr><td>40014</td><td>UINT16</td><td>Pen 1 Alarm Status (bit 0=HiAlm, bit 1=LoAlm)</td></tr>
+                                <tr><td>40015</td><td>UINT16</td><td>Pen 2 Alarm Status (bit 0=HiAlm, bit 1=LoAlm)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Modbus Frame Format Card -->
+                <div class="guide-card collapsed">
+                    <div class="guide-header">
+                        <h4>
+                            <span><i class="fa-solid fa-code"></i> Modbus RTU Frame Format</span>
+                            <i class="fa-solid fa-chevron-down fold-icon"></i>
+                        </h4>
+                    </div>
+                    <div class="guide-body">
+                        <p>Each Modbus RTU frame ends with a CRC-16 (polynomial 0xA001). The slave only responds if its station address matches Byte 0.</p>
+                        <ul class="code-list" style="margin-left: 15px; font-size: 0.8rem; line-height: 1.8;">
+                            <li><code>Byte 0</code> : Station Address</li>
+                            <li><code>Byte 1</code> : Function Code (03 / 06 / 10)</li>
+                            <li><code>Byte 2–3</code> : Start Register Address (0-based)</li>
+                            <li><code>Byte 4–5</code> : Quantity / Data Value</li>
+                            <li><code>Byte N-1, N</code> : CRC-16 Low, High</li>
+                        </ul>
+                        <p style="margin-top:8px;">Frame delimiter: ≥3.5 character silences (~3.6 ms at 9600 baud), emulated here via a configurable inter-frame timeout.</p>
+                    </div>
+                </div>
+
+                <!-- Connection Guide -->
+                <div class="guide-card collapsed">
+                    <div class="guide-header">
+                        <h4>
+                            <span><i class="fa-solid fa-plug"></i> PC Connection</span>
+                            <i class="fa-solid fa-chevron-down fold-icon"></i>
+                        </h4>
+                    </div>
+                    <div class="guide-body">
+                        <p>Use a USB-to-RS485 or USB-to-RS232 adaptor to expose a COM port. Click <b>Connect Serial</b> in the CONTROLS panel and select the adaptor.</p>
+                        <p style="margin-top:8px;">Match your master device baud rate. Default: <strong>9600 baud, 8N1, no flow control.</strong></p>
+                        <div class="note-box" style="margin-top:10px; font-size:0.75rem;">
+                            <i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i>
+                            <span>Only one application may hold a serial port at a time. Close any terminal program before connecting here.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CRC Info -->
+                <div class="guide-card collapsed">
+                    <div class="guide-header">
+                        <h4>
+                            <span><i class="fa-solid fa-calculator"></i> CRC-16 Engine</span>
+                            <i class="fa-solid fa-chevron-down fold-icon"></i>
+                        </h4>
+                    </div>
+                    <div class="guide-body">
+                        <p>Modbus RTU CRC-16 uses polynomial <code>0xA001</code> (reflected form of 0x8005). The CRC covers all bytes except the CRC field itself.</p>
+                        <p style="margin-top:8px;">Frames with an invalid CRC are silently discarded, exactly as real hardware behaves.</p>
+                    </div>
+                </div>
+
+                <p class="copyright" style="margin-top: 25px; font-size: 0.75rem; text-align: center; color: var(--color-text-muted);">
+                    <a href="https://github.com/nofitnessforpurpose/WebTools">© 2026 NFfP</a>
+                </p>
+            </div>
+        </aside>
+
+        <!-- =====================================================================
+             Main Workspace — Chart Viewport
+        ====================================================================== -->
+        <div class="workspace-grid">
+            <section class="panel panel-chart">
+                <div class="panel-header" style="flex-wrap:nowrap; gap:12px;">
+                    <!-- 1. Title Group (Non-wrapping Icon + Text + Motor Activity Indicator) -->
+                    <div style="display:flex; align-items:center; gap:8px; flex-shrink:0; white-space:nowrap;">
+                        <i class="fa-solid fa-chart-line"></i>
+                        <h2 style="flex-grow:0; margin:0; white-space:nowrap; font-size:0.95rem;">Live Process Chart</h2>
+                        <!-- Motor Activity Indicator immediately right of text -->
+                        <div class="motor-activity-indicator" id="motorSpinner" title="Chart Motor Active Status"></div>
+                    </div>
+
+                    <!-- 2. Controls Group (Classic Vintage Drive Start/Stop Radio Button Cluster) -->
+                    <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+                        <div class="drive-btn-cluster" id="driveBtnCluster" title="Chart Paper Drive Control (Start / Stop)">
+                            <button type="button" class="btn-drive-toggle active" id="btnDriveStart">Start</button>
+                            <button type="button" class="btn-drive-toggle" id="btnDriveStop">Stop</button>
+                        </div>
+                        <span id="chartStatusBadge" class="badge offline">Offline</span>
+                    </div>
+
+                    <!-- 3. Process Values Stack (Sitting between Controls and Focus mode) -->
+                    <div class="live-readouts-stack" id="readoutsStack">
+                        <!-- Pen 1 live readout -->
+                        <div class="live-readout" id="pen1Readout" title="Pen 1 Process Value">
+                            <span class="readout-label"><span class="pen-dot pen-dot-1" id="dotPen1"></span></span>
+                            <span class="readout-value" id="valPen1">—</span>
+                            <span class="readout-unit" id="unitPen1">°C</span>
+                        </div>
+                        <!-- Pen 2 live readout -->
+                        <div class="live-readout" id="pen2Readout" title="Pen 2 Process Value" style="display:none;">
+                            <span class="readout-label"><span class="pen-dot pen-dot-2" id="dotPen2"></span></span>
+                            <span class="readout-value" id="valPen2">—</span>
+                            <span class="readout-unit" id="unitPen2">°C</span>
+                        </div>
+                        <!-- Pen 3 live readout -->
+                        <div class="live-readout" id="pen3Readout" title="Pen 3 Process Value" style="display:none;">
+                            <span class="readout-label"><span class="pen-dot pen-dot-3" id="dotPen3"></span></span>
+                            <span class="readout-value" id="valPen3">—</span>
+                            <span class="readout-unit" id="unitPen3">°C</span>
+                        </div>
+                        <!-- Pen 4 live readout -->
+                        <div class="live-readout" id="pen4Readout" title="Pen 4 Process Value" style="display:none;">
+                            <span class="readout-label"><span class="pen-dot pen-dot-4" id="dotPen4"></span></span>
+                            <span class="readout-value" id="valPen4">—</span>
+                            <span class="readout-unit" id="unitPen4">°C</span>
+                        </div>
+                    </div>
+
+                    <!-- 4. Focus Mode Toggle (Right-most item) -->
+                    <div class="toggle-container" title="Hide UI chrome and focus on the chart" style="flex-shrink:0;">
+                        <span class="toggle-label"><i class="fa-solid fa-expand"></i> Focus</span>
+                        <label class="switch">
+                            <input type="checkbox" id="chkFocusMode">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Chart Canvas Viewport -->
+                <div class="panel-body chart-viewport" id="chartViewport">
+                    <!-- Animated circular chart disc -->
+                    <div class="chart-instrument-shell" id="chartShell">
+                        <div class="chart-bezel">
+                            <!-- Circular chart paper disc -->
+                            <canvas id="chartCanvas" width="720" height="720" title="Circular chart disc"></canvas>
+                            <!-- Pen arm overlays (SVG). -->
+                            <svg class="pen-arms-overlay" id="penArmsOverlay" viewBox="0 0 720 720" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <filter id="armShadow" x="-30%" y="-30%" width="160%" height="160%">
+                                        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.75)"/>
+                                    </filter>
+
+                                    <!-- Brushed Stainless Steel Gradient -->
+                                    <linearGradient id="brushedSteelGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#334155"/>
+                                        <stop offset="25%" stop-color="#94a3b8"/>
+                                        <stop offset="45%" stop-color="#f8fafc"/>
+                                        <stop offset="65%" stop-color="#cbd5e1"/>
+                                        <stop offset="85%" stop-color="#64748b"/>
+                                        <stop offset="100%" stop-color="#1e293b"/>
+                                    </linearGradient>
+
+                                    <!-- Vintage Phosphor Glow-in-the-Dark Cream Paint Gradient -->
+                                    <linearGradient id="phosphorPaintGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" stop-color="#f5f8ed"/>
+                                        <stop offset="60%" stop-color="#e3ebd5"/>
+                                        <stop offset="100%" stop-color="#d0dfbe"/>
+                                    </linearGradient>
+
+                                    <!-- Alignment Pointer Drop Shadow -->
+                                    <filter id="pointerShadow" x="-50%" y="-50%" width="200%" height="200%">
+                                        <feDropShadow dx="1" dy="3" stdDeviation="2.5" flood-color="rgba(0,0,0,0.85)"/>
+                                    </filter>
+                                </defs>
+
+                                <!-- ═══ STATIONARY PAPER ALIGNMENT ARM & RETRO PHOSPHOR POINTER ═══ -->
+                                <g id="paperAlignmentMarker" filter="url(#pointerShadow)" title="Paper disc alignment reference point">
+                                    <!-- 1. Brushed Stainless Steel Mounting Arm -->
+                                    <path d="M 353,-10 L 367,-10 L 366,7 L 360,11 L 354,7 Z" fill="url(#brushedSteelGrad)" stroke="#1e293b" stroke-width="0.8"/>
+                                    <line x1="356" y1="-10" x2="356" y2="8" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
+                                    <line x1="364" y1="-10" x2="364" y2="8" stroke="rgba(0,0,0,0.35)" stroke-width="0.5"/>
+
+                                    <!-- 2. Retro Phosphor Glow-in-the-Dark Cream Paint Pointer Tab -->
+                                    <polygon points="360,23 349,5 371,5" fill="#2d3748" stroke="#4a5568" stroke-width="1" stroke-linejoin="round"/>
+                                    <polygon points="360,20 351,7 369,7" fill="url(#phosphorPaintGrad)" stroke="#889a78" stroke-width="0.8"/>
+                                    <line x1="360" y1="7" x2="360" y2="18" stroke="#b2c8a0" stroke-width="0.8" stroke-linecap="round"/>
+
+                                    <!-- 3. Stainless Steel Fastener Rivet Pin -->
+                                    <circle cx="360" cy="1" r="2.8" fill="url(#brushedSteelGrad)" stroke="#0f172a" stroke-width="0.8"/>
+                                    <circle cx="359.2" cy="0.2" r="0.9" fill="#ffffff" opacity="0.8"/>
+                                </g>
+
+                                <!-- ═══ PEN 1 ARM ═══ -->
+                                <g id="p1ArmGroup" filter="url(#armShadow)">
+                                    <line id="p1BodyLine" x1="210" y1="515" x2="260" y2="130" stroke="#1e293b" stroke-width="10" stroke-linecap="round"/>
+                                    <line id="p1StripeLine" x1="210" y1="515" x2="260" y2="130" stroke="#ff4060" stroke-width="4.5" stroke-linecap="round"/>
+                                    <circle id="p1TipDot" cx="260" cy="130" r="7" fill="#ff2040" stroke="#ff7090" stroke-width="2"/>
+                                    <circle id="p1TipGlint" cx="257" cy="127" r="2.5" fill="#ffffff" opacity="0.75"/>
+                                    <circle id="p1PivotBase" cx="210" cy="515" r="9" fill="#1e293b" stroke="#64748b" stroke-width="2.5"/>
+                                    <circle id="p1PivotInner" cx="210" cy="515" r="4" fill="#94a3b8"/>
+                                    <circle id="p1PivotGlint" cx="208" cy="513" r="1.5" fill="rgba(255,255,255,0.5)"/>
+                                </g>
+
+                                <!-- ═══ PEN 2 ARM ═══ -->
+                                <g id="p2ArmGroup" filter="url(#armShadow)" style="display:none;">
+                                    <line id="p2BodyLine" x1="310" y1="515" x2="260" y2="155" stroke="#1e293b" stroke-width="8" stroke-linecap="round"/>
+                                    <line id="p2StripeLine" x1="310" y1="515" x2="260" y2="155" stroke="#00b4d8" stroke-width="3.5" stroke-linecap="round"/>
+                                    <circle id="p2TipDot" cx="260" cy="155" r="6" fill="#00c8f0" stroke="#50d8ff" stroke-width="2"/>
+                                    <circle id="p2TipGlint" cx="257" cy="152" r="2" fill="#ffffff" opacity="0.75"/>
+                                    <circle id="p2PivotBase" cx="310" cy="515" r="8" fill="#1e293b" stroke="#64748b" stroke-width="2.5"/>
+                                    <circle id="p2PivotInner" cx="310" cy="515" r="3.5" fill="#94a3b8"/>
+                                    <circle id="p2PivotGlint" cx="308" cy="513" r="1.5" fill="rgba(255,255,255,0.5)"/>
+                                </g>
+
+                                <!-- ═══ PEN 3 ARM ═══ -->
+                                <g id="p3ArmGroup" filter="url(#armShadow)" style="display:none;">
+                                    <line id="p3BodyLine" x1="360" y1="515" x2="260" y2="175" stroke="#1e293b" stroke-width="8" stroke-linecap="round"/>
+                                    <line id="p3StripeLine" x1="360" y1="515" x2="260" y2="175" stroke="#10b981" stroke-width="3.5" stroke-linecap="round"/>
+                                    <circle id="p3TipDot" cx="260" cy="175" r="6" fill="#10b981" stroke="#6ee7b7" stroke-width="2"/>
+                                    <circle id="p3TipGlint" cx="257" cy="172" r="2" fill="#ffffff" opacity="0.75"/>
+                                    <circle id="p3PivotBase" cx="360" cy="515" r="8" fill="#1e293b" stroke="#64748b" stroke-width="2.5"/>
+                                    <circle id="p3PivotInner" cx="360" cy="515" r="3.5" fill="#94a3b8"/>
+                                    <circle id="p3PivotGlint" cx="358" cy="513" r="1.5" fill="rgba(255,255,255,0.5)"/>
+                                </g>
+
+                                <!-- ═══ PEN 4 ARM ═══ -->
+                                <g id="p4ArmGroup" filter="url(#armShadow)" style="display:none;">
+                                    <line id="p4BodyLine" x1="410" y1="515" x2="260" y2="195" stroke="#1e293b" stroke-width="8" stroke-linecap="round"/>
+                                    <line id="p4StripeLine" x1="410" y1="515" x2="260" y2="195" stroke="#f59e0b" stroke-width="3.5" stroke-linecap="round"/>
+                                    <circle id="p4TipDot" cx="260" cy="195" r="6" fill="#f59e0b" stroke="#fde047" stroke-width="2"/>
+                                    <circle id="p4TipGlint" cx="257" cy="192" r="2" fill="#ffffff" opacity="0.75"/>
+                                    <circle id="p4PivotBase" cx="410" cy="515" r="8" fill="#1e293b" stroke="#64748b" stroke-width="2.5"/>
+                                    <circle id="p4PivotInner" cx="410" cy="515" r="3.5" fill="#94a3b8"/>
+                                    <circle id="p4PivotGlint" cx="408" cy="513" r="1.5" fill="rgba(255,255,255,0.5)"/>
+                                </g>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Right-side strip trend (time-axis scroll) -->
+                    <div class="trend-strip-panel hidden">
+                        <div class="trend-strip-header">
+                            <i class="fa-solid fa-wave-square"></i>
+                            <span>Trend Strip</span>
+                        </div>
+                        <canvas id="trendCanvas" width="200" height="460" title="Scrolling strip trend"></canvas>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- =====================================================================
+             Right-side Sidebar Tab Triggers
+        ====================================================================== -->
+        <button class="sidebar-tab-trigger" id="help-trigger" data-panel="help-panel" style="top: 80px;" title="Open Help">
+            <i class="fa-solid fa-chevron-left toggle-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-circle-info"></i> HELP</span>
+        </button>
+
+        <button class="sidebar-tab-trigger" id="config-trigger" data-panel="config-panel" style="top: 190px;" title="Open Device Config">
+            <i class="fa-solid fa-chevron-left toggle-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-sliders"></i> CONFIG</span>
+        </button>
+
+        <button class="sidebar-tab-trigger" id="controls-trigger" data-panel="controls-panel" style="top: 300px;" title="Open Serial Controls">
+            <i class="fa-solid fa-chevron-left toggle-icon"></i>
+            <span id="controls-status-dot" class="status-dot"></span>
+            <span class="tab-label"><i class="fa-solid fa-plug"></i> CONTROLS</span>
+        </button>
+
+        <button class="sidebar-tab-trigger" id="operations-trigger" data-panel="operations-panel" style="top: 410px;" title="Open Operations">
+            <i class="fa-solid fa-chevron-left toggle-icon"></i>
+            <span class="tab-label"><i class="fa-solid fa-gears"></i> OPERATIONS</span>
+        </button>
+
+        <!-- =====================================================================
+             HELP Sidebar
+        ====================================================================== -->
+        <aside class="sidebar-panel" id="help-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-circle-info"></i> Help Reference</h2>
+                <button class="btn-close-sidebar" id="btn-close-help" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sidebar-body">
+                <div style="display:flex; flex-direction:column; gap:15px;">
+                    <div class="guide-card collapsed opl-only-element">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-terminal" style="color:var(--color-primary);"></i> ASCII Protocol & OPL Guide</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body" style="font-size:0.8rem;">
+                            <p style="color:var(--color-text-main); font-weight:600; margin-bottom:4px;">Simple ASCII Line Protocol Structure:</p>
+                            <ul style="padding-left:14px; margin:0; display:flex; flex-direction:column; gap:5px; color:var(--color-text-muted);">
+                                <li><strong>Read Query:</strong> <code>$PV?\r\n</code> or <code>$01:PV?\r\n</code><br>Returns: <code>*PV:P1=25.00,P2=60.00,P3=110.00,P4=145.00\r\n</code></li>
+                                <li><strong>Write PVs:</strong> <code>$P1=45.5,P2=80.2\r\n</code> or <code>$01:P1=50.0,P2=75.0,P3=120.0,P4=160.0\r\n</code><br>Returns: <code>*OK\r\n</code></li>
+                                <li><strong>Flow Control:</strong> Software XON (<code>0x11</code>) / XOFF (<code>0x13</code>) supported.</li>
+                            </ul>
+                            <p style="color:var(--color-text-main); font-weight:600; margin-top:8px; margin-bottom:4px;">Organiser II OPL Code Example:</p>
+                            <pre style="background:rgba(0,0,0,0.5); padding:8px; border-radius:6px; border:1px solid var(--border-color); color:var(--color-primary); font-size:0.74rem; overflow-x:auto; margin:0; font-family:var(--font-mono);">
+CHART:
+  LOCAL p1,p2,cmd$(32)
+  LOPEN "A"
+  p1=45.5 : p2=80.2
+  cmd$="$P1="+NUM$(p1,5,1)+",P2="+NUM$(p2,5,1)+CHR$(13)+CHR$(10)
+  LPRINT cmd$
+  LCLOSE
+</pre>
+                        </div>
+                    </div>
+                    <div class="guide-card">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-play"></i> Getting Started</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>Open the <b>CONTROLS</b> panel, then click <b>Connect Serial</b> to pick your USB-serial adaptor. The emulator will immediately start listening for Modbus RTU or Simple ASCII frames.</p>
+                            <p style="margin-top:8px;">Use the <b>CONFIG</b> panel to set the station address, engineering units, alarm thresholds, and chart speed before connecting a master.</p>
+                        </div>
+                    </div>
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-diagram-project"></i> Architecture</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>The emulator is split into three decoupled layers:</p>
+                            <ul style="margin-left:15px; font-size:0.8rem; line-height:1.7;">
+                                <li><strong>VirtualDevice</strong> — register bank & data model</li>
+                                <li><strong>ModbusParser</strong> — CRC-16, FC dispatch, response builder</li>
+                                <li><strong>SerialPort I/O</strong> — Web Serial read loop with inter-frame timeout</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-triangle-exclamation"></i> Warnings</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>Web Serial requires Chrome 89+ or Edge 89+. Firefox and Safari are not supported.</p>
+                            <p style="margin-top:8px;">Only one application can hold a COM port. Ensure no other terminal or driver software has the port open.</p>
+                        </div>
+                    </div>
+                </div>
+                <p class="copyright" style="margin-top:25px; font-size:0.75rem; text-align:center; color:var(--color-text-muted);">
+                    <a href="https://github.com/nofitnessforpurpose/WebTools">© 2026 NFfP</a>
+                </p>
+            </div>
+        </aside>
+
+        <!-- =====================================================================
+             CONFIG Sidebar — Device register configuration
+        ====================================================================== -->
+        <aside class="sidebar-panel" id="config-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-sliders"></i> Config</h2>
+                <button class="btn-close-sidebar" id="btn-close-config" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sidebar-body">
+
+                <!-- Station Config -->
+                <div class="control-group font-status-card collapsed" id="cardStationConfig">
+                    <label class="card-header-label">
+                        <span><i class="fa-solid fa-server" style="margin-right:6px; color:var(--color-primary);"></i>Station Config</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <table class="status-table">
+                            <tr>
+                                <td>Active Pens</td>
+                                <td>
+                                    <select id="selectPenCount" class="setting-select" title="Number of active pen arms (1–4)">
+                                        <option value="1" selected>1 Pen (Single Trace)</option>
+                                        <option value="2">2 Pens (Dual Trace)</option>
+                                        <option value="3">3 Pens (Triple Trace)</option>
+                                        <option value="4">4 Pens (Quad Trace)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Serial Protocol</td>
+                                <td>
+                                    <select id="selectProtocol" class="setting-select" title="Communication protocol">
+                                        <option value="ascii" selected>Simple ASCII ($P1=25.0,P2=60.0\r\n)</option>
+                                        <option value="modbus">Modbus RTU (Binary)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr id="rowStationAddr" class="modbus-only-element">
+                                <td>Station Address</td>
+                                <td>
+                                    <input type="number" id="inputStationAddr" min="1" max="247" value="1"
+                                        class="inline-number-input" title="Modbus RTU slave address (1–247)">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Engineering Units</td>
+                                <td>
+                                    <select id="selectEngUnits" class="setting-select" title="Process Engineering Units">
+                                        <option value="0" selected>°C — Celsius</option>
+                                        <option value="1">°F — Fahrenheit</option>
+                                        <option value="2">K — Kelvin</option>
+                                        <option value="3">%RH — Relative Humidity</option>
+                                        <option value="4">bar — Pressure (bar)</option>
+                                        <option value="5">mbar — Pressure (mbar)</option>
+                                        <option value="6">PSI — Pressure (PSI)</option>
+                                        <option value="7">kPa — Pressure (kPa)</option>
+                                        <option value="8">MPa — Pressure (MPa)</option>
+                                        <option value="9">A — Current (Amps)</option>
+                                        <option value="10">mA — Current (Milliamps)</option>
+                                        <option value="11">kA — Current (kAmps)</option>
+                                        <option value="12">µA — Current (Microamps)</option>
+                                        <option value="13">V — Voltage (Volts)</option>
+                                        <option value="14">mV — Voltage (Millivolts)</option>
+                                        <option value="15">kV — Voltage (Kilovolts)</option>
+                                        <option value="16">kW — Power (Kilowatts)</option>
+                                        <option value="17">MW — Power (Megawatts)</option>
+                                        <option value="18">W — Power (Watts)</option>
+                                        <option value="19">kVA — Power (kVA)</option>
+                                        <option value="20">kVAR — Power (kVAR)</option>
+                                        <option value="21">Hz — Frequency (Hertz)</option>
+                                        <option value="22">RPM — Speed (RPM)</option>
+                                        <option value="23">% — Level / Percentage</option>
+                                        <option value="24">L/min — Flow Rate (L/min)</option>
+                                        <option value="25">L/h — Flow Rate (L/h)</option>
+                                        <option value="26">m³/h — Flow Rate (m³/h)</option>
+                                        <option value="27">GPM — Flow Rate (Gallons/min)</option>
+                                        <option value="28">PPM — Concentration (PPM)</option>
+                                        <option value="29">pH — Chemical Level (pH)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Scale Hi</td>
+                                <td>
+                                    <input type="number" id="inputScaleHi" value="200" step="1"
+                                        class="inline-number-input" title="Full-scale high (EU)">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Scale Lo</td>
+                                <td>
+                                    <input type="number" id="inputScaleLo" value="0" step="1"
+                                        class="inline-number-input" title="Full-scale low (EU)">
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Pen 1 Settings -->
+                <div class="control-group font-status-card collapsed" id="cardPen1">
+                    <label class="card-header-label">
+                        <span><span class="pen-dot pen-dot-1" id="dotConfigPen1" style="display:inline-block; margin-right:6px;"></span>Pen 1 Settings</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <table class="status-table">
+                            <tr>
+                                <td>Pen Colour</td>
+                                <td>
+                                    <select id="selectPen1Color" class="setting-select">
+                                        <option value="#ff4060" selected>Red / Crimson</option>
+                                        <option value="#00b4d8">Cyan / Blue</option>
+                                        <option value="#10b981">Emerald Green</option>
+                                        <option value="#f59e0b">Amber Yellow</option>
+                                        <option value="#a855f7">Purple Violet</option>
+                                        <option value="#ec4899">Hot Pink</option>
+                                        <option value="#f97316">Vibrant Orange</option>
+                                        <option value="#ffffff">Pure White</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Process Value</td>
+                                <td>
+                                    <input type="number" id="inputPen1PV" value="25.0" step="0.1"
+                                        class="inline-number-input" title="Pen 1 process value (IEEE 754 float)">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Alarm Hi</td>
+                                <td>
+                                    <input type="number" id="inputPen1AlarmHi" value="150" step="1"
+                                        class="inline-number-input">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Alarm Lo</td>
+                                <td>
+                                    <input type="number" id="inputPen1AlarmLo" value="5" step="1"
+                                        class="inline-number-input">
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Pen 2 Settings -->
+                <div class="control-group font-status-card" id="cardPen2" style="display:none;">
+                    <label class="card-header-label">
+                        <span><span class="pen-dot pen-dot-2" id="dotConfigPen2" style="display:inline-block; margin-right:6px;"></span>Pen 2 Settings</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <table class="status-table">
+                            <tr>
+                                <td>Pen Colour</td>
+                                <td>
+                                    <select id="selectPen2Color" class="setting-select">
+                                        <option value="#ff4060">Red / Crimson</option>
+                                        <option value="#00b4d8" selected>Cyan / Blue</option>
+                                        <option value="#10b981">Emerald Green</option>
+                                        <option value="#f59e0b">Amber Yellow</option>
+                                        <option value="#a855f7">Purple Violet</option>
+                                        <option value="#ec4899">Hot Pink</option>
+                                        <option value="#f97316">Vibrant Orange</option>
+                                        <option value="#ffffff">Pure White</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Process Value</td>
+                                <td>
+                                    <input type="number" id="inputPen2PV" value="60.0" step="0.1"
+                                        class="inline-number-input" title="Pen 2 process value (IEEE 754 float)">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Alarm Hi</td>
+                                <td>
+                                    <input type="number" id="inputPen2AlarmHi" value="150" step="1"
+                                        class="inline-number-input">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Alarm Lo</td>
+                                <td>
+                                    <input type="number" id="inputPen2AlarmLo" value="5" step="1"
+                                        class="inline-number-input">
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Pen 3 Settings -->
+                <div class="control-group font-status-card" id="cardPen3" style="display:none;">
+                    <label class="card-header-label">
+                        <span><span class="pen-dot pen-dot-3" id="dotConfigPen3" style="display:inline-block; margin-right:6px;"></span>Pen 3 Settings</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <table class="status-table">
+                            <tr>
+                                <td>Pen Colour</td>
+                                <td>
+                                    <select id="selectPen3Color" class="setting-select">
+                                        <option value="#ff4060">Red / Crimson</option>
+                                        <option value="#00b4d8">Cyan / Blue</option>
+                                        <option value="#10b981" selected>Emerald Green</option>
+                                        <option value="#f59e0b">Amber Yellow</option>
+                                        <option value="#a855f7">Purple Violet</option>
+                                        <option value="#ec4899">Hot Pink</option>
+                                        <option value="#f97316">Vibrant Orange</option>
+                                        <option value="#ffffff">Pure White</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Process Value</td>
+                                <td>
+                                    <input type="number" id="inputPen3PV" value="110.0" step="0.1"
+                                        class="inline-number-input" title="Pen 3 process value (IEEE 754 float)">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Alarm Hi</td>
+                                <td>
+                                    <input type="number" id="inputPen3AlarmHi" value="180" step="1"
+                                        class="inline-number-input">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Alarm Lo</td>
+                                <td>
+                                    <input type="number" id="inputPen3AlarmLo" value="10" step="1"
+                                        class="inline-number-input">
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Pen 4 Settings -->
+                <div class="control-group font-status-card" id="cardPen4" style="display:none;">
+                    <label class="card-header-label">
+                        <span><span class="pen-dot pen-dot-4" id="dotConfigPen4" style="display:inline-block; margin-right:6px;"></span>Pen 4 Settings</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <table class="status-table">
+                            <tr>
+                                <td>Pen Colour</td>
+                                <td>
+                                    <select id="selectPen4Color" class="setting-select">
+                                        <option value="#ff4060">Red / Crimson</option>
+                                        <option value="#00b4d8">Cyan / Blue</option>
+                                        <option value="#10b981">Emerald Green</option>
+                                        <option value="#f59e0b" selected>Amber Yellow</option>
+                                        <option value="#a855f7">Purple Violet</option>
+                                        <option value="#ec4899">Hot Pink</option>
+                                        <option value="#f97316">Vibrant Orange</option>
+                                        <option value="#ffffff">Pure White</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Process Value</td>
+                                <td>
+                                    <input type="number" id="inputPen4PV" value="145.0" step="0.1"
+                                        class="inline-number-input" title="Pen 4 process value (IEEE 754 float)">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Alarm Hi</td>
+                                <td>
+                                    <input type="number" id="inputPen4AlarmHi" value="190" step="1"
+                                        class="inline-number-input">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Alarm Lo</td>
+                                <td>
+                                    <input type="number" id="inputPen4AlarmLo" value="15" step="1"
+                                        class="inline-number-input">
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 1. Chart Mechanics & Timing -->
+                <div class="control-group font-status-card collapsed" id="cardChartMechanics">
+                    <label class="card-header-label">
+                        <span><i class="fa-solid fa-compass-drafting" style="margin-right:6px; color:var(--color-primary);"></i>Chart Mechanics</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <table class="status-table">
+                            <tr>
+                                <td>Chart Speed / Period</td>
+                                <td>
+                                    <select id="selectChartSpeed" class="setting-select">
+                                        <option value="100">Ultra-Fast: 30 Sec / Rev</option>
+                                        <option value="50">Fast: 1 Min / Rev</option>
+                                        <option value="20" selected>Standard: 2 Min / Rev</option>
+                                        <option value="10">Slow: 10 Min / Rev</option>
+                                        <option value="5">1-Hour / Rev</option>
+                                        <option value="1">24-Hour / Rev</option>
+                                        <option value="2">7-Day / Rev</option>
+                                        <option value="3">31-Day / Rev</option>
+                                        <option value="4">1-Year / Rev</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Start Rotation</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <input type="range" id="sliderStartAngle" min="0" max="360" value="343" step="1"
+                                            style="flex-grow:1; accent-color:var(--color-primary);" title="Chart paper initial rotation offset (0–360°)">
+                                        <span id="labelStartAngle" style="font-size:0.75rem; width:36px; text-align:right; font-family:var(--font-mono); color:var(--color-primary);">343°</span>
+                                        <div class="stepper-btn-group">
+                                            <button type="button" class="btn-step" id="btnStartAngleUp" title="Increase 1°"><i class="fa-solid fa-caret-up"></i></button>
+                                            <button type="button" class="btn-step" id="btnStartAngleDown" title="Decrease 1°"><i class="fa-solid fa-caret-down"></i></button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Arm Mount</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <input type="range" id="sliderArmMountAngle" min="0" max="360" value="195" step="1"
+                                            style="flex-grow:1; accent-color:var(--color-primary);" title="Pen arm mount angle (0–360°)">
+                                        <span id="labelArmMountAngle" style="font-size:0.75rem; width:36px; text-align:right; font-family:var(--font-mono); color:var(--color-primary);">195°</span>
+                                        <div class="stepper-btn-group">
+                                            <button type="button" class="btn-step" id="btnArmMountUp" title="Increase 1°"><i class="fa-solid fa-caret-up"></i></button>
+                                            <button type="button" class="btn-step" id="btnArmMountDown" title="Decrease 1°"><i class="fa-solid fa-caret-down"></i></button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Pen Draw</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <input type="range" id="sliderPenDrawAngle" min="0" max="360" value="260" step="1"
+                                            style="flex-grow:1; accent-color:var(--color-primary);" title="Pen nib draw position angle (0–360°)">
+                                        <span id="labelPenDrawAngle" style="font-size:0.75rem; width:36px; text-align:right; font-family:var(--font-mono); color:var(--color-primary);">260°</span>
+                                        <div class="stepper-btn-group">
+                                            <button type="button" class="btn-step" id="btnPenDrawUp" title="Increase 1°"><i class="fa-solid fa-caret-up"></i></button>
+                                            <button type="button" class="btn-step" id="btnPenDrawDown" title="Decrease 1°"><i class="fa-solid fa-caret-down"></i></button>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td></td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:6px; margin-left:8px;">
+                                        <input type="checkbox" id="chkArmCalibration" style="accent-color:var(--color-primary);">
+                                        <label for="chkArmCalibration" style="font-size:11px; user-select:none;">Calibration</label>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr id="rowArmCalibrationSlider" style="opacity:0.5; pointer-events:none;">
+                                <td>Arm Position</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:6px;">
+                                        <input type="range" id="sliderArmCalibration" min="0" max="100" value="50" step="0.5" disabled
+                                            style="flex-grow:1; accent-color:var(--color-primary);" title="Manual calibration position (0–100%)">
+                                        <span id="labelArmCalibration" style="font-size:0.75rem; width:36px; text-align:right; font-family:var(--font-mono); color:var(--color-primary);">50%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Trend Strip</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:6px; margin-left:24px;">
+                                        <input type="checkbox" id="chkShowTrend"
+                                            style="accent-color:var(--color-primary);">
+                                        <label for="chkShowTrend" style="font-size:11px; user-select:none;">Show Strip</label>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 2. Paper Disc & Grid Styling -->
+                <div class="control-group font-status-card collapsed" id="cardPaperAppearance">
+                    <label class="card-header-label">
+                        <span><i class="fa-solid fa-palette" style="margin-right:6px; color:var(--color-primary);"></i>Paper & Grid Appearance</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <table class="status-table">
+                            <tr>
+                                <td>Paper Stock / Colour</td>
+                                <td>
+                                    <select id="selectPaperStock" class="setting-select">
+                                        <option value="antique-white" selected>Antique White (#FDFBF7)</option>
+                                        <option value="manila-paper">Manila Paper (#F4F1EA)</option>
+                                        <option value="classic-cream">Classic Cream</option>
+                                        <option value="vintage-aged">Vintage Sepia</option>
+                                        <option value="blueprint-cyan">Blueprint Blue</option>
+                                        <option value="dark-slate">Dark Slate</option>
+                                        <option value="pure-white">Pure White</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Grid Line Colour</td>
+                                <td>
+                                    <select id="selectGridColor" class="setting-select">
+                                        <option value="grid-red" selected>Authentic Red (#CF3A3A)</option>
+                                        <option value="pale-blue">Pale Blue (#A6C1EE)</option>
+                                        <option value="faded-green">Faded Green (#99B299)</option>
+                                        <option value="sepia-warm">Warm Sepia (#D2A679)</option>
+                                        <option value="slate-gray">Slate Gray (#64748B)</option>
+                                        <option value="blueprint-white">Blueprint White (#E2E8F0)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Printed Text Colour</td>
+                                <td>
+                                    <select id="selectTextColor" class="setting-select">
+                                        <option value="auto" selected>Auto (Grid Theme)</option>
+                                        <option value="crimson-red">Authentic Red (#8B0000)</option>
+                                        <option value="dark-charcoal">Dark Charcoal (#1E293B)</option>
+                                        <option value="navy-blue">Navy Blue (#1E3A8A)</option>
+                                        <option value="faded-brown">Faded Brown (#4A2E16)</option>
+                                        <option value="forest-green">Forest Green (#14532D)</option>
+                                        <option value="bright-white">Bright White (#F8FAFC)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Pre-printed Grid</td>
+                                <td>
+                                    <select id="selectGridStyle" class="setting-select">
+                                        <option value="standard-24h" selected>24-Hour Daily (24 Time Arcs)</option>
+                                        <option value="weekly-7d">7-Day Weekly (Mon–Sun Arcs)</option>
+                                        <option value="weekly-28d">4-Week (28-Day Arcs)</option>
+                                        <option value="monthly-31d">31-Day Monthly (Days 1–31 Arcs)</option>
+                                        <option value="annual-12m">12-Month Annual (Jan–Dec Arcs)</option>
+                                        <option value="graph-quad">Fine Graph Grid (15-Min Subdivisions)</option>
+                                        <option value="polar-12h">12-Hour Polar (12 Arcs)</option>
+                                        <option value="spiral-target">Spiral Target Grid</option>
+                                        <option value="concentric-only">Concentric Rings Only</option>
+                                        <option value="blank-clean">Clean Blank (No Grid)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Scale Value Labels</td>
+                                <td>
+                                    <select id="selectScaleLabelMode" class="setting-select" title="Scale number label placement">
+                                        <option value="single" selected>Primary Pen Arc Only</option>
+                                        <option value="all">Every Time Arc</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Export Resolution</td>
+                                <td>
+                                    <select id="selectExportRes" class="setting-select">
+                                        <option value="1">Standard (1x - 520px)</option>
+                                        <option value="2" selected>High-Res (2x - 1040px)</option>
+                                        <option value="3">Ultra-Res (3x - 1560px)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Outer Rim Zebra</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:6px; margin-left:8px;">
+                                        <input type="checkbox" id="chkShowZebra" checked
+                                            style="accent-color:var(--color-primary);">
+                                        <label for="chkShowZebra" style="font-size:11px; user-select:none;">Show Zebra Border</label>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 3. Line Weight Adjustments -->
+                <div class="control-group font-status-card collapsed" id="cardLineWeights">
+                    <label class="card-header-label">
+                        <span><i class="fa-solid fa-sliders" style="margin-right:6px; color:var(--color-primary);"></i>Line Weights & Calibration</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <table class="status-table">
+                            <tr>
+                                <td>Main Radial Lines</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <input type="range" id="sliderMainRadialWidth" min="0.3" max="3.0" value="1.1" step="0.1"
+                                            style="flex-grow:1; accent-color:var(--color-primary);" title="Main radial time spoke line weight (centre to periphery)">
+                                        <span id="labelMainRadialWidth" style="font-size:0.75rem; width:36px; text-align:right; font-family:var(--font-mono); color:var(--color-primary);">1.1px</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Sub Radial Lines</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <input type="range" id="sliderSubRadialWidth" min="0.1" max="2.0" value="0.6" step="0.1"
+                                            style="flex-grow:1; accent-color:var(--color-primary);" title="Sub-division radial time spoke line weight">
+                                        <span id="labelSubRadialWidth" style="font-size:0.75rem; width:36px; text-align:right; font-family:var(--font-mono); color:var(--color-primary);">0.6px</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Major Ring Lines</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <input type="range" id="sliderMajorRingWidth" min="0.5" max="3.5" value="1.4" step="0.1"
+                                            style="flex-grow:1; accent-color:var(--color-primary);" title="Major circular scale ring line weight (between inner and outer zone)">
+                                        <span id="labelMajorRingWidth" style="font-size:0.75rem; width:36px; text-align:right; font-family:var(--font-mono); color:var(--color-primary);">1.4px</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Sub Ring Lines</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <input type="range" id="sliderSubRingWidth" min="0.1" max="2.0" value="0.5" step="0.1"
+                                            style="flex-grow:1; accent-color:var(--color-primary);" title="Sub-division graticule circular ring line weight">
+                                        <span id="labelSubRingWidth" style="font-size:0.75rem; width:36px; text-align:right; font-family:var(--font-mono); color:var(--color-primary);">0.5px</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Pen Trace Width</td>
+                                <td>
+                                    <select id="selectTraceWidth" class="setting-select">
+                                        <option value="0.8">0.8 px — Fine</option>
+                                        <option value="1.5" selected>1.5 px — Standard</option>
+                                        <option value="2.5">2.5 px — Medium</option>
+                                        <option value="4.0">4.0 px — Bold</option>
+                                        <option value="6.0">6.0 px — Heavy</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+
+                <button class="btn btn-action" id="btnApplyConfig" style="margin-top:4px;">
+                    <i class="fa-solid fa-check"></i> Apply Configuration
+                </button>
+                <button class="btn btn-action" id="btnResetConfig" style="margin-top:4px;">
+                    <i class="fa-solid fa-arrow-rotate-left"></i> Reset to Defaults
+                </button>
+            </div>
+        </aside>
+
+        <!-- =====================================================================
+             CONTROLS Sidebar — Web Serial connection & LEDs
+        ====================================================================== -->
+        <aside class="sidebar-panel" id="controls-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-plug"></i> Serial & Control</h2>
+                <button class="btn-close-sidebar" id="btn-close-controls" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sidebar-body">
+
+                <!-- 1. Serial Interface & Settings (Default Expanded) -->
+                <div class="control-group font-status-card" id="cardSerialConfig">
+                    <label class="card-header-label">
+                        <span><i class="fa-solid fa-network-wired" style="margin-right:6px; color:var(--color-primary);"></i>Serial Settings & Connection</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <!-- Physical Interface Button -->
+                        <div class="control-group" style="margin-bottom:12px;">
+                            <label class="control-label">Physical Interface</label>
+                            <div class="serial-status-container">
+                                <button class="btn btn-primary" id="btnSerialConnect">
+                                    <i class="fa-solid fa-plug"></i> Connect Serial
+                                </button>
+                                <span id="serialAlert" class="unsupported-alert" style="display:none;">
+                                    <i class="fa-solid fa-exclamation-triangle"></i> Web Serial not supported in this browser.
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Status LEDs -->
+                        <div class="led-card" style="margin-bottom:14px;">
+                            <div class="led-row">
+                                <div class="led-item">
+                                    <div class="led led-status" id="ledStatus"></div>
+                                    <span class="led-label">Serial On</span>
+                                </div>
+                                <div class="led-item">
+                                    <div class="led led-rx" id="ledRx"></div>
+                                    <span class="led-label">Rx Active</span>
+                                </div>
+                                <div class="led-item">
+                                    <div class="led led-tx" id="ledTx"></div>
+                                    <span class="led-label">Tx Active</span>
+                                </div>
+                                <div class="led-item">
+                                    <div class="led led-alarm" id="ledAlarm"></div>
+                                    <span class="led-label">Alarm</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Serial Parameters Table -->
+                        <table class="status-table">
+                            <tr>
+                                <td>Baud Rate</td>
+                                <td>
+                                    <select id="selectBaudRate" class="setting-select">
+                                        <option value="1200">1200 bps</option>
+                                        <option value="2400">2400 bps</option>
+                                        <option value="4800">4800 bps</option>
+                                        <option value="9600" selected>9600 bps</option>
+                                        <option value="19200">19200 bps</option>
+                                        <option value="38400">38400 bps</option>
+                                        <option value="115200">115200 bps</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Parity</td>
+                                <td>
+                                    <select id="selectParity" class="setting-select">
+                                        <option value="none" selected>None</option>
+                                        <option value="even">Even</option>
+                                        <option value="odd">Odd</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Data Bits</td>
+                                <td>
+                                    <select id="selectDataBits" class="setting-select">
+                                        <option value="7">7 Bits</option>
+                                        <option value="8" selected>8 Bits</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Stop Bits</td>
+                                <td>
+                                    <select id="selectStopBits" class="setting-select">
+                                        <option value="1" selected>1 Stop Bit</option>
+                                        <option value="2">2 Stop Bits</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr id="rowInterFrameTimeout" class="modbus-only-element" style="display:none;">
+                                <td>Inter-Frame Timeout</td>
+                                <td>
+                                    <select id="selectFrameTimeout" class="setting-select" title="Silence threshold to detect Modbus RTU frame boundary">
+                                        <option value="5">5 ms (fast)</option>
+                                        <option value="10" selected>10 ms (standard)</option>
+                                        <option value="20">20 ms (slow link)</option>
+                                        <option value="50">50 ms (very slow)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <div style="margin-top:10px; padding-top:8px; border-top:1px solid var(--border-color);">
+                            <label class="control-label" style="margin-bottom:6px;">Flow Control Options</label>
+                            <div style="display:flex; flex-direction:column; gap:6px;">
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <input type="checkbox" id="chkXonXoff" style="accent-color:var(--color-primary);">
+                                    <label for="chkXonXoff" style="font-size:0.80rem; color:var(--color-text-main); cursor:pointer; user-select:none; font-weight:500;">
+                                        Software Flow Control (XON / XOFF)
+                                    </label>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <input type="checkbox" id="chkHwFlow" style="accent-color:var(--color-primary);">
+                                    <label for="chkHwFlow" style="font-size:0.80rem; color:var(--color-text-main); cursor:pointer; user-select:none; font-weight:500;">
+                                        Hardware Flow Control (RTS / CTS)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Download OPL Sample Procedure & Serial Transfer Wizard (Collapsed, ASCII mode) -->
+                <div class="control-group font-status-card collapsed opl-only-element" id="groupOplDownload">
+                    <label class="card-header-label">
+                        <span><i class="fa-solid fa-file-code" style="margin-right:6px; color:var(--color-primary);"></i>Organiser II OPL Procedure</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <button class="btn btn-primary btn-opl-transfer" id="btnSendOPLSerial">
+                                <i class="fa-solid fa-paper-plane"></i> Transfer CHART.OPL to Psion
+                            </button>
+                            <button class="btn btn-action" id="btnDownloadOPL" title="Save CHART.OPL as a local file">
+                                <i class="fa-solid fa-file-arrow-down"></i> Save OPL File (CHART.OPL)
+                            </button>
+                        </div>
+
+                        <!-- Transfer Progress Box -->
+                        <div id="oplTransferStatus" style="display:none; margin-top:10px; padding:10px; background:rgba(0,0,0,0.4); border:1px solid var(--border-color); border-radius:6px; font-size:0.78rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                <span id="oplTransferLabel" style="font-weight:600; color:var(--color-primary);">Ready to transfer...</span>
+                                <span id="oplTransferPercent" style="font-family:var(--font-mono); color:var(--color-text-muted);">0%</span>
+                            </div>
+                            <div style="width:100%; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                                <div id="oplProgressBar" style="width:0%; height:100%; background:var(--color-primary); transition:width 0.15s ease;"></div>
+                            </div>
+                            <p id="oplTransferInstruction" style="margin-top:8px; margin-bottom:0; color:var(--color-text-muted); font-size:0.72rem; line-height:1.3;">
+                                On Psion Organiser II: Open <strong>PROG &gt; NEW &gt; CHART</strong> then start transfer.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Raw Frame / ASCII Injector (Collapsed) -->
+                <div class="control-group font-status-card collapsed" id="cardInjectFrame">
+                    <label class="card-header-label">
+                        <span><i class="fa-solid fa-syringe" style="margin-right:6px; color:var(--color-primary);"></i>Inject Serial Frame</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <textarea class="code-area" id="rawFrameInput"
+                            placeholder="e.g. $P1=45.5,P2=80.2\r\n or 01 03 00 00 00 02 C4 0B"
+                            style="height:70px; color:var(--color-primary);"></textarea>
+                        <button class="btn btn-action" id="btnInjectFrame" style="margin-top:8px;">
+                            <i class="fa-solid fa-syringe"></i> Inject Frame
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 4. Modbus Frame Diagnostics (Collapsed, Modbus mode only) -->
+                <div class="control-group font-status-card collapsed modbus-only-element" id="cardFrameStats">
+                    <label class="card-header-label">
+                        <span><i class="fa-solid fa-chart-pie" style="margin-right:6px; color:var(--color-primary);"></i>Modbus Frame Diagnostics</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <div style="display:flex; align-items:center; justify-between; font-size:0.8rem; color:var(--color-text-muted); background:rgba(255,255,255,0.04); border:1px solid var(--border-color); border-radius:6px; padding:6px 10px; margin-bottom:10px;" id="groupFrameCount">
+                            <span><i class="fa-solid fa-network-wired" style="color:var(--color-primary); margin-right:6px;"></i> Modbus Frames:</span>
+                            <strong id="valFrameCount" style="color:var(--color-text-main); margin-left:auto;">0</strong>
+                        </div>
+                        <table class="status-table">
+                            <tr><td>Total Rx Frames</td><td id="statTotalRx">0</td></tr>
+                            <tr><td>Valid Frames</td><td id="statValidFrames">0</td></tr>
+                            <tr><td>CRC Errors</td><td id="statCrcErrors">0</td></tr>
+                            <tr><td>FC 03 Read Ops</td><td id="statFC03">0</td></tr>
+                            <tr><td>FC 06 Write Ops</td><td id="statFC06">0</td></tr>
+                            <tr><td>FC 16 Write Ops</td><td id="statFC16">0</td></tr>
+                            <tr><td>Unknown FC</td><td id="statUnknownFC">0</td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- =====================================================================
+             OPERATIONS Sidebar
+        ====================================================================== -->
+        <aside class="sidebar-panel" id="operations-panel">
+            <div class="sidebar-header">
+                <h2><i class="fa-solid fa-gears"></i> Emulator Operations</h2>
+                <button class="btn-close-sidebar" id="btn-close-operations" title="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="sidebar-body">
+
+                <!-- Live Simulation -->
+                <div class="control-group font-status-card">
+                    <label class="control-label">Live Process Simulation</label>
+                    <table class="status-table">
+                        <tr>
+                            <td>Simulate PV 1</td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <input type="checkbox" id="chkSimPen1" style="accent-color:var(--color-pen1);">
+                                    <label for="chkSimPen1" style="font-size:11px; user-select:none;">Sinewave</label>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Pen 1 Period</td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:8px; width:100%;">
+                                    <input type="range" id="sliderPen1Period" min="5" max="120" value="30"
+                                        style="flex-grow:1; accent-color:var(--color-pen1);">
+                                    <span id="labelPen1Period" style="font-family:var(--font-mono); font-size:0.75rem; min-width:36px; text-align:right;">30s</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Simulate PV 2</td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:6px;">
+                                    <input type="checkbox" id="chkSimPen2" style="accent-color:var(--color-pen2);">
+                                    <label for="chkSimPen2" style="font-size:11px; user-select:none;">Sinewave</label>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Pen 2 Period</td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:8px; width:100%;">
+                                    <input type="range" id="sliderPen2Period" min="5" max="120" value="60"
+                                        style="flex-grow:1; accent-color:var(--color-pen2);">
+                                    <span id="labelPen2Period" style="font-family:var(--font-mono); font-size:0.75rem; min-width:36px; text-align:right;">60s</span>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Noise Level</td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:8px; width:100%;">
+                                    <input type="range" id="sliderNoise" min="0" max="10" value="1" step="0.5"
+                                        style="flex-grow:1; accent-color:var(--color-primary);">
+                                    <span id="labelNoise" style="font-family:var(--font-mono); font-size:0.75rem; min-width:28px; text-align:right;">1.0</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <hr class="divider">
+
+                <!-- Action Buttons -->
+                <div class="control-group">
+                    <label class="control-label">Actions</label>
+                    <div class="action-buttons">
+                        <button class="btn btn-action" id="btnResetRotation">
+                            <i class="fa-solid fa-rotate-left"></i> Align Chart to Start
+                        </button>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn btn-action" id="btnJogLeft" style="flex:1;" title="Jog Chart Disc 1° Counter-Clockwise (Left Arrow Key)">
+                                <i class="fa-solid fa-rotate-left"></i> Jog 1° ↺
+                            </button>
+                            <button class="btn btn-action" id="btnJogRight" style="flex:1;" title="Jog Chart Disc 1° Clockwise (Right Arrow Key)">
+                                <i class="fa-solid fa-rotate-right"></i> Jog 1° ↻
+                            </button>
+                        </div>
+                        <button class="btn btn-action" id="btnClearChart">
+                            <i class="fa-solid fa-eraser"></i> Clear Chart History
+                        </button>
+                        <button class="btn btn-action" id="btnExportChart">
+                            <i class="fa-solid fa-file-arrow-down"></i> Export Chart (PNG)
+                        </button>
+                        <button class="btn btn-action" id="btnExportLog">
+                            <i class="fa-solid fa-file-lines"></i> Export Data Log (CSV)
+                        </button>
+                        <button class="btn btn-action" id="btnCopyChart">
+                            <i class="fa-solid fa-copy"></i> Copy Chart to Clipboard
+                        </button>
+                        <button class="btn btn-danger" id="btnResetEmulator">
+                            <i class="fa-solid fa-power-off"></i> Reset Emulator State
+                        </button>
+                        <button class="btn btn-action" id="btnResetPrefs" style="margin-top:4px; background:rgba(239,68,68,0.15); color:#fca5a5; border:1px solid rgba(239,68,68,0.3);">
+                            <i class="fa-solid fa-trash-can"></i> Reset Saved Preferences
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>
