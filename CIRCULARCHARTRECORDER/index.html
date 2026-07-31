@@ -29,10 +29,10 @@
             <span class="tab-label"><i class="fa-solid fa-book-open"></i> GUIDE</span>
         </button>
 
-        <!-- Slide-out Guide Sidebar Panel -->
+        <!-- Slide-out Guide Sidebar Panel (Left) -->
         <aside class="sidebar-panel-left" id="guide-panel">
             <div class="sidebar-header">
-                <h2><i class="fa-solid fa-book-open"></i> Protocol & Usage Guide</h2>
+                <h2><i class="fa-solid fa-book-open"></i> System Overview & Guide</h2>
                 <button class="btn-close-sidebar" id="btn-close-guide" title="Close Panel">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
@@ -40,93 +40,73 @@
             <div class="sidebar-body">
                 <div class="guide-text note-box">
                     <i class="fa-solid fa-info-circle"></i>
-                    <span>This emulator acts as a faithful Modbus RTU slave device. Connect a Modbus RTU master (PLC, SCADA, or test tool) at 9600 baud, 8N1. The emulator responds to Function Codes 0x03, 0x06, and 0x10.</span>
-                </div>
-                <div class="guide-text note-box">
-                    <i class="fa-solid fa-microchip"></i>
-                    <span>All process variables are held in a virtual 16-bit register bank. 32-bit IEEE 754 floats are stored across two consecutive holding registers (high word first).</span>
+                    <span>This emulator simulates an industrial circular chart recorder. It receives process telemetry via Web Serial or internal simulation, plotting continuous pen traces on rotatable paper stock.</span>
                 </div>
 
-                <!-- Register Map Card -->
+                <!-- 1. Introduction & Concepts -->
                 <div class="guide-card">
                     <div class="guide-header">
                         <h4>
-                            <span><i class="fa-solid fa-table-list"></i> Register Map (FC 03/06/10)</span>
+                            <span><i class="fa-solid fa-compass-drafting" style="color:var(--color-primary);"></i> Introduction & Concepts</span>
                             <i class="fa-solid fa-chevron-down fold-icon"></i>
                         </h4>
                     </div>
-                    <div class="guide-body">
-                        <table class="reg-table">
-                            <thead><tr><th>Reg</th><th>Type</th><th>Description</th></tr></thead>
-                            <tbody>
-                                <tr><td>40001</td><td>UINT16</td><td>Device Status Word</td></tr>
-                                <tr><td>40002–40003</td><td>FLOAT32</td><td>Pen 1 Process Value</td></tr>
-                                <tr><td>40004–40005</td><td>FLOAT32</td><td>Pen 2 Process Value</td></tr>
-                                <tr><td>40006</td><td>UINT16</td><td>Chart Speed (mm/h × 10)</td></tr>
-                                <tr><td>40007</td><td>UINT16</td><td>Pen 1 Alarm Hi Threshold (EU × 10)</td></tr>
-                                <tr><td>40008</td><td>UINT16</td><td>Pen 1 Alarm Lo Threshold (EU × 10)</td></tr>
-                                <tr><td>40009</td><td>UINT16</td><td>Pen 2 Alarm Hi Threshold (EU × 10)</td></tr>
-                                <tr><td>40010</td><td>UINT16</td><td>Pen 2 Alarm Lo Threshold (EU × 10)</td></tr>
-                                <tr><td>40011</td><td>UINT16</td><td>Engineering Units (0=°C 1=°F 2=%RH 3=bar)</td></tr>
-                                <tr><td>40012</td><td>UINT16</td><td>Full-scale Range Hi (EU × 10)</td></tr>
-                                <tr><td>40013</td><td>UINT16</td><td>Full-scale Range Lo (EU × 10)</td></tr>
-                                <tr><td>40014</td><td>UINT16</td><td>Pen 1 Alarm Status (bit 0=HiAlm, bit 1=LoAlm)</td></tr>
-                                <tr><td>40015</td><td>UINT16</td><td>Pen 2 Alarm Status (bit 0=HiAlm, bit 1=LoAlm)</td></tr>
-                            </tbody>
-                        </table>
+                    <div class="guide-body" style="font-size:0.8rem;">
+                        <p>Circular chart recorders record process values (temperature, pressure, flow) over time onto a revolving paper disc driven by a synchronous clock motor.</p>
+                        <p style="margin-top:6px;">This software emulator reproduces full kinematic pen arm movement, customizable graticule grids, paper stock colors, and physical ink blending.</p>
                     </div>
                 </div>
 
-                <!-- Modbus Frame Format Card -->
+                <!-- 2. Dual Protocols Overview -->
                 <div class="guide-card collapsed">
                     <div class="guide-header">
                         <h4>
-                            <span><i class="fa-solid fa-code"></i> Modbus RTU Frame Format</span>
+                            <span><i class="fa-solid fa-network-wired" style="color:var(--color-primary);"></i> Dual Communication Protocols</span>
                             <i class="fa-solid fa-chevron-down fold-icon"></i>
                         </h4>
                     </div>
-                    <div class="guide-body">
-                        <p>Each Modbus RTU frame ends with a CRC-16 (polynomial 0xA001). The slave only responds if its station address matches Byte 0.</p>
-                        <ul class="code-list" style="margin-left: 15px; font-size: 0.8rem; line-height: 1.8;">
-                            <li><code>Byte 0</code> : Station Address</li>
-                            <li><code>Byte 1</code> : Function Code (03 / 06 / 10)</li>
-                            <li><code>Byte 2–3</code> : Start Register Address (0-based)</li>
-                            <li><code>Byte 4–5</code> : Quantity / Data Value</li>
-                            <li><code>Byte N-1, N</code> : CRC-16 Low, High</li>
+                    <div class="guide-body" style="font-size:0.8rem;">
+                        <p>The emulator supports two operational protocol modes selectable in <strong>CONFIG</strong>:</p>
+                        <ul style="padding-left:14px; margin:6px 0 0 0; display:flex; flex-direction:column; gap:6px; color:var(--color-text-muted);">
+                            <li><strong>Classic ASCII Protocol</strong>: Simple human-readable text commands (e.g. <code>$P1=45.5\r\n</code>). Designed for Psion Organiser II, microcontrollers, and serial terminals.</li>
+                            <li><strong>Industrial Modbus RTU Protocol</strong>: Standard 16-bit binary slave protocol (FC 03/06/10) for PLCs, SCADA systems, and test software.</li>
                         </ul>
-                        <p style="margin-top:8px;">Frame delimiter: ≥3.5 character silences (~3.6 ms at 9600 baud), emulated here via a configurable inter-frame timeout.</p>
                     </div>
                 </div>
 
-                <!-- Connection Guide -->
+                <!-- 3. Quick Start Workflow -->
                 <div class="guide-card collapsed">
                     <div class="guide-header">
                         <h4>
-                            <span><i class="fa-solid fa-plug"></i> PC Connection</span>
+                            <span><i class="fa-solid fa-play" style="color:var(--color-primary);"></i> Quick Start Workflow</span>
                             <i class="fa-solid fa-chevron-down fold-icon"></i>
                         </h4>
                     </div>
-                    <div class="guide-body">
-                        <p>Use a USB-to-RS485 or USB-to-RS232 adaptor to expose a COM port. Click <b>Connect Serial</b> in the CONTROLS panel and select the adaptor.</p>
-                        <p style="margin-top:8px;">Match your master device baud rate. Default: <strong>9600 baud, 8N1, no flow control.</strong></p>
-                        <div class="note-box" style="margin-top:10px; font-size:0.75rem;">
-                            <i class="fa-solid fa-triangle-exclamation" style="color:var(--color-warning);"></i>
-                            <span>Only one application may hold a serial port at a time. Close any terminal program before connecting here.</span>
-                        </div>
+                    <div class="guide-body" style="font-size:0.8rem;">
+                        <ol style="padding-left:16px; margin:0; display:flex; flex-direction:column; gap:6px; color:var(--color-text-muted);">
+                            <li><strong>Configure Device</strong>: Open <strong>CONFIG</strong> to set protocol, active pen count (1–4), scale ranges, and paper colors.</li>
+                            <li><strong>Connect Serial or Simulation</strong>: Open <strong>CONTROLS</strong> and click <b>Connect Serial</b> to bind a USB-serial adaptor, or toggle <b>Live Process Simulation</b>.</li>
+                            <li><strong>Manage Sessions</strong>: Use <strong>Session Storage</strong> in CONFIG to save, name, and resume up to 4 historical recording sessions.</li>
+                        </ol>
                     </div>
                 </div>
 
-                <!-- CRC Info -->
+                <!-- 4. Core Features Summary -->
                 <div class="guide-card collapsed">
                     <div class="guide-header">
                         <h4>
-                            <span><i class="fa-solid fa-calculator"></i> CRC-16 Engine</span>
+                            <span><i class="fa-solid fa-star" style="color:var(--color-primary);"></i> Core Capabilities</span>
                             <i class="fa-solid fa-chevron-down fold-icon"></i>
                         </h4>
                     </div>
-                    <div class="guide-body">
-                        <p>Modbus RTU CRC-16 uses polynomial <code>0xA001</code> (reflected form of 0x8005). The CRC covers all bytes except the CRC field itself.</p>
-                        <p style="margin-top:8px;">Frames with an invalid CRC are silently discarded, exactly as real hardware behaves.</p>
+                    <div class="guide-body" style="font-size:0.8rem;">
+                        <ul style="padding-left:14px; margin:0; display:flex; flex-direction:column; gap:5px; color:var(--color-text-muted);">
+                            <li>7 Realistic paper stock themes & outer rim zebra border</li>
+                            <li>Physical ink color blending (Multiply & Screen modes)</li>
+                            <li>Live strip-chart trend view & CSV data log export</li>
+                            <li>High-res PNG chart disc export & clipboard copying</li>
+                            <li>Multi-slot session persistence with 10s auto-save</li>
+                        </ul>
                     </div>
                 </div>
 
@@ -335,16 +315,38 @@
         </button>
 
         <!-- =====================================================================
-             HELP Sidebar
+             HELP Sidebar — Slide-out Help Sidebar Panel (Right)
         ====================================================================== -->
         <aside class="sidebar-panel" id="help-panel">
             <div class="sidebar-header">
-                <h2><i class="fa-solid fa-circle-info"></i> Help Reference</h2>
+                <h2><i class="fa-solid fa-circle-info"></i> Technical Reference</h2>
                 <button class="btn-close-sidebar" id="btn-close-help" title="Close"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="sidebar-body">
-                <div style="display:flex; flex-direction:column; gap:15px;">
-                    <div class="guide-card collapsed opl-only-element">
+                <div style="display:flex; flex-direction:column; gap:12px;">
+
+                    <!-- 1. Web Serial Hardware Setup & Troubleshooting (FIRST AS REQUESTED) -->
+                    <div class="guide-card">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-plug" style="color:var(--color-primary);"></i> Hardware & Web Serial Setup</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body" style="font-size:0.8rem;">
+                            <p style="color:var(--color-text-main); font-weight:600; margin-bottom:4px;">Browser Requirements:</p>
+                            <p style="color:var(--color-text-muted);">Web Serial is supported in <strong>Chrome 89+</strong>, <strong>Edge 89+</strong>, <strong>Opera</strong>, and <strong>Firefox 151+</strong>. Safari does not support the Web Serial API.</p>
+                            
+                            <p style="color:var(--color-text-main); font-weight:600; margin-top:8px; margin-bottom:4px;">COM Port Access Rules:</p>
+                            <p style="color:var(--color-text-muted);">Only one application can hold a COM port at a time. Ensure terminal software (PuTTY, TeraTerm, Modbus Poll) is disconnected before clicking <b>Connect Serial</b>.</p>
+
+                            <p style="color:var(--color-text-main); font-weight:600; margin-top:8px; margin-bottom:4px;">Flow Control Options:</p>
+                            <p style="color:var(--color-text-muted);">Supports software <strong>XON (0x11) / XOFF (0x13)</strong> flow control and hardware <strong>RTS/CTS</strong> flow control configured in <strong>CONTROLS</strong>.</p>
+                        </div>
+                    </div>
+
+                    <!-- 2. Classic ASCII Protocol & OPL II Reference -->
+                    <div class="guide-card collapsed">
                         <div class="guide-header">
                             <h4>
                                 <span><i class="fa-solid fa-terminal" style="color:var(--color-primary);"></i> ASCII Protocol & OPL Guide</span>
@@ -352,13 +354,12 @@
                             </h4>
                         </div>
                         <div class="guide-body" style="font-size:0.8rem;">
-                            <p style="color:var(--color-text-main); font-weight:600; margin-bottom:4px;">Simple ASCII Line Protocol Structure:</p>
+                            <p style="color:var(--color-text-main); font-weight:600; margin-bottom:4px;">Simple ASCII Line Protocol Syntax:</p>
                             <ul style="padding-left:14px; margin:0; display:flex; flex-direction:column; gap:5px; color:var(--color-text-muted);">
                                 <li><strong>Read Query:</strong> <code>$PV?\r\n</code> or <code>$01:PV?\r\n</code><br>Returns: <code>*PV:P1=25.00,P2=60.00,P3=110.00,P4=145.00\r\n</code></li>
-                                <li><strong>Write PVs:</strong> <code>$P1=45.5,P2=80.2\r\n</code> or <code>$01:P1=50.0,P2=75.0,P3=120.0,P4=160.0\r\n</code><br>Returns: <code>*OK\r\n</code></li>
-                                <li><strong>Flow Control:</strong> Software XON (<code>0x11</code>) / XOFF (<code>0x13</code>) supported.</li>
+                                <li><strong>Write PVs:</strong> <code>$P1=45.5,P2=80.2\r\n</code> or <code>$01:P1=50.0,P2=75.0,P3=120.0,P4=160.0\r\n</code><br>Returns: <code>*OK\r\n</code> or <code>*ERR:01\r\n</code></li>
                             </ul>
-                            <p style="color:var(--color-text-main); font-weight:600; margin-top:8px; margin-bottom:4px;">Organiser II OPL Code Example:</p>
+                            <p style="color:var(--color-text-main); font-weight:600; margin-top:8px; margin-bottom:4px;">Psion Organiser II OPL Procedure:</p>
                             <pre style="background:rgba(0,0,0,0.5); padding:8px; border-radius:6px; border:1px solid var(--border-color); color:var(--color-primary); font-size:0.74rem; overflow-x:auto; margin:0; font-family:var(--font-mono);">
 CHART:
   LOCAL p1,p2,cmd$(32)
@@ -370,46 +371,61 @@ CHART:
 </pre>
                         </div>
                     </div>
-                    <div class="guide-card">
-                        <div class="guide-header">
-                            <h4>
-                                <span><i class="fa-solid fa-play"></i> Getting Started</span>
-                                <i class="fa-solid fa-chevron-down fold-icon"></i>
-                            </h4>
-                        </div>
-                        <div class="guide-body">
-                            <p>Open the <b>CONTROLS</b> panel, then click <b>Connect Serial</b> to pick your USB-serial adaptor. The emulator will immediately start listening for Modbus RTU or Simple ASCII frames.</p>
-                            <p style="margin-top:8px;">Use the <b>CONFIG</b> panel to set the station address, engineering units, alarm thresholds, and chart speed before connecting a master.</p>
-                        </div>
-                    </div>
+
+                    <!-- 3. Modbus RTU Register Map & Specs -->
                     <div class="guide-card collapsed">
                         <div class="guide-header">
                             <h4>
-                                <span><i class="fa-solid fa-diagram-project"></i> Architecture</span>
+                                <span><i class="fa-solid fa-table-list" style="color:var(--color-primary);"></i> Modbus RTU Register Map</span>
                                 <i class="fa-solid fa-chevron-down fold-icon"></i>
                             </h4>
                         </div>
-                        <div class="guide-body">
-                            <p>The emulator is split into three decoupled layers:</p>
-                            <ul style="margin-left:15px; font-size:0.8rem; line-height:1.7;">
-                                <li><strong>VirtualDevice</strong> — register bank & data model</li>
-                                <li><strong>ModbusParser</strong> — CRC-16, FC dispatch, response builder</li>
-                                <li><strong>SerialPort I/O</strong> — Web Serial read loop with inter-frame timeout</li>
-                            </ul>
+                        <div class="guide-body" style="font-size:0.8rem;">
+                            <table class="reg-table" style="margin-bottom:8px;">
+                                <thead><tr><th>Reg</th><th>Type</th><th>Description</th></tr></thead>
+                                <tbody>
+                                    <tr><td>40001</td><td>UINT16</td><td>Device Status Word</td></tr>
+                                    <tr><td>40002–40003</td><td>FLOAT32</td><td>Pen 1 Process Value</td></tr>
+                                    <tr><td>40004–40005</td><td>FLOAT32</td><td>Pen 2 Process Value</td></tr>
+                                    <tr><td>40006</td><td>UINT16</td><td>Chart Speed (mm/h × 10)</td></tr>
+                                    <tr><td>40007–40010</td><td>UINT16</td><td>Pen 1/2 Alarm Hi/Lo (EU × 10)</td></tr>
+                                    <tr><td>40011</td><td>UINT16</td><td>Engineering Units (0=°C 1=°F 2=%RH 3=bar)</td></tr>
+                                    <tr><td>40012–40013</td><td>UINT16</td><td>Scale Range Hi/Lo (EU × 10)</td></tr>
+                                    <tr><td>40014–40015</td><td>UINT16</td><td>Pen 1/2 Alarm Status Bits</td></tr>
+                                </tbody>
+                            </table>
+                            <p style="color:var(--color-text-muted);">Supports Function Codes <strong>0x03</strong> (Read Holding), <strong>0x06</strong> (Write Single), and <strong>0x10</strong> (Write Multiple) with CRC-16 (poly <code>0xA001</code>).</p>
                         </div>
                     </div>
+
+                    <!-- 4. Device Mechanics & Ink Blending -->
                     <div class="guide-card collapsed">
                         <div class="guide-header">
                             <h4>
-                                <span><i class="fa-solid fa-triangle-exclamation"></i> Warnings</span>
+                                <span><i class="fa-solid fa-sliders" style="color:var(--color-primary);"></i> Kinematic Arms & Ink Blending</span>
                                 <i class="fa-solid fa-chevron-down fold-icon"></i>
                             </h4>
                         </div>
-                        <div class="guide-body">
-                            <p>Web Serial requires Chrome 89+ or Edge 89+. Firefox and Safari are not supported.</p>
-                            <p style="margin-top:8px;">Only one application can hold a COM port. Ensure no other terminal or driver software has the port open.</p>
+                        <div class="guide-body" style="font-size:0.8rem;">
+                            <p style="color:var(--color-text-muted);">Customizable arm mount angle (195° default), pen draw angle (343° default), and line weights.</p>
+                            <p style="color:var(--color-text-muted); margin-top:6px;"><strong>Physical Ink Blending</strong> uses canvas <code>multiply</code> or <code>screen</code> composite modes with translucent alpha transparency so overlapping traces darken realistically.</p>
                         </div>
                     </div>
+
+                    <!-- 5. Session Storage Reference -->
+                    <div class="guide-card collapsed">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-floppy-disk" style="color:var(--color-primary);"></i> Session Storage Persistence</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body" style="font-size:0.8rem;">
+                            <p style="color:var(--color-text-muted);">Supports <strong>4 independent storage slots</strong> stored in browser <code>localStorage</code>.</p>
+                            <p style="color:var(--color-text-muted); margin-top:6px;">Each slot retains friendly session names, start/last timestamps, recorded sample counts, rotation angle, and register states with 10s auto-saving.</p>
+                        </div>
+                    </div>
+
                 </div>
                 <p class="copyright" style="margin-top:25px; font-size:0.75rem; text-align:center; color:var(--color-text-muted);">
                     <a href="https://github.com/nofitnessforpurpose/WebTools">© 2026 NFfP</a>
@@ -903,6 +919,16 @@ CHART:
                                     </div>
                                 </td>
                             </tr>
+                            <tr>
+                                <td>Ink Color Blending</td>
+                                <td>
+                                    <div style="display:flex; align-items:center; gap:6px; margin-left:8px;">
+                                        <input type="checkbox" id="chkInkBlending" checked
+                                            style="accent-color:var(--color-primary);">
+                                        <label for="chkInkBlending" style="font-size:11px; user-select:none;">Enable Ink Blending (Multiply)</label>
+                                    </div>
+                                </td>
+                            </tr>
                         </table>
                     </div>
                 </div>
@@ -968,6 +994,68 @@ CHART:
                                 </td>
                             </tr>
                         </table>
+                    </div>
+                </div>
+
+                <!-- Session Storage -->
+                <div class="control-group font-status-card collapsed" id="cardSessionStorage">
+                    <label class="card-header-label">
+                        <span><i class="fa-solid fa-floppy-disk" style="margin-right:6px; color:var(--color-primary);"></i>Session Storage</span>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </label>
+                    <div class="card-body">
+                        <table class="status-table" style="margin-bottom: 10px;">
+                            <tr>
+                                <td>Session Slot</td>
+                                <td>
+                                    <select id="selectSessionSlot" class="setting-select" title="Select storage slot (1-4)">
+                                        <option value="1">Slot 1 (Empty)</option>
+                                        <option value="2">Slot 2 (Empty)</option>
+                                        <option value="3">Slot 3 (Empty)</option>
+                                        <option value="4">Slot 4 (Empty)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Friendly Name</td>
+                                <td>
+                                    <input type="text" id="inputSessionName" class="setting-input" placeholder="e.g. Batch #104 - 24h Run" maxlength="40" style="width:100%; box-sizing:border-box;">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Start Time</td>
+                                <td id="lblSessionStartTime" style="font-family:monospace; font-size:11px; color:#cbd5e1;">—</td>
+                            </tr>
+                            <tr>
+                                <td>Last Recorded</td>
+                                <td id="lblSessionLastTime" style="font-family:monospace; font-size:11px; color:#cbd5e1;">—</td>
+                            </tr>
+                            <tr>
+                                <td>Sample Points</td>
+                                <td><span id="lblSessionSamples" class="val-highlight">0 points</span></td>
+                            </tr>
+                            <tr>
+                                <td>Slot Status</td>
+                                <td><span id="badgeSessionStatus" class="badge offline">EMPTY</span></td>
+                            </tr>
+                        </table>
+
+                        <div style="display:flex; flex-direction:column; gap:6px;">
+                            <button class="btn btn-action" id="btnSaveSession" style="background:var(--color-primary-dark); color:#fff;">
+                                <i class="fa-solid fa-floppy-disk"></i> Save Current Session to Slot
+                            </button>
+                            <button class="btn btn-action" id="btnLoadSession" style="background:rgba(16,185,129,0.2); color:#6ee7b7; border:1px solid rgba(16,185,129,0.4);">
+                                <i class="fa-solid fa-folder-open"></i> Load & Resume Session
+                            </button>
+                            <button class="btn btn-action" id="btnClearSession" style="background:rgba(239,68,68,0.15); color:#fca5a5; border:1px solid rgba(239,68,68,0.3);">
+                                <i class="fa-solid fa-trash-can"></i> Clear Selected Slot
+                            </button>
+                        </div>
+
+                        <div style="margin-top:10px; font-size:11px; color:#94a3b8; display:flex; align-items:center; gap:6px;">
+                            <input type="checkbox" id="chkAutoSaveSession" checked style="accent-color:var(--color-primary);">
+                            <label for="chkAutoSaveSession" style="cursor:pointer;">Auto-save active session to slot every 10s</label>
+                        </div>
                     </div>
                 </div>
 
@@ -1291,6 +1379,19 @@ CHART:
     <!-- Toast Notifications -->
     <div id="toastContainer" class="toast-container"></div>
 
-    <script type="module" src="./js/app.js"></script>
+    <!-- Bundled Data & Script Modules (Loaded as standard scripts to prevent CORS issues) -->
+    <script src="data.js"></script>
+    <script src="./js/utils/mathUtils.js"></script>
+    <script src="./js/utils/crc16.js"></script>
+    <script src="./js/modules/virtualDevice.js"></script>
+    <script src="./js/modules/modbusParser.js"></script>
+    <script src="./js/modules/asciiParser.js"></script>
+    <script src="./js/modules/chartRenderer.js"></script>
+    <script src="./js/modules/trendRenderer.js"></script>
+    <script src="./js/modules/serialManager.js"></script>
+    <script src="./js/modules/simulationEngine.js"></script>
+    <script src="./js/modules/calibrationController.js"></script>
+    <script src="./js/modules/uiController.js"></script>
+    <script src="./js/app.js"></script>
 </body>
 </html>

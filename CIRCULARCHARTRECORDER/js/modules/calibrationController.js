@@ -1,7 +1,7 @@
 /**
  * CalibrationController — Arm sweep calibration mode & gentle motor parking helper.
  */
-export class CalibrationController {
+class CalibrationController {
     static isCalibrationActive() {
         const chkCalib = document.getElementById('chkArmCalibration');
         return chkCalib ? chkCalib.checked : false;
@@ -49,4 +49,8 @@ export class CalibrationController {
 
         requestAnimationFrame(animStep);
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.CalibrationController = CalibrationController;
 }

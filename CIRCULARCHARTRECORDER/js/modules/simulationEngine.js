@@ -1,7 +1,7 @@
 /**
  * SimulationEngine — Live PV Sinewave & Noise Generator.
  */
-export class SimulationEngine {
+class SimulationEngine {
     constructor(device, onUpdate) {
         this._device = device;
         this._onUpdate = onUpdate;
@@ -60,4 +60,8 @@ export class SimulationEngine {
             if (this._onUpdate) this._onUpdate();
         }
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.SimulationEngine = SimulationEngine;
 }

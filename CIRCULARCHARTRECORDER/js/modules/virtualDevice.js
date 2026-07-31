@@ -4,7 +4,7 @@
  * All data is held in a flat Uint16Array.
  */
 
-export class VirtualDevice {
+class VirtualDevice {
     static REG = Object.freeze({
         DEVICE_STATUS:    0,
         PEN1_PV_HI:       1,
@@ -131,4 +131,8 @@ export class VirtualDevice {
         this._updateAlarmStatus();
         return true;
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.VirtualDevice = VirtualDevice;
 }

@@ -1,11 +1,9 @@
-import { ModbusCRC16 } from '../utils/crc16.js';
-
 /**
  * LAYER 3 — ModbusParser
  * Parses an accumulated Modbus RTU frame byte buffer and returns a binary
  * response payload to be written to the serial port.
  */
-export class ModbusParser {
+class ModbusParser {
     static FC_READ_HOLDING_REGISTERS     = 0x03;
     static FC_WRITE_SINGLE_REGISTER      = 0x06;
     static FC_WRITE_MULTIPLE_REGISTERS   = 0x10;
@@ -250,4 +248,8 @@ export class ModbusParser {
         response[4] = crc[1];
         return response;
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.ModbusParser = ModbusParser;
 }

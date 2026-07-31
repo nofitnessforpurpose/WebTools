@@ -2,22 +2,22 @@
  * Mathematical & Kinematic Utilities for Chart Recorder Emulator
  */
 
-export function degToRad(deg) {
+function degToRad(deg) {
     return (deg * Math.PI) / 180;
 }
 
-export function radToDeg(rad) {
+function radToDeg(rad) {
     return (rad * 180) / Math.PI;
 }
 
-export function normaliseAngleDeg(deg) {
+function normaliseAngleDeg(deg) {
     return (Math.round(deg) % 360 + 360) % 360;
 }
 
 /**
  * Solves the kinematic pen arm Law of Cosines sweep angle at radius r.
  */
-export function getRefAngleForRadius(r, cx, cy, R, armMountAngleDeg = 195, penDrawAngleDeg = 260) {
+function getRefAngleForRadius(r, cx, cy, R, armMountAngleDeg = 195, penDrawAngleDeg = 260) {
     const innerHubR = R * 0.16;
     const outerScaleR = R * 0.94;
     const midR = innerHubR + 0.5 * (outerScaleR - innerHubR);
@@ -55,4 +55,11 @@ export function getRefAngleForRadius(r, cx, cy, R, armMountAngleDeg = 195, penDr
 
     const sign = (diffPlus <= diffMinus) ? 1 : -1;
     return thetaPivot + sign * beta;
+}
+
+if (typeof window !== 'undefined') {
+    window.degToRad = degToRad;
+    window.radToDeg = radToDeg;
+    window.normaliseAngleDeg = normaliseAngleDeg;
+    window.getRefAngleForRadius = getRefAngleForRadius;
 }

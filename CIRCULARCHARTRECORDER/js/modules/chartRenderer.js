@@ -1,9 +1,7 @@
-import { degToRad, getRefAngleForRadius } from '../utils/mathUtils.js';
-
 /**
  * CircularChartRenderer — 2D Canvas circular chart disc renderer & SVG pen arm updater.
  */
-export class CircularChartRenderer {
+class CircularChartRenderer {
     constructor(canvas, emulator) {
         this._chartCanvas = canvas;
         this._chartCtx    = canvas.getContext('2d');
@@ -20,6 +18,7 @@ export class CircularChartRenderer {
         this._textColor = 'auto';
 
         this._showZebra = true;
+        this._inkBlending = true;
         this._exportResMultiplier = 2;
 
         this._armMountAngle = 195;
@@ -49,7 +48,7 @@ export class CircularChartRenderer {
 
         ctx.clearRect(0, 0, W, H);
 
-        const paperStocks = {
+        const paperStocks = (typeof chartRecorderData !== 'undefined' && chartRecorderData.paperStocks) ? chartRecorderData.paperStocks : {
             'antique-white': ['#fdfbf7', '#f7f4ed', '#eee8dd'],
             'manila-paper':  ['#f4f1ea', '#ebe6dc', '#ded6c6'],
             'classic-cream': ['#f9f5e9', '#f0ead6', '#e8dfca'],
@@ -61,7 +60,7 @@ export class CircularChartRenderer {
 
         const bgGradColors = paperStocks[this._paperStock] || paperStocks['antique-white'];
 
-        const gridColors = {
+        const gridColors = (typeof chartRecorderData !== 'undefined' && chartRecorderData.gridColors) ? chartRecorderData.gridColors : {
             'grid-red':        { major: '#d94343', minor: 'rgba(217,67,67,0.45)', text: '#8b0000' },
             'pale-blue':       { major: '#769cdb', minor: 'rgba(166,193,238,0.5)', text: '#1e3a8a' },
             'faded-green':     { major: '#688e68', minor: 'rgba(153,178,153,0.5)', text: '#14532d' },
@@ -72,7 +71,7 @@ export class CircularChartRenderer {
 
         const gColor = gridColors[this._gridColor] || gridColors['grid-red'];
 
-        const textColors = {
+        const textColors = (typeof chartRecorderData !== 'undefined' && chartRecorderData.textColors) ? chartRecorderData.textColors : {
             'crimson-red':    '#8b0000',
             'dark-charcoal': '#1e293b',
             'navy-blue':     '#1e3a8a',
@@ -527,6 +526,9 @@ export class CircularChartRenderer {
 
         const activeCount = Math.min(4, Math.max(1, this._penCount));
 
+        const isDarkPaper = (this._paperStock === 'dark-slate' || this._paperStock === 'blueprint-cyan');
+        const blendMode   = isDarkPaper ? 'screen' : 'multiply';
+
         for (let i = 0; i < activeCount; i++) {
             const pvNorm = penNorms[i] !== undefined ? penNorms[i] : 0.5;
             const penR = innerR + pvNorm * (outerR - innerR);
@@ -538,12 +540,20 @@ export class CircularChartRenderer {
 
             const prev = this._prevPenCanvas[i];
             if (prev) {
+                ctx.save();
+                if (this._inkBlending) {
+                    ctx.globalCompositeOperation = blendMode;
+                    ctx.globalAlpha = 0.88;
+                }
+                ctx.lineCap  = 'round';
+                ctx.lineJoin = 'round';
                 ctx.beginPath();
                 ctx.moveTo(prev.x, prev.y);
                 ctx.lineTo(px, py);
                 ctx.strokeStyle = this._penColors[i] || '#ff4060';
                 ctx.lineWidth   = (i === 0) ? this._traceLineWidth : (this._traceLineWidth * 0.88);
                 ctx.stroke();
+                ctx.restore();
             }
 
             this._prevPenCanvas[i] = { x: px, y: py };
@@ -614,4 +624,79 @@ export class CircularChartRenderer {
             setAttr(`p${pIdx}PivotGlint`, 'cx', pivX - 2); setAttr(`p${pIdx}PivotGlint`, 'cy', pivY - 2);
         }
     }
+
+    clearChart() {
+        this._prevPenCanvas = [null, null, null, null];
+        this._traceHistory = [];
+        this._drawDiscBackground();
+    }
+
+    getTraceData() {
+        return [...this._traceHistory];
+    }
+
+    loadTraceData(traceHistory) {
+        this.clearChart();
+        if (Array.isArray(traceHistory)) {
+            for (const sample of traceHistory) {
+                if (sample && sample.penNorms && typeof sample.discAngleDeg === 'number') {
+                    this.drawPenTraces(sample.penNorms, sample.discAngleDeg, true);
+                }
+            }
+        }
+    }
+
+    exportChartPNG() {
+        const scale = this._exportResMultiplier || 1;
+        const targetW = this._chartCanvas.width * scale;
+        const targetH = this._chartCanvas.height * scale;
+
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width  = targetW;
+        offCanvas.height = targetH;
+        const offCtx = offCanvas.getContext('2d');
+
+        const origCanvas         = this._chartCanvas;
+        const origCtx            = this._chartCtx;
+        const origPrevCanvas     = [...this._prevPenCanvas];
+        const origTraceLineWidth = this._traceLineWidth;
+
+        this._chartCanvas    = offCanvas;
+        this._chartCtx       = offCtx;
+        this._prevPenCanvas  = [null, null, null, null];
+        this._traceLineWidth = origTraceLineWidth * scale;
+
+        this._drawDiscBackground();
+
+        for (const sample of this._traceHistory) {
+            this.drawPenTraces(sample.penNorms, sample.discAngleDeg, false);
+        }
+
+        const cx = targetW / 2;
+        const cy = targetH / 2;
+        const R  = (targetW / 2) - (2 * scale);
+
+        const clippedCanvas = document.createElement('canvas');
+        clippedCanvas.width  = targetW;
+        clippedCanvas.height = targetH;
+        const clipCtx = clippedCanvas.getContext('2d');
+
+        clipCtx.save();
+        clipCtx.beginPath();
+        clipCtx.arc(cx, cy, R, 0, Math.PI * 2);
+        clipCtx.clip();
+        clipCtx.drawImage(offCanvas, 0, 0);
+        clipCtx.restore();
+
+        this._chartCanvas    = origCanvas;
+        this._chartCtx       = origCtx;
+        this._prevPenCanvas  = origPrevCanvas;
+        this._traceLineWidth = origTraceLineWidth;
+
+        return clippedCanvas.toDataURL('image/png');
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.CircularChartRenderer = CircularChartRenderer;
 }

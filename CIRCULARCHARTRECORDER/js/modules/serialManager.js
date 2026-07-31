@@ -1,21 +1,18 @@
-import { VirtualDevice } from './virtualDevice.js';
-import { ModbusParser } from './modbusParser.js';
-
 /**
  * LAYER 4 — ChartRecorderEmulator
  * Top-level Web Serial manager & Modbus/ASCII frame orchestrator.
  */
-export class ChartRecorderEmulator {
+class ChartRecorderEmulator {
     constructor(options = {}) {
-        this._stationAddress   = options.stationAddress   ?? 1;
-        this._baudRate         = options.baudRate         ?? 9600;
-        this._dataBits         = options.dataBits         ?? 8;
-        this._stopBits         = options.stopBits         ?? 1;
-        this._parity           = options.parity           ?? 'none';
-        this._interFrameTimeout= options.interFrameTimeout ?? 10;
+        this._stationAddress   = (options.stationAddress !== undefined)   ? options.stationAddress   : 1;
+        this._baudRate         = (options.baudRate !== undefined)         ? options.baudRate         : 9600;
+        this._dataBits         = (options.dataBits !== undefined)         ? options.dataBits         : 8;
+        this._stopBits         = (options.stopBits !== undefined)         ? options.stopBits         : 1;
+        this._parity           = (options.parity !== undefined)           ? options.parity           : 'none';
+        this._interFrameTimeout= (options.interFrameTimeout !== undefined)? options.interFrameTimeout: 10;
 
-        this._onStateChange    = options.onStateChange    ?? (() => {});
-        this._onFrameProcessed = options.onFrameProcessed ?? (() => {});
+        this._onStateChange    = (options.onStateChange !== undefined)    ? options.onStateChange    : (() => {});
+        this._onFrameProcessed = (options.onFrameProcessed !== undefined) ? options.onFrameProcessed : (() => {});
 
         this._stats = {
             totalRx:      0,
@@ -38,8 +35,8 @@ export class ChartRecorderEmulator {
         this._rxBuffer    = new Uint8Array(512);
         this._rxBufLength = 0;
 
-        this._flowControl = options.flowControl ?? 'none';
-        this._hwFlowControl = options.hwFlowControl ?? false;
+        this._flowControl = (options.flowControl !== undefined) ? options.flowControl : 'none';
+        this._hwFlowControl = (options.hwFlowControl !== undefined) ? options.hwFlowControl : false;
         this._frameTimer  = null;
     }
 
@@ -286,4 +283,8 @@ export class ChartRecorderEmulator {
         console.warn('[CR-EMU] Physical disconnect detected.');
         this.disconnect();
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.ChartRecorderEmulator = ChartRecorderEmulator;
 }

@@ -2,7 +2,7 @@
  * ModbusCRC16 — Standalone, stateless CRC-16/ARC engine.
  * Polynomial: 0xA001 (reflected form of 0x8005, used by Modbus RTU).
  */
-export class ModbusCRC16 {
+class ModbusCRC16 {
     static _table = ModbusCRC16._buildTable();
 
     static _buildTable() {
@@ -50,4 +50,8 @@ export class ModbusCRC16 {
         const rxCrcHi    = frame[dataLength + 1];
         return (computed[0] === rxCrcLo) && (computed[1] === rxCrcHi);
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.ModbusCRC16 = ModbusCRC16;
 }

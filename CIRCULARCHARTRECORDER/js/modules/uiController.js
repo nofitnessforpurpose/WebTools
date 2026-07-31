@@ -1,7 +1,7 @@
 /**
- * UIController — Sidebars, pulse/peek cues, toasts, and UI card collapse management.
+ * UIController — Sidebars, keyboard shortcuts, toasts, and UI card collapse management.
  */
-export class UIController {
+class UIController {
     static showToast(message, icon = 'fa-check', isError = false) {
         const container = document.getElementById('toastContainer');
         if (!container) return;
@@ -19,88 +19,152 @@ export class UIController {
     }
 
     static initSidebars() {
-        UIController._wireLeftSidebar('guide-trigger',  'guide-panel',  'btn-close-guide');
-
-        UIController._wireRightSidebar('help-trigger',       'help-panel',       'btn-close-help');
-        UIController._wireRightSidebar('config-trigger',     'config-panel',     'btn-close-config');
-        UIController._wireRightSidebar('controls-trigger',   'controls-panel',   'btn-close-controls');
-        UIController._wireRightSidebar('operations-trigger', 'operations-panel', 'btn-close-operations');
-
-        document.querySelectorAll('.guide-header').forEach(header => {
-            header.addEventListener('click', () => {
-                header.closest('.guide-card').classList.toggle('collapsed');
-            });
-        });
-
-        setTimeout(() => {
-            const controlsTrigger = document.getElementById('controls-trigger');
-            const controlsPanel   = document.getElementById('controls-panel');
-            if (controlsTrigger) {
-                controlsTrigger.classList.add('pulse-glow');
-
-                if (controlsPanel && !controlsPanel.classList.contains('open')) {
-                    controlsPanel.classList.add('peek');
-                    controlsTrigger.classList.add('peek');
-
-                    setTimeout(() => {
-                        controlsPanel.classList.remove('peek');
-                        controlsTrigger.classList.remove('peek');
-                    }, 1500);
+        /* Document-level single event delegation for sidebar tab triggers & close buttons */
+        document.addEventListener('click', (e) => {
+            const trigger = e.target.closest('.sidebar-tab-trigger, .sidebar-tab-trigger-left');
+            if (trigger) {
+                const panelId = trigger.dataset.panel || trigger.getAttribute('data-panel');
+                if (panelId) {
+                    e.preventDefault();
+                    if (trigger.classList.contains('sidebar-tab-trigger-left')) {
+                        UIController.toggleLeftSidebar(trigger.id, panelId);
+                    } else {
+                        UIController.toggleRightSidebar(trigger.id, panelId);
+                    }
+                    return;
                 }
             }
-        }, 600);
-    }
 
-    static _wireLeftSidebar(triggerId, panelId, closeId) {
-        const trigger = document.getElementById(triggerId);
-        const panel   = document.getElementById(panelId);
-        const closer  = document.getElementById(closeId);
-        if (!trigger || !panel) return;
-
-        trigger.addEventListener('click', () => {
-            const isOpen = panel.classList.contains('open');
-            panel.classList.toggle('open', !isOpen);
-            trigger.classList.toggle('panel-open', !isOpen);
+            const closer = e.target.closest('.btn-close-sidebar');
+            if (closer) {
+                const panel = closer.closest('.sidebar-panel, .sidebar-panel-left');
+                if (panel) {
+                    e.preventDefault();
+                    panel.classList.remove('open', 'peek');
+                    const isLeft = panel.classList.contains('sidebar-panel-left');
+                    if (isLeft) {
+                        const trig = document.getElementById('guide-trigger');
+                        if (trig) trig.classList.remove('panel-open');
+                        document.body.classList.remove('left-panel-open');
+                    } else {
+                        document.querySelectorAll('.sidebar-tab-trigger').forEach(t => t.classList.remove('panel-open'));
+                        const anyRightOpen = !!document.querySelector('.sidebar-panel.open');
+                        document.body.classList.toggle('right-panel-open', anyRightOpen);
+                    }
+                }
+            }
         });
 
-        if (closer) {
-            closer.addEventListener('click', () => {
-                panel.classList.remove('open');
-                trigger.classList.remove('panel-open');
+        /* Keyboard support (Enter/Space on tab triggers) */
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                const trigger = e.target.closest('.sidebar-tab-trigger, .sidebar-tab-trigger-left');
+                if (trigger) {
+                    const panelId = trigger.dataset.panel || trigger.getAttribute('data-panel');
+                    if (panelId) {
+                        e.preventDefault();
+                        if (trigger.classList.contains('sidebar-tab-trigger-left')) {
+                            UIController.toggleLeftSidebar(trigger.id, panelId);
+                        } else {
+                            UIController.toggleRightSidebar(trigger.id, panelId);
+                        }
+                    }
+                }
+            }
+        });
+
+        /* Collapsible guide card headers */
+        document.querySelectorAll('.guide-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const card = header.closest('.guide-card');
+                if (card) card.classList.toggle('collapsed');
             });
+        });
+
+        /* Global Keyboard Shortcuts (Escape to close, Alt+S/C/O/H/G for tabs) */
+        window.addEventListener('keydown', (e) => {
+            if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+
+            if (e.key === 'Escape') {
+                UIController.closeAllSidebars();
+            } else if (e.altKey && !e.ctrlKey && !e.shiftKey) {
+                const key = e.key.toLowerCase();
+                if (key === 's') {
+                    e.preventDefault();
+                    UIController.toggleRightSidebar('controls-trigger', 'controls-panel');
+                } else if (key === 'c') {
+                    e.preventDefault();
+                    UIController.toggleRightSidebar('config-trigger', 'config-panel');
+                } else if (key === 'h') {
+                    e.preventDefault();
+                    UIController.toggleRightSidebar('help-trigger', 'help-panel');
+                } else if (key === 'o') {
+                    e.preventDefault();
+                    UIController.toggleRightSidebar('operations-trigger', 'operations-panel');
+                } else if (key === 'g') {
+                    e.preventDefault();
+                    UIController.toggleLeftSidebar('guide-trigger', 'guide-panel');
+                }
+            }
+        });
+    }
+
+    static closeAllSidebars() {
+        document.querySelectorAll('.sidebar-panel, .sidebar-panel-left').forEach(p => p.classList.remove('open', 'peek'));
+        document.querySelectorAll('.sidebar-tab-trigger, .sidebar-tab-trigger-left').forEach(t => t.classList.remove('panel-open', 'peek'));
+        document.body.classList.remove('right-panel-open', 'left-panel-open');
+    }
+
+    static toggleLeftSidebar(triggerId, panelId) {
+        const trigger = document.getElementById(triggerId);
+        const panel   = document.getElementById(panelId);
+        if (!trigger || !panel) return;
+
+        /* Close right sidebars first */
+        document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('open', 'peek'));
+        document.querySelectorAll('.sidebar-tab-trigger').forEach(t => t.classList.remove('panel-open', 'peek'));
+        document.body.classList.remove('right-panel-open');
+
+        const isOpen = panel.classList.contains('open');
+        if (isOpen) {
+            panel.classList.remove('open');
+            trigger.classList.remove('panel-open');
+            document.body.classList.remove('left-panel-open');
+        } else {
+            panel.classList.add('open');
+            trigger.classList.add('panel-open');
+            document.body.classList.add('left-panel-open');
         }
     }
 
-    static _wireRightSidebar(triggerId, panelId, closeId) {
+    static toggleRightSidebar(triggerId, panelId) {
         const trigger = document.getElementById(triggerId);
         const panel   = document.getElementById(panelId);
-        const closer  = document.getElementById(closeId);
         if (!trigger || !panel) return;
 
-        trigger.addEventListener('click', () => {
-            trigger.classList.remove('pulse-glow', 'peek');
-            if (panel) panel.classList.remove('peek');
+        /* Close left sidebar if open */
+        const leftPanel = document.getElementById('guide-panel');
+        const leftTrigger = document.getElementById('guide-trigger');
+        if (leftPanel) leftPanel.classList.remove('open');
+        if (leftTrigger) leftTrigger.classList.remove('panel-open');
+        document.body.classList.remove('left-panel-open');
 
-            document.querySelectorAll('.sidebar-panel').forEach(p => {
-                if (p.id !== panelId) {
-                    p.classList.remove('open', 'peek');
-                }
-            });
-            document.querySelectorAll('.sidebar-tab-trigger').forEach(t => {
-                if (t.id !== triggerId) {
-                    t.classList.remove('panel-open', 'peek');
-                }
-            });
-            const isOpen = panel.classList.contains('open');
-            panel.classList.toggle('open', !isOpen);
-            trigger.classList.toggle('panel-open', !isOpen);
-        });
+        const isOpen = panel.classList.contains('open');
 
-        if (closer) {
-            closer.addEventListener('click', () => {
-                panel.classList.remove('open');
-                trigger.classList.remove('panel-open');
-            });
+        /* Close all right sidebars */
+        document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('open', 'peek'));
+        document.querySelectorAll('.sidebar-tab-trigger').forEach(t => t.classList.remove('panel-open', 'peek'));
+
+        if (isOpen) {
+            document.body.classList.remove('right-panel-open');
+        } else {
+            panel.classList.add('open');
+            trigger.classList.add('panel-open');
+            document.body.classList.add('right-panel-open');
         }
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.UIController = UIController;
 }

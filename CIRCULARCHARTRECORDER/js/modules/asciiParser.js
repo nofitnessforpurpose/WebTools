@@ -2,7 +2,7 @@
  * AsciiProtocolParser — Decoupled parser for Simple ASCII Line Protocol
  * and Organiser II OPL text commands.
  */
-export class AsciiProtocolParser {
+class AsciiProtocolParser {
     static parse(rawText, device, stationAddress = 1) {
         const dollarIdx = rawText.indexOf('$');
         if (dollarIdx === -1) return null;
@@ -50,4 +50,8 @@ export class AsciiProtocolParser {
 
         return `*ERR:INVALID\r\n`;
     }
+}
+
+if (typeof window !== 'undefined') {
+    window.AsciiProtocolParser = AsciiProtocolParser;
 }
