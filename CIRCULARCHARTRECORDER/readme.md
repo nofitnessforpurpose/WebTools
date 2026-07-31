@@ -29,6 +29,9 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 - **Hardware Simulation**: Retro style status LEDs (Rx active, Buffer status, Connection state) and simulated paper styles and rotation.
 - **Export Capabilities**: Clear the paper or download the entire plot history as a single high-quality PNG image.
 - **Self-Test Mode**: Simulated test plot to verify the rendering engine locally.
+- **Chart Storage**: Chart session saves and management.
+- **Paper Styles**: Select chart styles.
+
 
 
 <BR>
@@ -68,6 +71,11 @@ As the emulation supports Web Serial (RS232), you can connect a huge range of de
 
 <BR>
 
+## Known Issues  
+Chrome animation not as smooth as Firefox or Edge.  
+Research indicates this to be an issue with Chrome's rendering of the chart paper rotation animation, it's most noticeable at rates above 2 minutes per revolution.
+
+<BR>
 
 ## Technical Details
 
