@@ -141,35 +141,48 @@ class SoundSynth {
         }
     }
 
-    playPrintSweep(durationMs = 300, isGraphics = false) {
+    triggerPinStrike(time = null, isGraphics = false) {
         if (!this.enabled) return;
         this.init();
         if (!this.ctx) return;
 
-        const now = this.ctx.currentTime;
-        const durationSec = durationMs / 1000;
+        const now = time !== null ? time : this.ctx.currentTime;
 
-        const motorOsc = this.ctx.createOscillator();
-        const motorGain = this.ctx.createGain();
-        motorOsc.type = 'triangle';
-        motorOsc.frequency.setValueAtTime(110, now);
-        motorOsc.frequency.linearRampToValueAtTime(115, now + durationSec * 0.5);
-        motorOsc.frequency.linearRampToValueAtTime(108, now + durationSec);
+        // Metallic Pin Ring 1: Primary steel wire strike (2400 Hz square wave)
+        const osc1 = this.ctx.createOscillator();
+        const gain1 = this.ctx.createGain();
+        osc1.type = 'square';
+        osc1.frequency.setValueAtTime(isGraphics ? 2800 : 2400, now);
 
-        motorGain.gain.setValueAtTime(0, now);
-        motorGain.gain.linearRampToValueAtTime(0.12, now + 0.03);
-        motorGain.gain.setValueAtTime(0.12, now + durationSec - 0.05);
-        motorGain.gain.linearRampToValueAtTime(0, now + durationSec);
+        gain1.gain.setValueAtTime(0, now);
+        gain1.gain.linearRampToValueAtTime(0.12, now + 0.0005); // 0.5ms sharp attack
+        gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.022); // 22ms metallic ringing decay
 
-        const motorFilter = this.ctx.createBiquadFilter();
-        motorFilter.type = 'lowpass';
-        motorFilter.frequency.setValueAtTime(300, now);
+        // Metallic Pin Ring 2: High inharmonic ring (3800 Hz triangle wave) for crisp metal ping
+        const osc2 = this.ctx.createOscillator();
+        const gain2 = this.ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(isGraphics ? 4200 : 3800, now);
 
-        motorOsc.connect(motorGain);
-        motorGain.connect(motorFilter);
-        motorFilter.connect(this.ctx.destination);
+        gain2.gain.setValueAtTime(0, now);
+        gain2.gain.linearRampToValueAtTime(0.08, now + 0.0005);
+        gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.018);
 
-        const bufferSize = this.ctx.sampleRate * durationSec;
+        // High-Q Metallic Resonance Filter (Center 2800 Hz, Q: 6.0, +8dB boost)
+        const metalFilter = this.ctx.createBiquadFilter();
+        metalFilter.type = 'peaking';
+        metalFilter.frequency.setValueAtTime(2800, now);
+        metalFilter.Q.setValueAtTime(6.0, now);
+        metalFilter.gain.setValueAtTime(8, now);
+
+        osc1.connect(gain1);
+        osc2.connect(gain2);
+        gain1.connect(metalFilter);
+        gain2.connect(metalFilter);
+        metalFilter.connect(this.ctx.destination);
+
+        // Impact noise burst (Ribbon/Paper strike) with High-Q Bandpass (2200 Hz, Q: 4.5)
+        const bufferSize = Math.floor(this.ctx.sampleRate * 0.02);
         const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
         const output = noiseBuffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
@@ -179,47 +192,72 @@ class SoundSynth {
         const noiseNode = this.ctx.createBufferSource();
         noiseNode.buffer = noiseBuffer;
 
-        const noiseFilter = this.ctx.createBiquadFilter();
-        noiseFilter.type = 'bandpass';
-        
-        // Print head click/pin frequency settings (kept for potential rollback):
-        // - Previous (High click tone): isGraphics ? 2200 : 1800
-        // - Current (Lower tone click): isGraphics ? 1200 : 1000
-        noiseFilter.frequency.setValueAtTime(isGraphics ? 1200 : 1000, now);
-        noiseFilter.Q.setValueAtTime(2.0, now); // Previous: 3.0
+        const bandpass = this.ctx.createBiquadFilter();
+        bandpass.type = 'bandpass';
+        bandpass.frequency.setValueAtTime(isGraphics ? 2600 : 2200, now);
+        bandpass.Q.setValueAtTime(4.5, now);
 
         const noiseGain = this.ctx.createGain();
         noiseGain.gain.setValueAtTime(0, now);
-        noiseGain.gain.linearRampToValueAtTime(isGraphics ? 0.35 : 0.22, now + 0.03);
+        noiseGain.gain.linearRampToValueAtTime(0.14, now + 0.0005);
+        noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.016);
 
-        const modOsc = this.ctx.createOscillator();
-        const modGain = this.ctx.createGain();
-        
-        // Needle hammer firing buzz rate settings (kept for potential rollback):
-        // - Previous: isGraphics ? 160 : 120 (fast buzz)
-        // - Current: isGraphics ? 90 : 70 (slower pin hammer click rate)
-        modOsc.frequency.setValueAtTime(isGraphics ? 90 : 70, now);
-        modOsc.type = 'sawtooth';
-
-        modGain.gain.setValueAtTime(0.5, now);
-
-        modOsc.connect(noiseGain.gain);
-
-        noiseGain.gain.setValueAtTime(isGraphics ? 0.25 : 0.18, now + durationSec - 0.05);
-        noiseGain.gain.linearRampToValueAtTime(0, now + durationSec);
-
-        noiseNode.connect(noiseFilter);
-        noiseFilter.connect(noiseGain);
+        noiseNode.connect(bandpass);
+        bandpass.connect(noiseGain);
         noiseGain.connect(this.ctx.destination);
+
+        osc1.start(now);
+        osc2.start(now);
+        osc1.stop(now + 0.025);
+        osc2.stop(now + 0.025);
+        noiseNode.start(now);
+        noiseNode.stop(now + 0.025);
+    }
+
+    playPrintSweep(durationMs = 300, isGraphics = false, textLength = 40) {
+        if (!this.enabled) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const startTime = this.ctx.currentTime;
+        const durationSec = durationMs / 1000;
+        
+        // Trigger rapid pin strikes every 30-40ms while print head moves across text
+        const strikeIntervalSec = isGraphics ? 0.03 : 0.04;
+        const totalStrikes = Math.floor(durationSec / strikeIntervalSec);
+
+        for (let i = 0; i < totalStrikes; i++) {
+            const strikeTime = startTime + (i * strikeIntervalSec);
+            if (i % 7 === 0 && Math.random() > 0.6) continue; // Micro-pauses for word spaces
+            this.triggerPinStrike(strikeTime, isGraphics);
+        }
+
+        // Low background motor hum during head traverse
+        this.playMotorHum(startTime, durationSec);
+    }
+
+    playMotorHum(startTime, durationSec) {
+        const now = startTime;
+        const motorOsc = this.ctx.createOscillator();
+        const motorGain = this.ctx.createGain();
+        motorOsc.type = 'triangle';
+        motorOsc.frequency.setValueAtTime(120, now);
+
+        motorGain.gain.setValueAtTime(0, now);
+        motorGain.gain.linearRampToValueAtTime(0.04, now + 0.01);
+        motorGain.gain.setValueAtTime(0.04, now + durationSec - 0.02);
+        motorGain.gain.linearRampToValueAtTime(0, now + durationSec);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(350, now);
+
+        motorOsc.connect(motorGain);
+        motorGain.connect(filter);
+        filter.connect(this.ctx.destination);
 
         motorOsc.start(now);
         motorOsc.stop(now + durationSec);
-        
-        noiseNode.start(now);
-        noiseNode.stop(now + durationSec);
-        
-        modOsc.start(now);
-        modOsc.stop(now + durationSec);
     }
 
     playFeed(durationMs = 150) {
@@ -227,94 +265,51 @@ class SoundSynth {
         this.init();
         if (!this.ctx) return;
 
+        // Cap sound duration to max 250ms so page and multi-line feeds trigger a snappy motor step without long drones
+        const soundDurationMs = Math.min(durationMs, 250);
         const now = this.ctx.currentTime;
-        const durationSec = durationMs / 1000;
+        const durationSec = soundDurationMs / 1000;
 
-        // Stepper motor coil hum: 440Hz square wave for that buzzy stepping energy
-        const osc1 = this.ctx.createOscillator();
-        const gain1 = this.ctx.createGain();
-        osc1.type = 'square';
-        osc1.frequency.setValueAtTime(440, now);
-        // Frequency ramps up and down slightly for acceleration/deceleration
-        osc1.frequency.linearRampToValueAtTime(480, now + durationSec * 0.2);
-        osc1.frequency.linearRampToValueAtTime(420, now + durationSec);
+        // Sawtooth wave at 120 Hz motor hum
+        const sawOsc = this.ctx.createOscillator();
+        sawOsc.type = 'sawtooth';
+        sawOsc.frequency.setValueAtTime(120, now);
 
-        // Secondary metallic resonance: 880Hz triangle wave
-        const osc2 = this.ctx.createOscillator();
-        const gain2 = this.ctx.createGain();
-        osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(880, now);
-        osc2.frequency.linearRampToValueAtTime(960, now + durationSec * 0.2);
-        osc2.frequency.linearRampToValueAtTime(840, now + durationSec);
+        // LFO Triangle wave at 40 Hz modulating pitch by +/- 30 Hz for rhythmic chugging
+        const lfoOsc = this.ctx.createOscillator();
+        lfoOsc.type = 'triangle';
+        lfoOsc.frequency.setValueAtTime(40, now);
 
-        // LFO for discrete stepper steps vibration (180Hz sawtooth modulation)
-        const modOsc = this.ctx.createOscillator();
-        const modGain1 = this.ctx.createGain();
-        const modGain2 = this.ctx.createGain();
-        modOsc.type = 'sawtooth';
-        modOsc.frequency.setValueAtTime(180, now);
+        const lfoGain = this.ctx.createGain();
+        lfoGain.gain.setValueAtTime(30, now);
 
-        modGain1.gain.setValueAtTime(0.04, now); // Mod depth for carrier 1
-        modGain2.gain.setValueAtTime(0.03, now); // Mod depth for carrier 2
+        lfoOsc.connect(lfoGain);
+        lfoGain.connect(sawOsc.frequency);
 
-        modOsc.connect(modGain1);
-        modOsc.connect(modGain2);
-
-        // Muffle buzz to fit physical casing resonance
+        // Lowpass filter at 400 Hz (muffles harsh highs, simulates casing)
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(1400, now);
+        filter.frequency.setValueAtTime(400, now);
 
-        gain1.gain.setValueAtTime(0, now);
-        gain1.gain.linearRampToValueAtTime(0.08, now + 0.02);
-        gain1.gain.exponentialRampToValueAtTime(0.005, now + durationSec);
+        // Amplifier Envelope: Attack 10ms, Decay 50ms, Sustain 80%, Release 20ms
+        const ampGain = this.ctx.createGain();
+        const peakGain = 0.10;
+        const sustainGain = peakGain * 0.8;
 
-        gain2.gain.setValueAtTime(0, now);
-        gain2.gain.linearRampToValueAtTime(0.06, now + 0.02);
-        gain2.gain.exponentialRampToValueAtTime(0.005, now + durationSec);
+        ampGain.gain.setValueAtTime(0, now);
+        ampGain.gain.linearRampToValueAtTime(peakGain, now + 0.010);
+        ampGain.gain.linearRampToValueAtTime(sustainGain, now + 0.060);
+        ampGain.gain.setValueAtTime(sustainGain, Math.max(now + 0.060, now + durationSec - 0.020));
+        ampGain.gain.linearRampToValueAtTime(0, now + durationSec);
 
-        modGain1.connect(gain1.gain);
-        modGain2.connect(gain2.gain);
+        sawOsc.connect(filter);
+        filter.connect(ampGain);
+        ampGain.connect(this.ctx.destination);
 
-        osc1.connect(filter);
-        osc2.connect(filter);
-        filter.connect(gain1);
-        filter.connect(gain2);
-        gain1.connect(this.ctx.destination);
-        gain2.connect(this.ctx.destination);
-
-        // Friction noise (paper sliding through rubber/metal rollers)
-        const bufferSize = this.ctx.sampleRate * durationSec;
-        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const output = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = Math.random() * 2 - 1;
-        }
-        const noiseNode = this.ctx.createBufferSource();
-        noiseNode.buffer = noiseBuffer;
-
-        const noiseFilter = this.ctx.createBiquadFilter();
-        noiseFilter.type = 'bandpass';
-        noiseFilter.frequency.setValueAtTime(2600, now); // High-pitched slide sound
-        noiseFilter.Q.setValueAtTime(1.5, now);
-
-        const noiseGain = this.ctx.createGain();
-        noiseGain.gain.setValueAtTime(0, now);
-        noiseGain.gain.linearRampToValueAtTime(0.06, now + 0.02);
-        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + durationSec);
-
-        noiseNode.connect(noiseFilter);
-        noiseFilter.connect(noiseGain);
-        noiseGain.connect(this.ctx.destination);
-
-        osc1.start(now);
-        osc1.stop(now + durationSec);
-        osc2.start(now);
-        osc2.stop(now + durationSec);
-        modOsc.start(now);
-        modOsc.stop(now + durationSec);
-        noiseNode.start(now);
-        noiseNode.stop(now + durationSec);
+        sawOsc.start(now);
+        lfoOsc.start(now);
+        sawOsc.stop(now + durationSec);
+        lfoOsc.stop(now + durationSec);
     }
 
     playTear() {
@@ -323,34 +318,65 @@ class SoundSynth {
         if (!this.ctx) return;
 
         const now = this.ctx.currentTime;
-        const durationSec = 0.35;
-
-        const bufferSize = this.ctx.sampleRate * durationSec;
-        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const durationSec = 0.42;
+        const sampleRate = this.ctx.sampleRate;
+        const bufferSize = Math.floor(sampleRate * durationSec);
+        
+        // Create audio buffer for synthesized tear noise and micro-snaps
+        const noiseBuffer = this.ctx.createBuffer(1, bufferSize, sampleRate);
         const output = noiseBuffer.getChannelData(0);
         
+        // Synthesize paper tearing physics: background fiber friction + micro-rips at serration teeth pitch
         for (let i = 0; i < bufferSize; i++) {
-            const baseNoise = Math.random() * 2 - 1;
-            const crackle = (i % 80 === 0) ? (Math.random() > 0.5 ? 1.5 : -1.5) : 1;
-            output[i] = baseNoise * crackle * 0.4;
+            const t = i / bufferSize;
+            
+            // Base high-frequency paper grain friction noise
+            const baseNoise = (Math.random() * 2 - 1);
+
+            // Serration teeth micro-bursts (simulating paper snapping across tractor perforations)
+            // ~120 Hz rhythm with randomized intensity spikes
+            const teethCycle = (i % Math.floor(sampleRate / 115));
+            const isToothSnap = teethCycle < Math.floor(sampleRate * 0.0012); // Short 1.2ms impulse
+            const toothImpulse = isToothSnap ? (Math.random() > 0.3 ? (1.8 + Math.random() * 1.5) : -2.0) : 1.0;
+
+            // Random fiber snapping bursts (heavy paper tear pops)
+            const fiberSnap = (Math.random() < 0.004) ? (Math.random() > 0.5 ? 3.0 : -3.0) : 0.0;
+
+            // Amplitude profile: initial grip force spike -> steady rip -> trailing paper resonance decay
+            let env = 1.0;
+            if (t < 0.1) {
+                env = t / 0.1; // Initial tear start ramp
+            } else if (t > 0.7) {
+                env = Math.pow((1.0 - t) / 0.3, 1.5); // Tail fade out
+            }
+
+            output[i] = (baseNoise * toothImpulse + fiberSnap) * env * 0.35;
         }
 
         const noiseNode = this.ctx.createBufferSource();
         noiseNode.buffer = noiseBuffer;
 
+        // Bandpass filter centered around 1800 Hz (characteristic crisp paper tear resonance)
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(1000, now);
-        filter.frequency.exponentialRampToValueAtTime(350, now + durationSec);
-        filter.Q.setValueAtTime(1.5, now);
+        filter.frequency.setValueAtTime(1400, now);
+        filter.frequency.linearRampToValueAtTime(2400, now + durationSec * 0.4);
+        filter.frequency.exponentialRampToValueAtTime(800, now + durationSec);
+        filter.Q.setValueAtTime(1.8, now);
+
+        // Highpass filter to eliminate low frequency rumble and accentuate crisp paper edge tearing
+        const highpass = this.ctx.createBiquadFilter();
+        highpass.type = 'highpass';
+        highpass.frequency.setValueAtTime(450, now);
 
         const gainNode = this.ctx.createGain();
-        gainNode.gain.setValueAtTime(0, now);
-        gainNode.gain.linearRampToValueAtTime(0.6, now + 0.05);
+        gainNode.gain.setValueAtTime(0.01, now);
+        gainNode.gain.linearRampToValueAtTime(0.75, now + 0.04); // Fast initial rip sound
         gainNode.gain.exponentialRampToValueAtTime(0.01, now + durationSec);
 
         noiseNode.connect(filter);
-        filter.connect(gainNode);
+        filter.connect(highpass);
+        highpass.connect(gainNode);
         gainNode.connect(this.ctx.destination);
 
         noiseNode.start(now);
@@ -708,7 +734,7 @@ class EscpParser {
         const maxCapacity = this.getMaxColumns();
         if (this.lineBuffer.length >= maxCapacity) {
             this.flushLineBuffer();
-            this.callbacks.onFeedPaper(this.lineSpacing / 24);
+            this.callbacks.onFeedPaper(this.lineSpacing / 16);
         }
         this.lineBuffer.push({
             code,
@@ -832,11 +858,11 @@ const drawFoxing = (ctx, W, H, factor) => {
     ctx.restore();
 };
 
-const drawFibers = (ctx, W, H, factor) => {
-    if (factor <= 0) return;
+const drawFibers = (ctx, W, H, factor = 1) => {
     ctx.save();
-    ctx.strokeStyle = `rgba(80, 60, 40, ${0.25 * factor})`;
-    ctx.fillStyle = `rgba(80, 60, 40, ${0.3 * factor})`;
+    const alphaFactor = Math.max(0.6, factor);
+    ctx.strokeStyle = `rgba(80, 60, 40, ${0.45 * alphaFactor})`;
+    ctx.fillStyle = `rgba(80, 60, 40, ${0.5 * alphaFactor})`;
     const fibers = [
         { x: W * 0.35, y: H * 0.18, type: 'line', dx: 3, dy: -2 },
         { x: W * 0.62, y: H * 0.78, type: 'dot' },
@@ -869,12 +895,16 @@ class PrinterRenderer {
         this.paperPreset = 'green-bar';
         this.ribbonWear = 0;
         this.jitter = 0;
+        this.tractorWear = 0;
+        this.fullPageBands = true;
+        this.prePrintHalftone = false;
+        this.sidePerforation = 'standard';
         this.isLockedToBottom = true;
         this.scaleFactor = 2; // Default to 2x High-Res
-
+        this.sessionSeed = Math.floor(Math.random() * 100000);
         this.paperWidth = 912;
         this.printableWidth = 768; // 80 columns of pica (80 * 9.6px = 768px)
-        this.leftMargin = 72;      // 0.75" left margin (sprockets + padding)
+        this.leftMargin = 72;      // 0.75" left margin (48px sprocket + 24px / 0.25" paper inset)
         this.lineHeight = 16;
         this.pageLength = 1056; // 11.0 inches at 96 DPI (66 lines, 22 sprocket holes)
         this.totalHeightPrinted = 0;
@@ -906,10 +936,23 @@ class PrinterRenderer {
         setTimeout(() => this.updatePaperPadding(), 200);
         setTimeout(() => this.updatePaperPadding(), 500);
         setTimeout(() => this.updatePaperPadding(), 1000);
+
+        this.createTractorGears();
+        this.container.addEventListener('scroll', () => this.updateTractorPins());
     }
 
     setPaperPreset(preset) {
         this.paperPreset = preset;
+        this.updatePaperStyling();
+    }
+
+    setFullPageBands(fullPage) {
+        this.fullPageBands = !!fullPage;
+        this.updatePaperStyling();
+    }
+
+    setPrePrintHalftone(enabled) {
+        this.prePrintHalftone = !!enabled;
         this.updatePaperStyling();
     }
 
@@ -926,9 +969,268 @@ class PrinterRenderer {
         this.jitter = parseFloat(jitterVal) || 0;
     }
 
+    setTractorWear(wear) {
+        this.tractorWear = parseInt(wear, 10) || 0;
+        this.updatePaperStyling();
+    }
+
+    setSprocketHoleColor(val) {
+        this.sprocketHoleColor = parseInt(val, 10) || 0;
+        this.updatePaperStyling();
+    }
+
+    getSprocketHoleFillColor() {
+        const val = (this.sprocketHoleColor || 0) / 100;
+        const r = Math.round(15 + (255 - 15) * val);
+        const g = Math.round(23 + (255 - 23) * val);
+        const b = Math.round(42 + (255 - 42) * val);
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    setWatermarkSettings(enabled, text, angle, opacity, size) {
+        this.watermarkEnabled = !!enabled;
+        this.watermarkText = text || 'NFfP';
+        this.watermarkAngle = angle !== undefined ? parseInt(angle, 10) : 45;
+        this.watermarkOpacity = opacity !== undefined ? parseInt(opacity, 10) : 8;
+        this.watermarkSize = size !== undefined ? parseInt(size, 10) : 50;
+        this.updatePaperStyling();
+    }
+
+    drawWatermark(ctx, W, H) {
+        if (!this.watermarkEnabled || !this.watermarkText) return;
+
+        ctx.save();
+        ctx.translate(W / 2, H / 2);
+        ctx.rotate((this.watermarkAngle * Math.PI) / 180);
+
+        const opacity = (this.watermarkOpacity || 8) / 100;
+        ctx.fillStyle = `rgba(15, 23, 42, ${opacity})`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const targetWidth = W * ((this.watermarkSize || 50) / 100);
+        ctx.font = 'bold 100px "Inter", "Courier New", sans-serif';
+        const metrics = ctx.measureText(this.watermarkText);
+        const measuredW = metrics.width || 200;
+        const fontSize = Math.round((100 * targetWidth) / measuredW);
+
+        ctx.font = `bold ${fontSize}px "Inter", "Courier New", sans-serif`;
+        ctx.fillText(this.watermarkText, 0, 0);
+
+        ctx.restore();
+    }
+
+    setSidePerforation(perf) {
+        this.sidePerforation = perf || 'standard';
+        this.updatePaperStyling();
+    }
+
+    createTractorGears() {
+        this.leftGear = document.createElement('div');
+        this.leftGear.className = 'tractor-pin-gear left-gear';
+        this.rightGear = document.createElement('div');
+        this.rightGear.className = 'tractor-pin-gear right-gear';
+
+        this.leftPins = [];
+        this.rightPins = [];
+        for (let i = 0; i < 4; i++) {
+            const lp = document.createElement('div');
+            lp.className = 'tractor-pin';
+            this.leftGear.appendChild(lp);
+            this.leftPins.push(lp);
+
+            const rp = document.createElement('div');
+            rp.className = 'tractor-pin';
+            this.rightGear.appendChild(rp);
+            this.rightPins.push(rp);
+        }
+
+        const body = this.container.closest('.printer-body');
+        if (body) {
+            body.appendChild(this.leftGear);
+            body.appendChild(this.rightGear);
+        }
+        
+        this.updateTractorGearsLayout();
+        this.updateTractorPins();
+    }
+
+    updateTractorGearsLayout() {
+        const isClean = this.paperPreset.endsWith('-clean') || 
+                        (this.container.querySelector('#paperRoll')?.classList.contains('margins-removed'));
+        if (isClean) {
+            if (this.leftGear) this.leftGear.style.display = 'none';
+            if (this.rightGear) this.rightGear.style.display = 'none';
+            return;
+        } else {
+            if (this.leftGear) this.leftGear.style.display = 'block';
+            if (this.rightGear) this.rightGear.style.display = 'block';
+        }
+
+        const halfW = this.paperWidth / 2;
+        if (this.leftGear) this.leftGear.style.left = `calc(50% - ${halfW - 24}px)`;
+        if (this.rightGear) this.rightGear.style.left = `calc(50% + ${halfW - 24}px)`;
+    }
+
+    updateTractorPins() {
+        if (!this.leftPins || !this.rightPins) return;
+        const scrollTop = this.container.scrollTop;
+        
+        // Loop 4 pins spanning 192px (4 * 48px pitch)
+        // Y_min aligned to bottom: 24px (first visible hole at bottom)
+        // Y_mid at bottom: 96px (rotation axle center)
+        // Y_max at bottom: 168px (near tear bar)
+        // Highest pin extends past tear bar (up to 168px) and retracts
+        const Y_min = 24;
+        const Y_mid = 96;
+        const Y_range = 96; // larger range for 4 pins visibility
+        
+        for (let i = 0; i < 4; i++) {
+            // As page scrolls up, the pins travel up relative to the viewport.
+            let offset = (i * 48 + scrollTop) % 192;
+            if (offset < 0) offset += 192;
+            const Y = Y_min + offset;
+            
+            const d = Math.abs(Y - Y_mid);
+            const t = Math.max(0, 1 - d / Y_range); // 0 at limits, 1 at center
+            
+            const scale = 0.3 + 0.7 * t;
+            const opacity = t;
+            
+            // Subtract 7.2px (half the pin height of 14.4px) to align the center of the pin
+            // with the Y coordinate, correcting the 'bottom: Ypx' layout offset.
+            if (this.leftPins[i]) {
+                this.leftPins[i].style.bottom = `${Y - 7.2}px`;
+                this.leftPins[i].style.transform = `scale(${scale})`;
+                this.leftPins[i].style.opacity = opacity;
+            }
+            if (this.rightPins[i]) {
+                this.rightPins[i].style.bottom = `${Y - 7.2}px`;
+                this.rightPins[i].style.transform = `scale(${scale})`;
+                this.rightPins[i].style.opacity = opacity;
+            }
+        }
+    }
+
     setPaperAge(age) {
         this.paperAge = parseInt(age, 10) || 0;
         this.updatePaperStyling();
+    }
+
+    getPageCount() {
+        const height = Math.max(0, this.totalHeightPrinted - 96);
+        if (height === 0) return 1;
+        return Math.ceil(height / this.pageLength);
+    }
+
+    updatePageCountUI() {
+        const el = document.getElementById('valPageCount');
+        if (el) {
+            const count = this.getPageCount();
+            el.textContent = count;
+            const limit = this.storedPagesLimit;
+            if (limit > 0 && count >= limit) {
+                el.style.color = '#ef4444'; // Red limit warning
+            } else {
+                el.style.color = 'var(--color-text)'; // Default color
+            }
+        }
+    }
+
+    manageStoredPages() {
+        const limit = this.storedPagesLimit;
+        if (limit <= 0) return false;
+
+        let pageDeleted = false;
+        let loops = 0; // Guard to prevent infinite loop
+        while (this.getPageCount() > limit && loops < 150) {
+            this.deleteOldestPage();
+            pageDeleted = true;
+            loops++;
+        }
+        return pageDeleted;
+    }
+
+    deleteOldestPage() {
+        if (this.scrollInterval) {
+            cancelAnimationFrame(this.scrollInterval);
+            this.scrollInterval = null;
+        }
+
+        const children = Array.from(this.wrapper.children);
+        const pageTopOffset = 96;
+        const cutoffY = pageTopOffset + this.pageLength;
+        const subpixelEpsilon = 1.0; // 1px subpixel tolerance
+        
+        children.forEach(child => {
+            if (child.id === 'paperTextureOverlay') return;
+            const top = parseFloat(child.style.top) || 0;
+            
+            // Delete only elements whose top boundary is strictly on Page 1 (top < cutoffY - epsilon)
+            if (top < cutoffY - subpixelEpsilon) {
+                child.remove();
+            } else {
+                child.style.top = `${Math.round(top - this.pageLength)}px`;
+            }
+        });
+
+        // Shift text buffer lines as well
+        const linesPerPage = Math.floor(this.pageLength / this.lineHeight);
+        if (this.textLinesBuffer.length > linesPerPage) {
+            this.textLinesBuffer.splice(0, linesPerPage);
+        } else {
+            this.textLinesBuffer = [];
+        }
+
+        this.totalHeightPrinted = Math.max(96, Math.round(this.totalHeightPrinted - this.pageLength));
+        this.wrapper.style.height = `${this.totalHeightPrinted}px`;
+
+        this.updatePaperPadding();
+        this.updateTractorPins();
+        this.updatePageCountUI();
+
+        // Force browser DOM layout reflow so container.scrollHeight reflects the updated paper height synchronously
+        void this.container.offsetHeight;
+
+        // Instantly align scroll position to target to eliminate visual positioning offsets below print head
+        const target = Math.max(0, this.container.scrollHeight - this.container.clientHeight);
+        this.container.scrollTop = target;
+    }
+
+    fillBandingPattern(ctx, x, y, width, height, barColor, paperBgColor) {
+        if (!this.prePrintHalftone) {
+            ctx.fillStyle = barColor;
+            ctx.fillRect(x, y, width, height);
+            return;
+        }
+
+        // Halftone dot pattern generation (45° staggered screen halftone: 01010101 / 10101010)
+        const dotPatternCanvas = document.createElement('canvas');
+        const s = 3; // Cell size per dot position
+        dotPatternCanvas.width = s * 2;
+        dotPatternCanvas.height = s * 2;
+        const dCtx = dotPatternCanvas.getContext('2d');
+
+        // Fill paper background
+        dCtx.fillStyle = paperBgColor;
+        dCtx.fillRect(0, 0, s * 2, s * 2);
+
+        // Draw staggered halftone dots (Row 0: col 1; Row 1: col 0)
+        dCtx.fillStyle = barColor;
+        
+        // Dot 1 (Row 0, Col 1 -> (1.5s, 0.5s))
+        dCtx.beginPath();
+        dCtx.arc(s * 1.5, s * 0.5, s * 0.7, 0, Math.PI * 2);
+        dCtx.fill();
+
+        // Dot 2 (Row 1, Col 0 -> (0.5s, 1.5s))
+        dCtx.beginPath();
+        dCtx.arc(s * 0.5, s * 1.5, s * 0.7, 0, Math.PI * 2);
+        dCtx.fill();
+
+        const pattern = ctx.createPattern(dotPatternCanvas, 'repeat');
+        ctx.fillStyle = pattern;
+        ctx.fillRect(x, y, width, height);
     }
 
     updatePaperStyling() {
@@ -973,6 +1275,7 @@ class PrinterRenderer {
         else if (this.ribbonColor === 'fresh-brown') inkColor = '#552d19';
         
         document.documentElement.style.setProperty('--efx-ink-color', inkColor);
+        document.documentElement.style.setProperty('--efx-sprocket-hole-color', this.getSprocketHoleFillColor());
 
         // Color interpolation helper functions
         const hexToRgb = (hex) => {
@@ -1032,10 +1335,12 @@ class PrinterRenderer {
                 barColor = rgbToHex(r, g, b);
             }
             
-            pCtx.fillStyle = barColor;
             const stripeHeight = basePreset.endsWith('-2') ? this.lineHeight * 2 : this.lineHeight * 3; // 2-line vs 3-line bars
+            const marginInset = this.fullPageBands ? 0 : 52; // Full page width when checked (0), inboard of perforations when unchecked (52px)
+            const barStartX = marginInset;
+            const barWidth = this.paperWidth - (marginInset * 2);
             for (let y = stripeHeight; y < this.pageLength; y += stripeHeight * 2) {
-                pCtx.fillRect(0, y, this.paperWidth, stripeHeight);
+                this.fillBandingPattern(pCtx, barStartX, y, barWidth, stripeHeight, barColor, paperBg);
             }
         } else if (basePreset === 'music-sheet-1234-stock') {
             let barColor = '#d8eae0'; // Desaturated mint green
@@ -1047,10 +1352,9 @@ class PrinterRenderer {
                 const b = Math.round(barRgb.b + (targetRgb.b - barRgb.b) * factor);
                 barColor = rgbToHex(r, g, b);
             }
-            pCtx.fillStyle = barColor;
             const stripeHeight = this.lineHeight; // Alternating single-line bands (16px)
             for (let y = 48 + stripeHeight; y < this.pageLength; y += stripeHeight * 2) {
-                pCtx.fillRect(0, y, this.paperWidth, stripeHeight);
+                this.fillBandingPattern(pCtx, 0, y, this.paperWidth, stripeHeight, barColor, paperBg);
             }
         } else if (basePreset === 'invoice') {
             this.drawInvoiceForm(pCtx, this.paperWidth, this.pageLength, '#505a64');
@@ -1065,9 +1369,14 @@ class PrinterRenderer {
             this.drawForm8240(pCtx, this.paperWidth, this.pageLength, '#24634E');
         }
 
+        // Draw watermark if enabled
+        if (this.watermarkEnabled) {
+            this.drawWatermark(pCtx, this.paperWidth, this.pageLength);
+        }
+
         // Draw tractor metadata if margins are NOT removed
         if (!isClean) {
-            this.drawTractorMetadata(pCtx, this.paperWidth, this.pageLength);
+            this.drawTractorMetadata(pCtx, this.paperWidth, this.pageLength, paperBg);
         }
 
         // Apply edge oxidation, folds, foxing, and fibers to patternCanvas
@@ -1080,7 +1389,7 @@ class PrinterRenderer {
         document.documentElement.style.setProperty('--efx-ink-opacity', inkOpacity);
 
         // Draw page perforation lines
-        pCtx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+        pCtx.strokeStyle = 'rgba(80, 90, 100, 0.45)';
         pCtx.lineWidth = 1;
         pCtx.setLineDash([3, 5]);
         pCtx.beginPath();
@@ -1088,11 +1397,141 @@ class PrinterRenderer {
         pCtx.lineTo(this.paperWidth, this.pageLength - 1);
         pCtx.stroke();
 
-        // Apply background image to wrapper
+        // Apply background image exclusively to paperContentWrapper so top spacer stays dark viewport space
         const dataUrl = patternCanvas.toDataURL();
+        paperElement.style.backgroundImage = 'none';
+        paperElement.style.width = `${this.paperWidth}px`;
+        paperElement.style.minWidth = `${this.paperWidth}px`;
+
+        this.wrapper.style.width = `${this.paperWidth}px`;
+        this.wrapper.style.minWidth = `${this.paperWidth}px`;
         this.wrapper.style.backgroundImage = `url(${dataUrl})`;
         this.wrapper.style.backgroundRepeat = 'repeat-y';
         this.wrapper.style.backgroundSize = `${this.paperWidth}px ${this.pageLength}px`;
+
+        this.updateTractorGearsLayout();
+        this.updateTractorPins();
+    }
+
+    preparePrintBackground() {
+        this.cleanupPrintBackground();
+
+        const bgCanvas = document.createElement('canvas');
+        const scale = 2;
+        bgCanvas.width = this.paperWidth * scale;
+        bgCanvas.height = this.totalHeightPrinted * scale;
+        const ctx = bgCanvas.getContext('2d');
+        ctx.scale(scale, scale);
+
+        const isClean = this.paperPreset.endsWith('-clean');
+        const basePreset = isClean ? this.paperPreset.replace('-clean', '') : this.paperPreset;
+
+        let paperBg = '#fbfbf7';
+        if (basePreset === 'aged') paperBg = '#fef08a';
+        else if (basePreset === 'carbonless-yellow') paperBg = '#fef9c3';
+        else if (basePreset === 'carbonless-pink') paperBg = '#fce7f3';
+        else if (basePreset === 'carbonless-goldenrod') paperBg = '#fed7aa';
+        else if (basePreset === 'carbonless-blue') paperBg = '#dbeafe';
+        else if (basePreset === 'music-sheet-1234-stock' || this.paperFormat === 'music-sheet-1234') paperBg = '#fafaf6';
+
+        const ageVal = this.paperAge || 0;
+        const factor = ageVal / 100;
+
+        const hexToRgb = (hex) => {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 251, g: 251, b: 247 };
+        };
+        const rgbToHex = (r, g, b) => "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+
+        if (factor > 0) {
+            const baseRgb = hexToRgb(paperBg);
+            const targetRgb = hexToRgb('#e2cd9c');
+            const r = Math.round(baseRgb.r + (targetRgb.r - baseRgb.r) * factor);
+            const g = Math.round(baseRgb.g + (targetRgb.g - baseRgb.g) * factor);
+            const b = Math.round(baseRgb.b + (targetRgb.b - baseRgb.b) * factor);
+            paperBg = rgbToHex(r, g, b);
+        }
+
+        for (let y = 0; y < this.totalHeightPrinted; y += this.pageLength) {
+            ctx.save();
+            ctx.translate(0, y);
+
+            ctx.fillStyle = paperBg;
+            ctx.fillRect(0, 0, this.paperWidth, this.pageLength);
+
+            const isBanded = basePreset.startsWith('green-bar') || basePreset.startsWith('blue-bar') || basePreset.startsWith('grey-bar');
+            if (isBanded) {
+                let barColor = '#e2efe0';
+                if (basePreset.startsWith('blue-bar')) barColor = '#e1ecf4';
+                else if (basePreset.startsWith('grey-bar')) barColor = '#ecece8';
+                if (factor > 0) {
+                    const barRgb = hexToRgb(barColor);
+                    const targetRgb = hexToRgb('#c4ae8a');
+                    const r = Math.round(barRgb.r + (targetRgb.r - barRgb.r) * factor);
+                    const g = Math.round(barRgb.g + (targetRgb.g - barRgb.g) * factor);
+                    const b = Math.round(barRgb.b + (targetRgb.b - barRgb.b) * factor);
+                    barColor = rgbToHex(r, g, b);
+                }
+                const stripeHeight = basePreset.endsWith('-2') ? this.lineHeight * 2 : this.lineHeight * 3;
+                const marginInset = this.fullPageBands ? 0 : 52; // Full page width when checked (0), inboard when unchecked (52px)
+                const barStartX = marginInset;
+                const barWidth = this.paperWidth - (marginInset * 2);
+                for (let py = stripeHeight; py < this.pageLength; py += stripeHeight * 2) {
+                    this.fillBandingPattern(ctx, barStartX, py, barWidth, stripeHeight, barColor, paperBg);
+                }
+            } else if (basePreset === 'invoice') {
+                this.drawInvoiceForm(ctx, this.paperWidth, this.pageLength, '#505a64');
+            }
+
+            if (this.paperFormat === 'correspondence-bordered' || this.paperFormat === 'mini-bordered') {
+                this.drawBorderedForm(ctx, this.paperWidth, this.pageLength, '#505a64');
+            } else if (this.paperFormat === 'music-sheet') {
+                this.drawComputerMusicForm(ctx, this.paperWidth, this.pageLength, '#505a64');
+            } else if (this.paperFormat === 'music-sheet-1234') {
+                this.drawForm8240(ctx, this.paperWidth, this.pageLength, '#24634E');
+            }
+
+            if (this.watermarkEnabled) {
+                this.drawWatermark(ctx, this.paperWidth, this.pageLength);
+            }
+
+            if (!isClean) {
+                this.drawTractorMetadata(ctx, this.paperWidth, this.pageLength, paperBg, y);
+            }
+
+            drawEdgeBrowning(ctx, this.paperWidth, this.pageLength, factor);
+            drawFoldBrowning(ctx, this.paperWidth, 0, this.pageLength, factor);
+            drawFoxing(ctx, this.paperWidth, this.pageLength, factor);
+            drawFibers(ctx, this.paperWidth, this.pageLength, factor);
+
+            ctx.strokeStyle = 'rgba(80, 90, 100, 0.45)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 5]);
+            ctx.beginPath();
+            ctx.moveTo(0, this.pageLength - 1);
+            ctx.lineTo(this.paperWidth, this.pageLength - 1);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        const img = document.createElement('img');
+        img.className = 'paper-print-bg-img';
+        img.src = bgCanvas.toDataURL();
+        img.style.position = 'absolute';
+        img.style.top = '0';
+        img.style.left = '0';
+        img.style.width = `${this.paperWidth}px`;
+        img.style.height = `${this.totalHeightPrinted}px`;
+        img.style.zIndex = '0';
+        img.style.pointerEvents = 'none';
+
+        this.wrapper.insertBefore(img, this.wrapper.firstChild);
+    }
+
+    cleanupPrintBackground() {
+        const existing = this.wrapper.querySelector('.paper-print-bg-img');
+        if (existing) existing.remove();
     }
 
     drawBorderedForm(ctx, W, H, inkColor) {
@@ -1283,26 +1722,303 @@ class PrinterRenderer {
         ctx.fillText('TOTAL DUE:', W - 260, bottomH + 20);
     }
 
-    drawTractorMetadata(ctx, W, H) {
-        // Vertical micro-perforation lines
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(48, 0);
-        ctx.lineTo(48, H);
-        ctx.moveTo(W - 48, 0);
-        ctx.lineTo(W - 48, H);
-        ctx.stroke();
-        ctx.setLineDash([]); // Reset line dash
-
-        // Circular sprocket holes repeating every 48px vertical (centered exactly between page perforations)
-        ctx.fillStyle = '#0f172a';
-        for (let y = 24; y < H; y += 48) {
+    drawDegradedSprocket(ctx, x, y, R, degradation, paperBg, pageYOffset = 0) {
+        const holeColor = this.getSprocketHoleFillColor();
+        if (degradation <= 0) {
+            ctx.fillStyle = holeColor;
             ctx.beginPath();
-            ctx.arc(24, y, 7.5, 0, Math.PI * 2);
-            ctx.arc(W - 24, y, 7.5, 0, Math.PI * 2);
+            ctx.arc(x, y, R, 0, Math.PI * 2);
             ctx.fill();
+            return;
+        }
+
+        const seed = x + (y + pageYOffset) * 137 + (this.sessionSeed || 0);
+        const seedRandom = (s) => {
+            let val = Math.sin(s) * 10000;
+            return val - Math.floor(val);
+        };
+
+        const rawFactor = degradation / 100;
+        // Deformation (shadows, stretching, ragged edges) ramps up very quickly (prominent early on)
+        const deformationFactor = Math.pow(rawFactor, 0.35);
+        // Tearing (eventual failure) is delayed and ramps up later at higher wear settings
+        const tearFactor = Math.pow(rawFactor, 1.5);
+        
+        // 1. Stress/Embossing Ring (pressed fibers)
+        // Increased maximum opacity from 0.15 to 0.22 to make shadows more prominent
+        ctx.strokeStyle = `rgba(0, 0, 0, ${0.22 * deformationFactor})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i <= 36; i++) {
+            const theta = (i * 10) * Math.PI / 180;
+            const rNoise = (seedRandom(seed + i) - 0.5) * deformationFactor * 1.5;
+            const stretch = Math.pow(Math.sin(theta), 2) * deformationFactor * 2.0;
+            const currentR = R + 1.5 + stretch + rNoise;
+            const px = x + currentR * Math.cos(theta);
+            const py = y + currentR * Math.sin(theta);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        // 2. Main Cutout (Hole with vertical push/pull stretch and ragged edge noise)
+        ctx.fillStyle = holeColor;
+        ctx.beginPath();
+        const boundaryPoints = [];
+        for (let i = 0; i <= 36; i++) {
+            const theta = (i * 10) * Math.PI / 180;
+            const rNoise = (seedRandom(seed + i) - 0.5) * deformationFactor * 3.0;
+            // Vertical stretch from feed pin pull
+            const stretch = Math.pow(Math.sin(theta), 2) * deformationFactor * 4.0;
+            const currentR = R + stretch + rNoise;
+            const px = x + currentR * Math.cos(theta);
+            const py = y + currentR * Math.sin(theta);
+            boundaryPoints.push({ x: px, y: py, theta: theta, r: currentR });
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+        }
+        ctx.fill();
+
+        // Top/Bottom points for vertical tears
+        let topPt = boundaryPoints.find(p => p.theta >= Math.PI * 1.4 && p.theta <= Math.PI * 1.6) || boundaryPoints[27];
+        let botPt = boundaryPoints.find(p => p.theta >= Math.PI * 0.4 && p.theta <= Math.PI * 0.6) || boundaryPoints[9];
+
+        // 3. Tears
+        ctx.strokeStyle = holeColor;
+        ctx.lineWidth = 1.0 + (tearFactor * 1.0);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+
+        // Upward Tear
+        const hasUpTear = seedRandom(seed + 50) < tearFactor;
+        const isTopHole = (y === 24);
+        if (hasUpTear) {
+            let tearLen = seedRandom(seed + 51) * tearFactor * 16;
+            if (isTopHole && tearFactor > 0.3) {
+                tearLen = y; // Tear all the way to top horizontal crease perforation (y=0)
+            }
+            if (tearLen > 0) {
+                ctx.beginPath();
+                ctx.moveTo(topPt.x, topPt.y);
+                const segments = Math.max(2, Math.floor(tearLen / 4));
+                for (let j = 1; j <= segments; j++) {
+                    const progress = j / segments;
+                    const nextY = topPt.y - tearLen * progress;
+                    const nextX = topPt.x + (seedRandom(seed + 52 + j) - 0.5) * tearFactor * 4;
+                    ctx.lineTo(nextX, nextY);
+                }
+                ctx.stroke();
+            }
+        }
+
+        // Downward Tear
+        const hasDownTear = seedRandom(seed + 60) < tearFactor;
+        const isBottomHole = (Math.abs(y - (ctx.canvas.height - 24)) < 2.0);
+        if (hasDownTear) {
+            let tearLen = seedRandom(seed + 61) * tearFactor * 16;
+            if (isBottomHole && tearFactor > 0.3) {
+                tearLen = 24; // Tear all the way to bottom horizontal crease perforation
+            }
+            if (tearLen > 0) {
+                ctx.beginPath();
+                ctx.moveTo(botPt.x, botPt.y);
+                const segments = Math.max(2, Math.floor(tearLen / 4));
+                for (let j = 1; j <= segments; j++) {
+                    const progress = j / segments;
+                    const nextY = botPt.y + tearLen * progress;
+                    const nextX = botPt.x + (seedRandom(seed + 62 + j) - 0.5) * tearFactor * 4;
+                    ctx.lineTo(nextX, nextY);
+                }
+                ctx.stroke();
+            }
+        }
+
+        // 4. Chad / Paper Flap / Folded Edges
+        const hasChad = seedRandom(seed + 70) < (tearFactor * 0.8);
+        if (hasChad && paperBg) {
+            const hingeAngle = seedRandom(seed + 71) * Math.PI * 2;
+            const isFoldedIn = seedRandom(seed + 73) > 0.5;
+            
+            ctx.save();
+            
+            // Choose between a hanging chad (partially detached circle) or a folded-in tab/edge
+            if (seedRandom(seed + 74) < 0.6) {
+                // A. Ragged Hanging Chad (hanging from a hinge point)
+                const flapRadius = R * (0.7 + seedRandom(seed + 72) * 0.35);
+                const flapOffset = R * 0.65; // offset outward/inward
+                const fx = x + flapOffset * Math.cos(hingeAngle);
+                const fy = y + flapOffset * Math.sin(hingeAngle);
+                
+                // Draw drop shadow for the flap if it's folded out
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+                ctx.beginPath();
+                for (let i = 0; i <= 24; i++) {
+                    const theta = (i * 15) * Math.PI / 180;
+                    // Raggedness noise
+                    const rNoise = (seedRandom(seed + 80 + i) - 0.5) * 1.5;
+                    const cr = flapRadius + rNoise;
+                    const px = fx + cr * Math.cos(theta) + 1.0; // slight offset for shadow
+                    const py = fy + cr * Math.sin(theta) + 1.0;
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.fill();
+                
+                // Draw the actual paper flap
+                ctx.fillStyle = paperBg;
+                ctx.strokeStyle = `rgba(0, 0, 0, ${0.12 + 0.18 * tearFactor})`;
+                ctx.lineWidth = 0.5;
+                ctx.beginPath();
+                for (let i = 0; i <= 24; i++) {
+                    const theta = (i * 15) * Math.PI / 180;
+                    const rNoise = (seedRandom(seed + 80 + i) - 0.5) * 1.5;
+                    const cr = flapRadius + rNoise;
+                    const px = fx + cr * Math.cos(theta);
+                    const py = fy + cr * Math.sin(theta);
+                    if (i === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.fill();
+                ctx.stroke();
+                
+                // Draw a crease line representing the hinge
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+                ctx.beginPath();
+                const hx1 = x + R * 0.9 * Math.cos(hingeAngle + Math.PI/3);
+                const hy1 = y + R * 0.9 * Math.sin(hingeAngle + Math.PI/3);
+                const hx2 = x + R * 0.9 * Math.cos(hingeAngle - Math.PI/3);
+                const hy2 = y + R * 0.9 * Math.sin(hingeAngle - Math.PI/3);
+                ctx.moveTo(hx1, hy1);
+                ctx.lineTo(hx2, hy2);
+                ctx.stroke();
+            } else {
+                // B. Ragged Folded Edge / Hole Deformation Flap
+                // This simulates a chunk of the hole boundary that didn't detach and is folded over
+                ctx.fillStyle = paperBg;
+                ctx.strokeStyle = `rgba(0, 0, 0, ${0.12 + 0.18 * tearFactor})`;
+                ctx.lineWidth = 0.5;
+                
+                // Create a D-shaped folded tab along the hole perimeter
+                ctx.beginPath();
+                const startTheta = hingeAngle - Math.PI / 3;
+                const endTheta = hingeAngle + Math.PI / 3;
+                
+                // Fold base (crease line)
+                const bx1 = x + R * Math.cos(startTheta);
+                const by1 = y + R * Math.sin(startTheta);
+                const bx2 = x + R * Math.cos(endTheta);
+                const by2 = y + R * Math.sin(endTheta);
+                
+                ctx.moveTo(bx1, by1);
+                
+                // Ragged outer arc of the folded tab (reflected inside or outside)
+                const foldDirection = isFoldedIn ? -0.7 : 0.7; // folded inwards (over the hole) or outwards
+                const midTheta = hingeAngle;
+                const apexX = x + R * (1 + foldDirection) * Math.cos(midTheta);
+                const apexY = y + R * (1 + foldDirection) * Math.sin(midTheta);
+                
+                // Draw a ragged curve to apex and back
+                ctx.lineTo(apexX + (seedRandom(seed + 90) - 0.5) * 1.5, apexY + (seedRandom(seed + 91) - 0.5) * 1.5);
+                ctx.lineTo(bx2, by2);
+                
+                // Close back along the crease
+                ctx.lineTo(bx1, by1);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Draw crease line
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+                ctx.beginPath();
+                ctx.moveTo(bx1, by1);
+                ctx.lineTo(bx2, by2);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    }
+
+    drawTractorMetadata(ctx, W, H, paperBg = '#fbfbf7', pageYOffset = 0) {
+        // Vertical perforation lines
+        const perf = this.sidePerforation || 'standard';
+        if (perf !== 'none') {
+            ctx.strokeStyle = 'rgba(80, 90, 100, 0.45)';
+            if (perf === 'micro') {
+                ctx.lineWidth = 1.0;
+                ctx.setLineDash([2, 3]);
+            } else { // standard
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([6, 6]);
+            }
+            ctx.beginPath();
+            ctx.moveTo(48, 0);
+            ctx.lineTo(48, H);
+            ctx.moveTo(W - 48, 0);
+            ctx.lineTo(W - 48, H);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset line dash
+        }
+
+        // Helper to determine the local paper background color at a given y-coordinate (handling color bands and aging)
+        const getPaperColorAtY = (yCoord) => {
+            const basePreset = this.paperPreset || 'default';
+            const isBanded = basePreset.startsWith('green-bar') || basePreset.startsWith('blue-bar') || basePreset.startsWith('grey-bar');
+            
+            const ageVal = this.paperAge || 0;
+            const ageFactor = ageVal / 100;
+            let currentBg = paperBg;
+            
+            const toRgb = (hex) => {
+                const res = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return res ? { r: parseInt(res[1], 16), g: parseInt(res[2], 16), b: parseInt(res[3], 16) } : { r: 251, g: 251, b: 247 };
+            };
+            const toHex = (r, g, b) => "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+            
+            if (isBanded) {
+                let barColor = '#e2efe0';
+                if (basePreset.startsWith('blue-bar')) barColor = '#e1ecf4';
+                else if (basePreset.startsWith('grey-bar')) barColor = '#ecece8';
+                
+                if (ageFactor > 0) {
+                    const barRgb = toRgb(barColor);
+                    const targetRgb = toRgb('#c4ae8a');
+                    const r = Math.round(barRgb.r + (targetRgb.r - barRgb.r) * ageFactor);
+                    const g = Math.round(barRgb.g + (targetRgb.g - barRgb.g) * ageFactor);
+                    const b = Math.round(barRgb.b + (targetRgb.b - barRgb.b) * ageFactor);
+                    barColor = toHex(r, g, b);
+                }
+                
+                const stripeHeight = basePreset.endsWith('-2') ? this.lineHeight * 2 : this.lineHeight * 3;
+                const period = stripeHeight * 2;
+                const relY = yCoord % period;
+                if (relY >= stripeHeight) {
+                    currentBg = barColor;
+                }
+            } else if (basePreset === 'music-sheet-1234-stock') {
+                let barColor = '#d8eae0';
+                if (ageFactor > 0) {
+                    const barRgb = toRgb(barColor);
+                    const targetRgb = toRgb('#cecbab');
+                    const r = Math.round(barRgb.r + (targetRgb.r - barRgb.r) * ageFactor);
+                    const g = Math.round(barRgb.g + (targetRgb.g - barRgb.g) * ageFactor);
+                    const b = Math.round(barRgb.b + (targetRgb.b - barRgb.b) * ageFactor);
+                    barColor = toHex(r, g, b);
+                }
+                const stripeHeight = this.lineHeight;
+                const period = stripeHeight * 2;
+                const relY = (yCoord - 48) % period;
+                if (yCoord >= 48 + stripeHeight && relY >= stripeHeight) {
+                    currentBg = barColor;
+                }
+            }
+            return currentBg;
+        };
+
+        // Draw degraded sprocket holes
+        const wear = this.tractorWear || 0;
+        for (let y = 24; y < H; y += 48) {
+            const sprocketPaperBg = getPaperColorAtY(y);
+            this.drawDegradedSprocket(ctx, 24, y, 7.5, wear, sprocketPaperBg, pageYOffset);
+            this.drawDegradedSprocket(ctx, W - 24, y, 7.5, wear, sprocketPaperBg, pageYOffset);
         }
 
         let metaInk = 'rgba(15, 23, 42, 0.18)';
@@ -1353,12 +2069,14 @@ class PrinterRenderer {
         ctx.textAlign = 'left'; // Reset alignment
         ctx.textBaseline = 'alphabetic'; // Reset baseline
 
-        // Directional Indicators "FEED THIS WAY" in tractor margins
+        // Directional Indicators "FEED THIS WAY" in tractor margins (shifted right to W - 6, positioned between sprocket holes)
         ctx.save();
-        ctx.translate(W - 12, H / 2);
-        ctx.rotate(Math.PI / 2);
+        ctx.translate(W - 6, H / 2 + 24);
+        ctx.rotate(-Math.PI / 2);
         ctx.font = '8px Courier New, Courier, monospace';
-        ctx.fillText('FEED THIS WAY >>>', -50, 0);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('FEED THIS WAY >>>', 0, 0);
         ctx.restore();
 
         // Alignment crosshairs in the printable corners
@@ -1414,7 +2132,12 @@ class PrinterRenderer {
         this.textLinesBuffer = [];
         this.printQueue = [];
         this.isProcessingQueue = false;
+        this.sessionSeed = Math.floor(Math.random() * 100000);
+        this.updatePaperStyling();
         this.updatePaperPadding();
+        this.updateTractorGearsLayout();
+        this.updateTractorPins();
+        this.updatePageCountUI();
         if (this.callbacks?.onTextBufferChange) {
             this.callbacks.onTextBufferChange();
         }
@@ -1755,29 +2478,39 @@ class PrinterRenderer {
         const canvasHeightUserSpace = canvas.height / scale;
         
         // Check if the scroll position is currently locked to the bottom
-        const isNearBottom = (this.container.scrollHeight - this.container.scrollTop - this.container.clientHeight) < 15;
+        const isNearBottom = (this.container.scrollHeight - this.container.scrollTop - this.container.clientHeight) < 40;
         
-        // Calculate print Y position relative to paper top based on current scroll position
-        const printY = Math.min(this.totalHeightPrinted, this.container.scrollTop + 96);
+        // Print position is anchored to the physical bottom of the printed paper
+        const printY = this.totalHeightPrinted;
         this.lastPrintY = printY;
         
         canvas.style.position = 'absolute';
         canvas.style.left = '0';
         canvas.style.top = `${printY}px`;
+        canvas.style.width = `${this.paperWidth}px`;
+        canvas.style.height = `${canvasHeightUserSpace}px`;
         
         this.wrapper.appendChild(canvas);
         
-        // If we printed beyond the current paper length, expand the paper height
-        if (printY + canvasHeightUserSpace > this.totalHeightPrinted) {
-            this.totalHeightPrinted = printY + canvasHeightUserSpace;
+        // Only physical paper feeds (blank lines) advance totalHeightPrinted
+        if (canvas.classList.contains('blank-line')) {
+            this.totalHeightPrinted = Math.round(printY + canvasHeightUserSpace);
             this.wrapper.style.height = `${this.totalHeightPrinted}px`;
+        } else {
+            // For text/graphics line overlays, ensure wrapper height visually covers the line
+            const currentWrapperH = parseFloat(this.wrapper.style.height) || 96;
+            if (printY + canvasHeightUserSpace > currentWrapperH) {
+                this.wrapper.style.height = `${Math.round(printY + canvasHeightUserSpace)}px`;
+            }
         }
         
+        this.updatePageCountUI();
+        const pageDeleted = this.manageStoredPages();
         this.updatePaperPadding();
         
         const autoScroll = document.getElementById('checkAutoScroll')?.checked ?? true;
-        if (autoScroll && isNearBottom) {
-            this.scrollToBottom(scrollDuration);
+        if (autoScroll) {
+            this.scrollToBottom(pageDeleted ? 0 : scrollDuration);
         } else {
             // Only roll the paper forward if this is a physical paper feed (blank line)
             if (canvas.classList.contains('blank-line')) {
@@ -1788,44 +2521,19 @@ class PrinterRenderer {
 
     scrollToBottom(duration = 0) {
         const autoScroll = document.getElementById('checkAutoScroll')?.checked ?? true;
-        if (!this.isLockedToBottom || !autoScroll) return;
-        const target = this.container.scrollHeight - this.container.clientHeight;
-
-        if (duration <= 0) {
-            if (this.scrollInterval) cancelAnimationFrame(this.scrollInterval);
-            this.container.scrollTop = target;
-            return;
-        }
+        if (!autoScroll) return;
+        
+        // Force browser DOM layout reflow so container.scrollHeight is accurate
+        void this.container.offsetHeight;
+        const target = Math.max(0, this.container.scrollHeight - this.container.clientHeight);
 
         if (this.scrollInterval) {
             cancelAnimationFrame(this.scrollInterval);
+            this.scrollInterval = null;
         }
 
-        const start = this.container.scrollTop;
-        const change = target - start;
-
-        if (Math.abs(change) < 2) {
-            this.container.scrollTop = target;
-            return;
-        }
-
-        const startTime = performance.now();
-
-        const animate = (time) => {
-            const elapsed = time - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            
-            // Linear progress mimics the constant speed of a stepper motor feeding paper
-            this.container.scrollTop = start + change * progress;
-
-            if (progress < 1) {
-                this.scrollInterval = requestAnimationFrame(animate);
-            } else {
-                this.scrollInterval = null;
-            }
-        };
-
-        this.scrollInterval = requestAnimationFrame(animate);
+        // Lock scroll position directly to target to ensure 100% synchronization with print head
+        this.container.scrollTop = target;
     }
 
     feedPaper(lines = 3) {
@@ -1846,7 +2554,7 @@ class PrinterRenderer {
     }
 
     executeFormFeed(callback) {
-        const currentOffset = this.totalHeightPrinted % this.pageLength;
+        const currentOffset = (this.totalHeightPrinted - 96) % this.pageLength;
         const remainingToFeed = this.pageLength - currentOffset;
         const linesToFeed = Math.ceil(remainingToFeed / this.lineHeight);
         
@@ -1938,10 +2646,18 @@ class PrinterRenderer {
 
         this.soundSynth?.playTear();
 
+        const paperElement = this.container.querySelector('#paperRoll');
         const tornPage = document.createElement('div');
-        tornPage.className = 'torn-page-flight';
+        tornPage.className = `paper-roll ${paperElement?.className || ''} torn-page-flight`;
         tornPage.style.width = `${this.paperWidth}px`;
-        tornPage.style.background = getComputedStyle(document.documentElement).getPropertyValue('--paper-bg') || '#fff';
+        tornPage.style.height = `${splitHeight}px`;
+        if (paperElement) {
+            tornPage.style.backgroundColor = paperElement.style.backgroundColor || '#fbfbf7';
+            tornPage.style.backgroundImage = this.wrapper.style.backgroundImage || paperElement.style.backgroundImage;
+            tornPage.style.backgroundRepeat = this.wrapper.style.backgroundRepeat || paperElement.style.backgroundRepeat;
+            tornPage.style.backgroundSize = this.wrapper.style.backgroundSize || paperElement.style.backgroundSize;
+            tornPage.style.backgroundPosition = this.wrapper.style.backgroundPosition || paperElement.style.backgroundPosition;
+        }
         tornPage.style.boxShadow = '0 10px 25px rgba(0,0,0,0.3)';
 
         const rect = this.wrapper.getBoundingClientRect();
@@ -1972,6 +2688,127 @@ class PrinterRenderer {
         this.totalHeightPrinted = (this.totalHeightPrinted - splitHeight) + 96;
         this.wrapper.style.height = `${this.totalHeightPrinted}px`;
         this.container.scrollTop = Math.max(0, this.container.scrollTop - splitHeight);
+    }
+}
+
+// ==========================================================================
+// MODULE 6: WebSocket Manager
+// Manages a single browser-side WebSocket connection. Receives binary ESC/P
+// data and pipes it directly into the EscpParser. No forwarding to other
+// interfaces. Supports close code 4001 (exclusive channel lock), LAN-IP
+// JSON messages, and plain text fallback parsing.
+// ==========================================================================
+
+class WsManager {
+    constructor() {
+        this.socket       = null;
+        this.isConnected  = false;
+        this._rxTimer     = null;
+        this._parserRef   = null;
+        // Callbacks — overridden by UI binding code
+        this.onStatusChange   = (_state) => {};
+        this.onLanIpReceived  = (_ip, _port) => {};
+    }
+
+    /** Build the full WebSocket URL from individual components. */
+    buildUrl(scheme, host, port, channel, clientId) {
+        const ch = channel.startsWith('/') ? channel : `/${channel}`;
+        return `${scheme}://${host}:${port}${ch}?clientId=${encodeURIComponent(clientId)}`;
+    }
+
+    /**
+     * Open a WebSocket connection.
+     * @param {string} scheme  - 'ws' or 'wss'
+     * @param {string} host    - Hostname or IP
+     * @param {number} port    - Port number
+     * @param {string} channel - Channel path segment ('printer', 'plotter', or custom)
+     * @param {string} clientId - Client identity string
+     * @param {EscpParser} parserRef - Live parser instance to pipe received bytes into
+     */
+    connect(scheme, host, port, channel, clientId, parserRef) {
+        if (this.socket) this.disconnect(false);
+        this._parserRef = parserRef;
+
+        const url = this.buildUrl(scheme, host, port, channel, clientId);
+        try {
+            this.socket = new WebSocket(url);
+            this.socket.binaryType = 'arraybuffer';
+        } catch (e) {
+            this.onStatusChange('error');
+            return;
+        }
+
+        this.socket.onopen = () => {
+            this.isConnected = true;
+            this.onStatusChange('connected');
+        };
+
+        this.socket.onmessage = (event) => {
+            if (event.data instanceof ArrayBuffer) {
+                // Binary frame: raw ESC/P bytes → parser
+                this._parserRef.parse(new Uint8Array(event.data));
+            } else if (typeof event.data === 'string') {
+                // Only attempt JSON parse when the frame looks like an object.
+                // This avoids throwing (and catching) a SyntaxError for every
+                // plain-text / ESC-P string frame, which would otherwise pause
+                // the debugger on "caught exceptions".
+                if (event.data.charCodeAt(0) === 0x7B /* '{' */) {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        if (msg && msg.type === 'lan-ip' && msg.ip) {
+                            this.onLanIpReceived(msg.ip, msg.port || port);
+                            this._flashRx();
+                            return;
+                        }
+                        // Known JSON frame but not a recognised control message —
+                        // do not pipe raw JSON text into the ESC/P parser.
+                        this._flashRx();
+                        return;
+                    } catch (_) {
+                        // Malformed JSON: fall through and treat as raw text.
+                    }
+                }
+                // Plain text / ESC-P string frame: encode as UTF-8 and parse.
+                this._parserRef.parse(new TextEncoder().encode(event.data));
+            }
+            this._flashRx();
+        };
+
+        this.socket.onclose = (event) => {
+            this.isConnected = false;
+            this.socket = null;
+            if (event.code === 4001) {
+                this.onStatusChange('locked');
+            } else {
+                this.onStatusChange('disconnected');
+            }
+        };
+
+        this.socket.onerror = () => {
+            this.onStatusChange('error');
+        };
+    }
+
+    /**
+     * Close the WebSocket connection.
+     * @param {boolean} [notify=true] - Whether to fire onStatusChange('disconnected')
+     */
+    disconnect(notify = true) {
+        if (this.socket) {
+            try { this.socket.close(1000, 'Client disconnected'); } catch (_) {}
+            this.socket = null;
+        }
+        this.isConnected = false;
+        if (notify) this.onStatusChange('disconnected');
+    }
+
+    /** Flash the Rx LED briefly. */
+    _flashRx() {
+        const led = document.getElementById('wsLedRx');
+        if (!led) return;
+        led.classList.add('active');
+        clearTimeout(this._rxTimer);
+        this._rxTimer = setTimeout(() => led.classList.remove('active'), 100);
     }
 }
 
@@ -2054,6 +2891,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const labelPaperAge = document.getElementById('labelPaperAge');
     const sliderJitter = document.getElementById('sliderJitter');
     const labelJitter = document.getElementById('labelJitter');
+    const sliderTractorWear = document.getElementById('sliderTractorWear');
+    const labelTractorWear = document.getElementById('labelTractorWear');
+    const inputStoredPages = document.getElementById('inputStoredPages');
+    const selectSidePerforation = document.getElementById('selectSidePerforation');
 
     const selectPitch = document.getElementById('selectPitch');
     const selectCondensed = document.getElementById('selectCondensed');
@@ -2155,6 +2996,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!('serial' in navigator)) {
         btnSerialConnect.disabled = true;
         serialAlert.style.display = 'flex';
+        const serialBadge = document.getElementById('serialBadge');
+        if (serialBadge) {
+            serialBadge.textContent = 'UNSUPPORTED';
+            serialBadge.className = 'ws-badge ws-badge-error';
+        }
     } else {
         btnSerialConnect.addEventListener('click', async () => {
             if (isSerialConnected) {
@@ -2234,15 +3080,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateConnectionStatus(isConnected) {
         const dot = document.getElementById('controls-status-dot');
+        const serialBadge = document.getElementById('serialBadge');
         if (isConnected) {
             btnSerialConnect.innerHTML = '<i class="fa-solid fa-unlink"></i> Disconnect';
             ledStatus.className = 'led led-status connected';
+            if (serialBadge) {
+                serialBadge.textContent = 'CONNECTED';
+                serialBadge.className = 'ws-badge ws-badge-connected';
+            }
             updatePrintStats('Idle');
             if (dot) dot.classList.add('online');
             showToast('Serial Port Connected!', 'fa-plug-circle-check');
         } else {
             btnSerialConnect.innerHTML = '<i class="fa-solid fa-plug"></i> Connect Serial';
             ledStatus.className = 'led led-status disconnected';
+            if (serialBadge) {
+                serialBadge.textContent = 'DISCONNECTED';
+                serialBadge.className = 'ws-badge ws-badge-disconnected';
+            }
             updatePrintStats('Offline');
             if (dot) dot.classList.remove('online');
             showToast('Serial Port Disconnected', 'fa-plug-circle-xmark');
@@ -2276,11 +3131,240 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ── WebSocket Card UI Bindings ─────────────────────────────────────────
+    const wsManager        = new WsManager();
+    const selectWsScheme   = document.getElementById('selectWsScheme');
+    const inputWsHost      = document.getElementById('inputWsHost');
+    const inputWsPort      = document.getElementById('inputWsPort');
+    const selectWsChannel  = document.getElementById('selectWsChannel');
+    const inputWsChannelCustom = document.getElementById('inputWsChannelCustom');
+    const inputWsClientId  = document.getElementById('inputWsClientId');
+    const btnWsNewId       = document.getElementById('btnWsNewId');
+    const btnWsConnect     = document.getElementById('btnWsConnect');
+    const wsBadge          = document.getElementById('wsBadge');
+    const wsLedConn        = document.getElementById('wsLedConn');
+    const wsLedLock        = document.getElementById('wsLedLock');
+    const wsUrlPreview     = document.getElementById('wsUrlPreview');
+    const wsQrWrap         = document.getElementById('wsQrWrap');
+    const wsQrCanvas       = document.getElementById('wsQrCanvas');
+    const wsQrLabel        = document.getElementById('wsQrLabel');
+    const btnWsQr          = document.getElementById('btnWsQr');
+
+    /** Generate a short random client ID. */
+    function generateClientId() {
+        return 'efx-' + Math.random().toString(36).substring(2, 8);
+    }
+
+    /** Compute the currently configured WS URL. */
+    function getCurrentWsUrl() {
+        const scheme  = selectWsScheme  ? selectWsScheme.value   : 'ws';
+        const host    = inputWsHost     ? (inputWsHost.value.trim()    || 'localhost') : 'localhost';
+        const port    = inputWsPort     ? (parseInt(inputWsPort.value) || 8080)        : 8080;
+        const channel = selectWsChannel
+            ? (selectWsChannel.value === 'custom'
+                ? (inputWsChannelCustom ? inputWsChannelCustom.value.trim() || 'printer' : 'printer')
+                : selectWsChannel.value)
+            : 'printer';
+        const clientId = inputWsClientId ? (inputWsClientId.value.trim() || generateClientId()) : generateClientId();
+        return wsManager.buildUrl(scheme, host, port, channel, clientId);
+    }
+
+    /** Update the live URL preview strip. */
+    function updateWsUrlPreview() {
+        if (!wsUrlPreview) return;
+        const url = getCurrentWsUrl();
+        wsUrlPreview.textContent = url;
+        wsUrlPreview.style.display = 'block';
+    }
+
+    /** Apply a status state to all WS UI indicators. */
+    function applyWsStatus(state) {
+        if (!wsBadge) return;
+        wsBadge.className = 'ws-badge';
+        if (wsLedConn) wsLedConn.className = 'led led-status';
+        if (wsLedLock) wsLedLock.classList.remove('active');
+
+        switch (state) {
+            case 'connected':
+                wsBadge.textContent = 'CONNECTED';
+                wsBadge.classList.add('ws-badge-connected');
+                if (wsLedConn) wsLedConn.classList.add('connected');
+                if (btnWsConnect) btnWsConnect.innerHTML = '<i class="fa-solid fa-unlink"></i> Disconnect';
+                showToast('WebSocket Connected', 'fa-plug-circle-check');
+                break;
+            case 'locked':
+                wsBadge.textContent = 'LOCKED';
+                wsBadge.classList.add('ws-badge-locked');
+                if (wsLedLock) wsLedLock.classList.add('active');
+                if (btnWsConnect) btnWsConnect.innerHTML = '<i class="fa-solid fa-plug"></i> Connect';
+                showToast('Channel locked — another client is active', 'fa-lock');
+                break;
+            case 'error':
+                wsBadge.textContent = 'ERROR';
+                wsBadge.classList.add('ws-badge-error');
+                if (btnWsConnect) btnWsConnect.innerHTML = '<i class="fa-solid fa-plug"></i> Connect';
+                showToast('WebSocket connection error', 'fa-triangle-exclamation');
+                break;
+            default: // 'disconnected'
+                wsBadge.textContent = 'DISCONNECTED';
+                wsBadge.classList.add('ws-badge-disconnected');
+                if (btnWsConnect) btnWsConnect.innerHTML = '<i class="fa-solid fa-plug"></i> Connect';
+                if (state === 'disconnected' && wsManager.isConnected === false && state !== 'initial') {
+                    // Only toast on explicit disconnect, not initial state
+                }
+                break;
+        }
+    }
+
+    // Wire status callback
+    wsManager.onStatusChange = applyWsStatus;
+
+    // Wire LAN IP callback — update QR display when server pushes its IP
+    wsManager.onLanIpReceived = (ip, port) => {
+        const scheme = selectWsScheme ? selectWsScheme.value : 'ws';
+        const channel = selectWsChannel
+            ? (selectWsChannel.value === 'custom'
+                ? (inputWsChannelCustom ? inputWsChannelCustom.value.trim() : 'printer')
+                : selectWsChannel.value)
+            : 'printer';
+        const url = `${scheme}://${ip}:${port}/${channel}`;
+        if (wsQrLabel) wsQrLabel.textContent = url;
+        if (wsQrCanvas && typeof QRCanvas === 'function') {
+            const ok = QRCanvas(url, wsQrCanvas, 4);
+            if (ok && wsQrWrap) wsQrWrap.style.display = 'flex';
+        }
+    };
+
+    // Save WebSocket settings to localStorage
+    function saveWsSettings() {
+        if (selectWsScheme) localStorage.setItem('efx_ws_scheme', selectWsScheme.value);
+        if (inputWsHost) localStorage.setItem('efx_ws_host', inputWsHost.value);
+        if (inputWsPort) localStorage.setItem('efx_ws_port', inputWsPort.value);
+        if (selectWsChannel) localStorage.setItem('efx_ws_channel', selectWsChannel.value);
+        if (inputWsChannelCustom) localStorage.setItem('efx_ws_channel_custom', inputWsChannelCustom.value);
+        if (inputWsClientId) localStorage.setItem('efx_ws_client_id', inputWsClientId.value);
+    }
+
+    // Show/hide custom channel text field
+    if (selectWsChannel) {
+        selectWsChannel.addEventListener('change', () => {
+            if (inputWsChannelCustom)
+                inputWsChannelCustom.style.display = selectWsChannel.value === 'custom' ? 'block' : 'none';
+            updateWsUrlPreview();
+            saveWsSettings();
+        });
+    }
+
+    // Live URL preview & persistence on any parameter change
+    [inputWsHost, inputWsPort, inputWsChannelCustom, inputWsClientId, selectWsScheme].forEach(el => {
+        if (el) el.addEventListener('input', () => {
+            updateWsUrlPreview();
+            saveWsSettings();
+        });
+    });
+
+    // Generate new random client ID
+    if (btnWsNewId) {
+        btnWsNewId.addEventListener('click', () => {
+            if (inputWsClientId) {
+                inputWsClientId.value = generateClientId();
+                updateWsUrlPreview();
+                saveWsSettings();
+            }
+        });
+    }
+
+    // Connect / Disconnect
+    if (btnWsConnect) {
+        btnWsConnect.addEventListener('click', () => {
+            if (wsManager.isConnected) {
+                wsManager.disconnect(true);
+                showToast('WebSocket Disconnected', 'fa-plug-circle-xmark');
+            } else {
+                const scheme  = selectWsScheme  ? selectWsScheme.value   : 'ws';
+                const host    = inputWsHost     ? (inputWsHost.value.trim()    || 'localhost') : 'localhost';
+                const port    = inputWsPort     ? (parseInt(inputWsPort.value) || 8080)        : 8080;
+                const channel = selectWsChannel
+                    ? (selectWsChannel.value === 'custom'
+                        ? (inputWsChannelCustom ? inputWsChannelCustom.value.trim() || 'printer' : 'printer')
+                        : selectWsChannel.value)
+                    : 'printer';
+                const clientId = inputWsClientId ? (inputWsClientId.value.trim() || generateClientId()) : generateClientId();
+                wsManager.connect(scheme, host, port, channel, clientId, parser);
+                updateWsUrlPreview();
+            }
+        });
+    }
+
+    // Generate QR for current configured URL
+    if (btnWsQr) {
+        btnWsQr.addEventListener('click', () => {
+            const scheme  = selectWsScheme  ? selectWsScheme.value   : 'ws';
+            const host    = inputWsHost     ? (inputWsHost.value.trim()    || 'localhost') : 'localhost';
+            const port    = inputWsPort     ? (parseInt(inputWsPort.value) || 8080)        : 8080;
+            const channel = selectWsChannel
+                ? (selectWsChannel.value === 'custom'
+                    ? (inputWsChannelCustom ? inputWsChannelCustom.value.trim() || 'printer' : 'printer')
+                    : selectWsChannel.value)
+                : 'printer';
+            const url = `${scheme}://${host}:${port}/${channel}`;
+            if (typeof QRCanvas === 'function' && wsQrCanvas) {
+                const ok = QRCanvas(url, wsQrCanvas, 4);
+                if (ok) {
+                    if (wsQrLabel) wsQrLabel.textContent = url;
+                    if (wsQrWrap)  wsQrWrap.style.display = 'flex';
+                } else {
+                    showToast('URL too long for QR code (max ~216 chars)', 'fa-triangle-exclamation');
+                }
+            }
+        });
+    }
+
+    // ── Help Panel: Copy Test Script button ────────────────────────────────
+    const btnCopyWsScript = document.getElementById('btnCopyWsScript');
+    if (btnCopyWsScript) {
+        btnCopyWsScript.addEventListener('click', () => {
+            const pre = document.getElementById('wsTestScriptBlock');
+            if (!pre) return;
+
+            // textContent gives decoded plain text — no HTML entities.
+            const scriptText = pre.textContent.trim();
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(scriptText).then(() => {
+                    btnCopyWsScript.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+                    setTimeout(() => {
+                        btnCopyWsScript.innerHTML = '<i class="fa-solid fa-copy"></i> Copy Script';
+                    }, 2000);
+                    showToast('Test script copied to clipboard', 'fa-copy');
+                }).catch(() => {
+                    showToast('Clipboard access denied — try Ctrl+C after selecting', 'fa-triangle-exclamation');
+                });
+            } else {
+                // Fallback: select the pre content for manual copy
+                const range = document.createRange();
+                range.selectNodeContents(pre);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+                showToast('Script selected — press Ctrl+C to copy', 'fa-copy');
+            }
+        });
+    }
+
     selectPaperPreset.addEventListener('change', (e) => {
         renderer.setPaperPreset(e.target.value);
         localStorage.setItem('efx_paperPreset', e.target.value);
         showToast('Paper preset updated', 'fa-palette');
     });
+
+    if (selectSidePerforation) {
+        selectSidePerforation.addEventListener('change', (e) => {
+            renderer.setSidePerforation(e.target.value);
+            localStorage.setItem('efx_sidePerforation', e.target.value);
+            showToast(`Side perforations: ${e.target.value}`, 'fa-file-lines');
+        });
+    }
 
     if (selectRibbonColor) {
         selectRibbonColor.addEventListener('change', (e) => {
@@ -2298,23 +3382,23 @@ document.addEventListener('DOMContentLoaded', () => {
             if (format === 'mini' || format === 'mini-bordered') {
                 renderer.paperWidth = 816; // 8.5" paper
                 renderer.pageLength = 672; // 7.0" page (42 lines, 14 holes)
-                renderer.printableWidth = 768; // 8.0" print width
-                renderer.leftMargin = 24;   // 0.25" margins
+                renderer.printableWidth = 672; // 70 cols Pica
+                renderer.leftMargin = 72; // 0.5" sprocket + 0.25" paper margin inset
             } else if (format === 'dp-12') {
                 renderer.paperWidth = 912; // 9.5" paper
                 renderer.pageLength = 1152; // 12.0" page (72 lines, 24 holes)
-                renderer.printableWidth = 768;
-                renderer.leftMargin = 72;
+                renderer.printableWidth = 768; // 80 cols Pica
+                renderer.leftMargin = 72; // 0.5" sprocket + 0.25" paper margin inset
             } else if (format === 'legal-14') {
                 renderer.paperWidth = 816; // 8.5" paper
                 renderer.pageLength = 1344; // 14.0" page (84 lines, 28 holes)
-                renderer.printableWidth = 768;
-                renderer.leftMargin = 24;
+                renderer.printableWidth = 672; // 70 cols Pica
+                renderer.leftMargin = 72; // 0.5" sprocket + 0.25" paper margin inset
             } else {
                 renderer.paperWidth = 912; // 9.5" paper
                 renderer.pageLength = 1056; // 11.0" page (66 lines, 22 holes)
-                renderer.printableWidth = 768;
-                renderer.leftMargin = 72;
+                renderer.printableWidth = 768; // 80 cols Pica
+                renderer.leftMargin = 72; // 0.5" sprocket + 0.25" paper margin inset
             }
             renderer.clear();
             parser.reset();
@@ -2329,6 +3413,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const val = parseInt(e.target.value, 10) || 2;
             renderer.scaleFactor = val;
             localStorage.setItem('efx_exportRes', val);
+            renderer.updatePaperStyling();
             showToast(`Export resolution changed to ${val}x`, 'fa-palette');
         });
     }
@@ -2338,6 +3423,34 @@ document.addEventListener('DOMContentLoaded', () => {
             const enabled = e.target.checked;
             localStorage.setItem('efx_autoScroll', enabled ? 'true' : 'false');
             showToast(enabled ? 'Auto scroll enabled' : 'Auto scroll disabled', 'fa-arrows-down-to-line');
+        });
+    }
+
+    const btnReturnBottom = document.getElementById('btnReturnBottom');
+    if (btnReturnBottom) {
+        btnReturnBottom.addEventListener('click', () => {
+            renderer.scrollToBottom(0);
+            btnReturnBottom.classList.remove('show');
+        });
+    }
+
+    const checkRestrictBands = document.getElementById('checkRestrictBands');
+    if (checkRestrictBands) {
+        checkRestrictBands.addEventListener('change', (e) => {
+            const enabled = e.target.checked;
+            renderer.setFullPageBands(enabled);
+            localStorage.setItem('efx_fullPageBands', enabled ? 'true' : 'false');
+            showToast(enabled ? 'Pre-print full page width enabled' : 'Pre-print restricted to main page area', 'fa-border-none');
+        });
+    }
+
+    const checkPrePrintHalftone = document.getElementById('checkPrePrintHalftone');
+    if (checkPrePrintHalftone) {
+        checkPrePrintHalftone.addEventListener('change', (e) => {
+            const enabled = e.target.checked;
+            renderer.setPrePrintHalftone(enabled);
+            localStorage.setItem('efx_prePrintHalftone', enabled ? 'true' : 'false');
+            showToast(enabled ? 'Pre-print halftone dot pattern enabled' : 'Pre-print solid tint fill enabled', 'fa-circle-dot');
         });
     }
 
@@ -2396,6 +3509,83 @@ document.addEventListener('DOMContentLoaded', () => {
         renderer.setJitter(val);
         localStorage.setItem('efx_jitter', val);
     });
+
+    if (sliderTractorWear) {
+        sliderTractorWear.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if (labelTractorWear) labelTractorWear.textContent = `${val}%`;
+            renderer.setTractorWear(val);
+            localStorage.setItem('efx_tractorWear', val);
+        });
+    }
+
+    const sliderSprocketHoleColor = document.getElementById('sliderSprocketHoleColor');
+    const labelSprocketHoleColor = document.getElementById('labelSprocketHoleColor');
+    if (sliderSprocketHoleColor) {
+        sliderSprocketHoleColor.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value, 10) || 0;
+            if (labelSprocketHoleColor) {
+                labelSprocketHoleColor.textContent = val === 0 ? 'Black' : (val === 100 ? 'White' : `${val}%`);
+            }
+            renderer.setSprocketHoleColor(val);
+            localStorage.setItem('efx_sprocketHoleColor', val);
+        });
+    }
+
+    const checkWatermarkEnabled = document.getElementById('checkWatermarkEnabled');
+    const inputWatermarkText = document.getElementById('inputWatermarkText');
+    const sliderWatermarkAngle = document.getElementById('sliderWatermarkAngle');
+    const labelWatermarkAngle = document.getElementById('labelWatermarkAngle');
+    const sliderWatermarkOpacity = document.getElementById('sliderWatermarkOpacity');
+    const labelWatermarkOpacity = document.getElementById('labelWatermarkOpacity');
+    const sliderWatermarkSize = document.getElementById('sliderWatermarkSize');
+    const labelWatermarkSize = document.getElementById('labelWatermarkSize');
+
+    function updateWatermarkFromUI() {
+        const enabled = checkWatermarkEnabled ? checkWatermarkEnabled.checked : false;
+        const text = inputWatermarkText ? inputWatermarkText.value : 'NFfP';
+        const angle = sliderWatermarkAngle ? parseInt(sliderWatermarkAngle.value, 10) : 45;
+        const opacitySliderVal = sliderWatermarkOpacity ? parseInt(sliderWatermarkOpacity.value, 10) : 28;
+        const size = sliderWatermarkSize ? parseInt(sliderWatermarkSize.value, 10) : 50;
+
+        // Quadratic non-linear mapping: (sliderVal / 100)^2 * 100 for fine refinement at low opacity
+        const opacityRatio = opacitySliderVal / 100;
+        const actualOpacityPct = Math.pow(opacityRatio, 2) * 100;
+
+        if (labelWatermarkAngle) labelWatermarkAngle.textContent = `${angle}°`;
+        if (labelWatermarkOpacity) {
+            labelWatermarkOpacity.textContent = actualOpacityPct < 1 ? `${actualOpacityPct.toFixed(1)}%` : `${Math.round(actualOpacityPct)}%`;
+        }
+        if (labelWatermarkSize) labelWatermarkSize.textContent = `${size}%`;
+
+        renderer.setWatermarkSettings(enabled, text, angle, actualOpacityPct, size);
+
+        localStorage.setItem('efx_watermarkEnabled', enabled ? 'true' : 'false');
+        localStorage.setItem('efx_watermarkText', text);
+        localStorage.setItem('efx_watermarkAngle', angle);
+        localStorage.setItem('efx_watermarkOpacitySlider', opacitySliderVal);
+        localStorage.setItem('efx_watermarkSize', size);
+    }
+
+    if (checkWatermarkEnabled) checkWatermarkEnabled.addEventListener('change', updateWatermarkFromUI);
+    if (inputWatermarkText) inputWatermarkText.addEventListener('input', updateWatermarkFromUI);
+    if (sliderWatermarkAngle) sliderWatermarkAngle.addEventListener('input', updateWatermarkFromUI);
+    if (sliderWatermarkOpacity) sliderWatermarkOpacity.addEventListener('input', updateWatermarkFromUI);
+    if (sliderWatermarkSize) sliderWatermarkSize.addEventListener('input', updateWatermarkFromUI);
+
+    if (inputStoredPages) {
+        inputStoredPages.addEventListener('change', (e) => {
+            let val = parseInt(e.target.value, 10);
+            if (isNaN(val) || val < 0) val = 0;
+            if (val > 100) val = 100;
+            e.target.value = val;
+            renderer.storedPagesLimit = val;
+            localStorage.setItem('efx_storedPagesLimit', val);
+            renderer.manageStoredPages();
+            renderer.updatePageCountUI();
+            showToast(`Stored pages limit: ${val === 0 ? 'Unlimited' : val + ' pages'}`, 'fa-file');
+        });
+    }
 
     function applyDipSwitchSettings() {
         const sw1 = document.getElementById('dipSw1');
@@ -2537,11 +3727,16 @@ document.addEventListener('DOMContentLoaded', () => {
         btnTearMargins.addEventListener('click', () => {
             const paperRoll = document.getElementById('paperRoll');
             if (paperRoll) {
+                if (renderer.sidePerforation === 'none') {
+                    showToast('Cannot strip margins: Paper has no perforations!', 'fa-circle-xmark');
+                    return;
+                }
                 if (paperRoll.classList.contains('margins-removed')) {
                     showToast('Margins are already stripped!', 'fa-circle-info');
                 } else {
                     soundSynth.playTear();
                     paperRoll.classList.add('margins-removed');
+                    renderer.updateTractorGearsLayout();
                     showToast('Tractor margins stripped!', 'fa-border-none');
                 }
             }
@@ -2577,8 +3772,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const logicalHeight = totalHeight / scale;
 
         // Separate base preset and clean-cut modifier
-        const isClean = renderer.paperPreset.endsWith('-clean');
-        const basePreset = isClean ? renderer.paperPreset.replace('-clean', '') : renderer.paperPreset;
+        // Check if tractor margins are stripped via preset or manual user strip button
+        const paperRollEl = document.getElementById('paperRoll');
+        const isClean = renderer.paperPreset.endsWith('-clean') || (paperRollEl && paperRollEl.classList.contains('margins-removed'));
+        const basePreset = renderer.paperPreset.replace('-clean', '');
 
         // Color interpolation helper functions
         const hexToRgb = (hex) => {
@@ -2642,10 +3839,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     barColor = rgbToHex(r, g, b);
                 }
                 
-                ctx.fillStyle = barColor;
-                const stripeHeight = basePreset.endsWith('-2') ? 48 : 72; // 2-line vs 3-line
+                const stripeHeight = basePreset.endsWith('-2') ? renderer.lineHeight * 2 : renderer.lineHeight * 3; // 2-line vs 3-line
+                const marginInset = renderer.fullPageBands ? 0 : 52; // Full page width when checked (0), inboard when unchecked (52px)
+                const barStartX = marginInset;
+                const barWidth = logicalWidth - (marginInset * 2);
                 for (let y = stripeHeight; y < renderer.pageLength; y += stripeHeight * 2) {
-                    ctx.fillRect(0, y, logicalWidth, stripeHeight);
+                    renderer.fillBandingPattern(ctx, barStartX, y, barWidth, stripeHeight, barColor, paperBg);
                 }
             } else if (basePreset === 'music-sheet-1234-stock') {
                 let barColor = '#d8eae0'; // Desaturated mint green
@@ -2657,10 +3856,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     const b = Math.round(barRgb.b + (targetRgb.b - barRgb.b) * factor);
                     barColor = rgbToHex(r, g, b);
                 }
-                ctx.fillStyle = barColor;
-                const stripeHeight = 24; // Alternating single-line bands (24px)
-                for (let y = 72 + stripeHeight; y < renderer.pageLength; y += stripeHeight * 2) {
-                    ctx.fillRect(0, y, logicalWidth, stripeHeight);
+                const stripeHeight = renderer.lineHeight; // Alternating single-line bands (16px)
+                for (let y = 48 + stripeHeight; y < renderer.pageLength; y += stripeHeight * 2) {
+                    renderer.fillBandingPattern(ctx, 0, y, logicalWidth, stripeHeight, barColor, paperBg);
                 }
             } else if (basePreset === 'invoice') {
                 renderer.drawInvoiceForm(ctx, logicalWidth, renderer.pageLength, '#505a64');
@@ -2675,9 +3873,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderer.drawForm8240(ctx, logicalWidth, renderer.pageLength, '#24634E');
             }
 
-            // Draw tractor metadata
+            // Draw watermark on export canvas if enabled
+            if (renderer.watermarkEnabled) {
+                renderer.drawWatermark(ctx, logicalWidth, renderer.pageLength);
+            }
+
+            // Draw tractor metadata (perforations, pin holes, branding) if margins NOT stripped
             if (!isClean) {
-                renderer.drawTractorMetadata(ctx, logicalWidth, renderer.pageLength);
+                renderer.drawTractorMetadata(ctx, logicalWidth, renderer.pageLength, paperBg, pageY);
             }
 
             // Apply aging effects to this page background on the export canvas
@@ -2687,7 +3890,7 @@ document.addEventListener('DOMContentLoaded', () => {
             drawFibers(ctx, logicalWidth, renderer.pageLength, factor);
 
             // Draw page perforation lines
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.12)';
+            ctx.strokeStyle = 'rgba(80, 90, 100, 0.45)';
             ctx.lineWidth = 1;
             ctx.setLineDash([3, 5]);
             ctx.beginPath();
@@ -2713,20 +3916,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (checkPaperTexture && checkPaperTexture.checked) {
+            // Large 97x101 prime-dimensioned tile to prevent grid repeating & screen Moiré beating
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 4;
-            tempCanvas.height = 4;
+            tempCanvas.width = 97;
+            tempCanvas.height = 101;
             const tCtx = tempCanvas.getContext('2d');
-            tCtx.fillStyle = 'rgba(0, 0, 0, 0.015)';
-            tCtx.fillRect(0, 0, 1, 1);
-            tCtx.fillStyle = 'rgba(255, 255, 255, 0.02)';
-            tCtx.fillRect(2, 2, 1, 1);
+            
+            // Seeded pseudo-random placement generator (Linear Congruential Generator)
+            let seed = 42;
+            const rnd = () => {
+                seed = (seed * 1664525 + 1013904223) % 4294967296;
+                return seed / 4294967296;
+            };
+
+            // Draw organic non-periodic fiber specks
+            for (let i = 0; i < 48; i++) {
+                const px = Math.floor(rnd() * 97);
+                const py = Math.floor(rnd() * 101);
+                const opacity = 0.03 + rnd() * 0.07;
+                tCtx.fillStyle = `rgba(50, 35, 20, ${opacity})`;
+                if (rnd() > 0.4) {
+                    tCtx.fillRect(px, py, 1.2, 1.2);
+                } else {
+                    const lenX = (rnd() - 0.5) * 4;
+                    const lenY = (rnd() - 0.5) * 4;
+                    tCtx.beginPath();
+                    tCtx.lineWidth = 0.8;
+                    tCtx.strokeStyle = `rgba(60, 45, 25, ${opacity})`;
+                    tCtx.moveTo(px, py);
+                    tCtx.lineTo(px + lenX, py + lenY);
+                    tCtx.stroke();
+                }
+            }
+
             const pattern = ctx.createPattern(tempCanvas, 'repeat');
             ctx.fillStyle = pattern;
             ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+            drawFibers(ctx, logicalWidth, logicalHeight, factor || 1);
         }
 
-        ctx.restore();
+        ctx.restore(); // Restore outer context (removes ctx.scale so we are back in physical export canvas pixel coordinates)
 
         const inkOpacity = 1 - (factor * 0.35);
         ctx.save();
@@ -2736,19 +3966,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (child.tagName === 'CANVAS') {
                 if (child.width > 0 && child.height > 0) {
                     const topY = parseFloat(child.style.top) || 0;
-                    ctx.drawImage(child, 0, topY * scale);
+                    const childWidth = child.width;
+                    const childHeight = child.height;
+                    const destY = topY * scale;
+                    const destWidth = exportCanvas.width;
+                    const destHeight = (childHeight / childWidth) * destWidth;
+                    ctx.drawImage(child, 0, destY, destWidth, destHeight);
                 }
             }
         });
         ctx.restore();
 
+        // If tractor margins are stripped (clean), crop off both 48px (96px total) tractor margin strips
         if (isClean) {
-            const croppedW = renderer.paperWidth - 80;
+            const croppedW = renderer.paperWidth - 96;
             const croppedCanvas = document.createElement('canvas');
             croppedCanvas.width = croppedW * scale;
             croppedCanvas.height = totalHeight;
             const croppedCtx = croppedCanvas.getContext('2d');
-            croppedCtx.drawImage(exportCanvas, 40 * scale, 0, croppedW * scale, totalHeight, 0, 0, croppedW * scale, totalHeight);
+            croppedCtx.drawImage(exportCanvas, 48 * scale, 0, croppedW * scale, totalHeight, 0, 0, croppedW * scale, totalHeight);
             return croppedCanvas;
         }
 
@@ -2821,16 +4057,18 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(() => showToast('Failed to copy text', 'fa-times'));
     });
 
+    let selfTestCounter = 0;
     function runSelfTest() {
-        showToast('Running EFX-80s Self-Test Page...', 'fa-vial');
+        selfTestCounter++;
+        showToast(`Running EFX-80s Self-Test Page (Pass #${selfTestCounter})...`, 'fa-vial');
         btnPrintTest.disabled = true;
 
         const seq = [];
         const s = (str) => new TextEncoder().encode(str);
         
         seq.push([27, 64]);
-        seq.push(s('EFX-80s 9-PIN IMPACT PRINTER EMULATOR\r\n'));
-        seq.push(s('=====================================\r\n'));
+        seq.push(s(`EFX-80s 9-PIN IMPACT PRINTER EMULATOR - TEST PASS #${selfTestCounter}\r\n`));
+        seq.push(s('====================================================\r\n'));
         seq.push([10]);
 
         seq.push(s('Standard Font Printable Characters (ASCII 32-126):\r\n'));
@@ -2928,6 +4166,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const isOpen = panel.classList.contains('open');
         closeAllPanelsExcept(isOpen ? null : panel);
         
+        if (controlsPanel) controlsPanel.classList.remove('peek');
+        if (controlsTrigger) {
+            controlsTrigger.classList.remove('peek');
+            controlsTrigger.classList.remove('pulse-glow');
+        }
+
         panel.classList.toggle('open', !isOpen);
         if (trigger) {
             trigger.classList.toggle('panel-open', !isOpen);
@@ -2959,7 +4203,9 @@ document.addEventListener('DOMContentLoaded', () => {
     btnCloseOperations.addEventListener('click', () => togglePanel(operationsPanel, operationsTrigger));
 
     chkFocusMode.addEventListener('change', (e) => {
-        if (e.target.checked) {
+        const isChecked = e.target.checked;
+        localStorage.setItem('efx_focusMode', isChecked);
+        if (isChecked) {
             document.body.classList.add('focus-mode');
             closeAllPanelsExcept(null);
             showToast('Focus Mode Enabled', 'fa-expand');
@@ -2967,13 +4213,22 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.remove('focus-mode');
             showToast('Focus Mode Disabled', 'fa-compress');
         }
+        renderer.updatePaperPadding();
+        renderer.scrollToBottom(0);
+        setTimeout(() => {
+            renderer.updatePaperPadding();
+            renderer.scrollToBottom(0);
+        }, 50);
     });
 
-    document.querySelectorAll('.guide-card').forEach(card => {
-        const header = card.querySelector('.guide-header');
+    document.querySelectorAll('.guide-card, .collapsible-card').forEach(card => {
+        const header = card.querySelector('.guide-header, .card-header-toggle');
         if (header) {
             header.addEventListener('click', () => {
                 card.classList.toggle('collapsed');
+                if (card.id) {
+                    localStorage.setItem(`efx_card_collapsed_${card.id}`, card.classList.contains('collapsed'));
+                }
             });
         }
     });
@@ -2985,23 +4240,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (savedFormat === 'mini' || savedFormat === 'mini-bordered') {
             renderer.paperWidth = 816; // 8.5" paper
             renderer.pageLength = 672; // 7.0" page (42 lines, 14 holes)
-            renderer.printableWidth = 768;
-            renderer.leftMargin = 24;
+            renderer.printableWidth = 672; // 8.5" paper minus 1.5" total margins (672px = 70 cols Pica)
+            renderer.leftMargin = 72; // 48px sprocket margin + 24px (0.25") paper inset
         } else if (savedFormat === 'dp-12') {
             renderer.paperWidth = 912; // 9.5" paper
             renderer.pageLength = 1152; // 12.0" page (72 lines, 24 holes)
-            renderer.printableWidth = 768;
-            renderer.leftMargin = 72;
+            renderer.printableWidth = 768; // 9.5" paper minus 1.5" total margins (768px = 80 cols Pica)
+            renderer.leftMargin = 72; // 48px sprocket margin + 24px (0.25") paper inset
         } else if (savedFormat === 'legal-14') {
             renderer.paperWidth = 816; // 8.5" paper
             renderer.pageLength = 1344; // 14.0" page (84 lines, 28 holes)
-            renderer.printableWidth = 768;
-            renderer.leftMargin = 24;
+            renderer.printableWidth = 672; // 8.5" paper minus 1.5" total margins (672px = 70 cols Pica)
+            renderer.leftMargin = 72; // 48px sprocket margin + 24px (0.25") paper inset
         } else {
-            renderer.paperWidth = 912; // 9.5" paper
+            renderer.paperWidth = 912; // 9.5" paper (Correspondence default)
             renderer.pageLength = 1056; // 11.0" page (66 lines, 22 holes)
-            renderer.printableWidth = 768;
-            renderer.leftMargin = 72;
+            renderer.printableWidth = 768; // 9.5" paper minus 1.5" total margins (768px = 80 cols Pica)
+            renderer.leftMargin = 72; // 48px sprocket margin + 24px (0.25") paper inset
         }
 
         const preset = localStorage.getItem('efx_paperPreset') || 'green-bar';
@@ -3028,6 +4283,69 @@ document.addEventListener('DOMContentLoaded', () => {
         sliderJitter.value = jitter;
         labelJitter.textContent = `${parseFloat(jitter).toFixed(1)}px`;
         renderer.setJitter(jitter);
+
+        const tractorWear = localStorage.getItem('efx_tractorWear') || '0';
+        if (sliderTractorWear) {
+            sliderTractorWear.value = tractorWear;
+            if (labelTractorWear) labelTractorWear.textContent = `${tractorWear}%`;
+        }
+        renderer.setTractorWear(tractorWear);
+
+        const holeColor = localStorage.getItem('efx_sprocketHoleColor') || '0';
+        const holeVal = parseInt(holeColor, 10) || 0;
+        if (sliderSprocketHoleColor) {
+            sliderSprocketHoleColor.value = holeVal;
+            if (labelSprocketHoleColor) {
+                labelSprocketHoleColor.textContent = holeVal === 0 ? 'Black' : (holeVal === 100 ? 'White' : `${holeVal}%`);
+            }
+        }
+        renderer.setSprocketHoleColor(holeVal);
+
+        const wmEnabled = localStorage.getItem('efx_watermarkEnabled') === 'true';
+        const wmText = localStorage.getItem('efx_watermarkText') || 'NFfP';
+        const wmAngle = parseInt(localStorage.getItem('efx_watermarkAngle') || '45', 10);
+        const wmOpacitySlider = parseInt(localStorage.getItem('efx_watermarkOpacitySlider') || '28', 10);
+        const wmSize = parseInt(localStorage.getItem('efx_watermarkSize') || '50', 10);
+
+        const actualOpacityPct = Math.pow(wmOpacitySlider / 100, 2) * 100;
+
+        if (checkWatermarkEnabled) checkWatermarkEnabled.checked = wmEnabled;
+        if (inputWatermarkText) inputWatermarkText.value = wmText;
+        if (sliderWatermarkAngle) {
+            sliderWatermarkAngle.value = wmAngle;
+            if (labelWatermarkAngle) labelWatermarkAngle.textContent = `${wmAngle}°`;
+        }
+        if (sliderWatermarkOpacity) {
+            sliderWatermarkOpacity.value = wmOpacitySlider;
+            if (labelWatermarkOpacity) {
+                labelWatermarkOpacity.textContent = actualOpacityPct < 1 ? `${actualOpacityPct.toFixed(1)}%` : `${Math.round(actualOpacityPct)}%`;
+            }
+        }
+        if (sliderWatermarkSize) {
+            sliderWatermarkSize.value = wmSize;
+            if (labelWatermarkSize) labelWatermarkSize.textContent = `${wmSize}%`;
+        }
+        renderer.setWatermarkSettings(wmEnabled, wmText, wmAngle, actualOpacityPct, wmSize);
+
+        const storedLimit = localStorage.getItem('efx_storedPagesLimit') || '8';
+        if (inputStoredPages) {
+            inputStoredPages.value = storedLimit;
+        }
+        renderer.storedPagesLimit = parseInt(storedLimit, 10);
+
+        const savedSidePerforation = localStorage.getItem('efx_sidePerforation') || 'standard';
+        if (selectSidePerforation) {
+            selectSidePerforation.value = savedSidePerforation;
+        }
+        renderer.setSidePerforation(savedSidePerforation);
+
+        const fullPageBandsEnabled = localStorage.getItem('efx_fullPageBands') !== 'false'; // Default to checked (true)
+        if (checkRestrictBands) checkRestrictBands.checked = fullPageBandsEnabled;
+        renderer.setFullPageBands(fullPageBandsEnabled);
+
+        const prePrintHalftoneEnabled = localStorage.getItem('efx_prePrintHalftone') === 'true';
+        if (checkPrePrintHalftone) checkPrePrintHalftone.checked = prePrintHalftoneEnabled;
+        renderer.setPrePrintHalftone(prePrintHalftoneEnabled);
 
         const dips = JSON.parse(localStorage.getItem('efx_dipSwitches') || '[false, false, false, false, false, false, false, false]');
         dipSwitches.forEach((sw, i) => {
@@ -3078,6 +4396,42 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectStopBits) {
             selectStopBits.value = localStorage.getItem('efx_stopBits') || '1';
         }
+
+        // Load persisted WebSocket Settings
+        if (selectWsScheme) selectWsScheme.value = localStorage.getItem('efx_ws_scheme') || 'ws';
+        if (inputWsHost) inputWsHost.value = localStorage.getItem('efx_ws_host') || 'localhost';
+        if (inputWsPort) inputWsPort.value = localStorage.getItem('efx_ws_port') || '8080';
+        if (selectWsChannel) {
+            const savedChannel = localStorage.getItem('efx_ws_channel') || 'printer';
+            selectWsChannel.value = savedChannel;
+            if (inputWsChannelCustom) {
+                inputWsChannelCustom.style.display = savedChannel === 'custom' ? 'block' : 'none';
+            }
+        }
+        if (inputWsChannelCustom) inputWsChannelCustom.value = localStorage.getItem('efx_ws_channel_custom') || '';
+        if (inputWsClientId) {
+            const savedId = localStorage.getItem('efx_ws_client_id');
+            inputWsClientId.value = savedId || generateClientId();
+        }
+        updateWsUrlPreview();
+
+        const savedFocusMode = localStorage.getItem('efx_focusMode') === 'true';
+        if (chkFocusMode) chkFocusMode.checked = savedFocusMode;
+
+        // Restore card expanded/collapsed states
+        document.querySelectorAll('.guide-card[id], .collapsible-card[id]').forEach(card => {
+            const savedState = localStorage.getItem(`efx_card_collapsed_${card.id}`);
+            if (savedState !== null) {
+                if (savedState === 'true') {
+                    card.classList.add('collapsed');
+                } else {
+                    card.classList.remove('collapsed');
+                }
+            }
+        });
+
+        renderer.updatePageCountUI();
+        renderer.manageStoredPages();
     }
 
     // Keyboard shortcuts for emulator actions
@@ -3153,6 +4507,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadSettings();
     updateActiveStyleUI();
+
+    // Start visual cues (Pulse & Peek) for Controls tab after a short delay
+    setTimeout(() => {
+        if (controlsTrigger) {
+            controlsTrigger.classList.add('pulse-glow');
+            
+            if (controlsPanel && !controlsPanel.classList.contains('open')) {
+                controlsPanel.classList.add('peek');
+                controlsTrigger.classList.add('peek');
+                
+                setTimeout(() => {
+                    controlsPanel.classList.remove('peek');
+                    controlsTrigger.classList.remove('peek');
+
+                    // Move to Focus Mode if selected, ONLY FOLLOWING the control emphasis effect
+                    if (chkFocusMode && chkFocusMode.checked) {
+                        setTimeout(() => {
+                            document.body.classList.add('focus-mode');
+                            closeAllPanelsExcept(null);
+                            renderer.updatePaperPadding();
+                            renderer.scrollToBottom(0);
+                            setTimeout(() => {
+                                renderer.updatePaperPadding();
+                                renderer.scrollToBottom(0);
+                            }, 50);
+                        }, 300);
+                    }
+                }, 1500);
+            } else {
+                if (chkFocusMode && chkFocusMode.checked) {
+                    document.body.classList.add('focus-mode');
+                    closeAllPanelsExcept(null);
+                    renderer.updatePaperPadding();
+                    renderer.scrollToBottom(0);
+                }
+            }
+        }
+    }, 600);
 });
 
 

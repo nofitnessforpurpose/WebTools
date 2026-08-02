@@ -41,19 +41,26 @@
             <div class="sidebar-body">
                 <div class="guide-text note-box">
                     <i class="fa-solid fa-info-circle"></i>
-                    <span>This emulator acts as a faithful 9-pin impact printer using the industry standard ESC/P control set. Any system that outputs ASCII characters can print text directly.</span>
+                    <span>This emulator acts as a faithful 9-pin impact printer using the industry standard ESC/P control set. 
+					<BR><BR>
+					Any system that outputs ASCII characters can print text directly via a serial link or web socket.</span>
                 </div>
 
                 <div class="guide-text note-box">
                     <i class="fa-solid fa-circle-nodes"></i>
-                    <span>For graphics and custom characters, you can redefine fonts dynamically using <code>ESC &amp;</code> or draw bit-images using <code>ESC K</code> (Draft/60 DPI), <code>ESC L</code> (120 DPI), or <code>ESC Z</code> (240 DPI).</span>
+                    <span>For graphics and custom characters, you can redefine fonts dynamically using <code>ESC &amp;</code> or draw bit-images using <code>ESC K</code> (Draft/60 DPI), <code>ESC L</code> (120 DPI), or <code>ESC Z</code> (240 DPI).
+					<BR><BR>
+					See the EFX-80s companion app. in the repository for a custom ESC mode image encoder.
+					</span>
                 </div>
 
                 <!-- OPL Stub Code -->
+				<div class="guide-text note-box">
+				<i class="fa-solid fa-code"></i>
                 <div class="code-section">
                     <div class="code-header">
                         <span>OPL Print Demo Stub</span>
-                    </div>
+                    
                     <textarea class="code-area" id="oplCode" readonly style="height: 150px;">PRNTDEMO:
   REM By NFfP
   REM EFX-80s ESC/P Text Demo
@@ -67,7 +74,9 @@
   LPRINT "Back to normal."
   LPRINT CHR$(12); :REM Form Feed</textarea>
                 </div>
-                <p class="copyright" style="margin-top: 25px; font-size: 0.75rem; text-align: center; color: var(--color-text-muted);">© 2026 NFfP</p>
+                </div>
+				</div>
+                    <p class="copyright" style="margin-top: 25px; font-size: 0.75rem; text-align: center; color: var(--color-text-muted);"><a href="https://github.com/nofitnessforpurpose/WebTools">© 2026 NFfP</a></p>
             </div>
         </aside>
 
@@ -81,6 +90,10 @@
                         <i class="fa-solid fa-print"></i>
                         <h2 style="flex-grow: 0; margin-right: 8px;">Tractor-Feed Paper Path</h2>
                         <span id="printStats" class="badge offline">Offline</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px; margin-right: 15px; font-size: 0.85rem; color: var(--color-text-muted);" id="pageCounterContainer">
+                        <i class="fa-regular fa-file"></i>
+                        <span>Pages: <strong id="valPageCount" style="color: var(--color-text);">1</strong></span>
                     </div>
                     <div class="toggle-container" title="Show only the paper roll">
                         <span class="toggle-label"><i class="fa-solid fa-expand"></i> Focus Mode</span>
@@ -270,7 +283,116 @@
                         </div>
                     </div>
                 </div>
-                <p class="copyright" style="margin-top: 25px; font-size: 0.75rem; text-align: center; color: var(--color-text-muted);">© 2026 NFfP</p>
+                <div class="guide-card collapsed" id="help-card-websocket">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-solid fa-network-wired"></i> WebSocket Support</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>The emulator can receive ESC/P print data over a WebSocket connection from any compatible server on your network &mdash; no Web Serial hardware required.</p>
+                            <p style="font-size:0.8rem;font-weight:600;color:var(--color-primary);margin-bottom:2px;">How to connect</p>
+                            <p>Open the <b>Controls</b> panel and expand the <b>WebSocket</b> card. Set your server address, port and channel, then click <b>Connect</b>. ESC/P data sent by the server arrives directly at the printer parser.</p>
+                            <p style="font-size:0.8rem;font-weight:600;color:var(--color-primary);margin-bottom:2px;">URL format</p>
+                            <code style="font-size:0.78rem;word-break:break-all;display:block;margin-bottom:6px;">ws://&lt;host&gt;:&lt;port&gt;/&lt;channel&gt;?clientId=&lt;id&gt;</code>
+                            <ul class="code-list" style="margin-left:15px;font-size:0.8rem;line-height:1.6;">
+                                <li><code>host</code> &mdash; hostname or IP address of your server</li>
+                                <li><code>port</code> &mdash; default <code>8080</code></li>
+                                <li><code>channel</code> &mdash; <code>printer</code>, <code>plotter</code>, or a custom path token</li>
+                                <li><code>clientId</code> &mdash; auto-generated; identifies this browser session</li>
+                            </ul>
+                            <p style="font-size:0.8rem;font-weight:600;color:var(--color-primary);margin-bottom:2px;">Accepted frame types</p>
+                            <ul class="code-list" style="margin-left:15px;font-size:0.8rem;line-height:1.6;">
+                                <li><b>Binary</b> &mdash; raw ESC/P bytes, piped directly to the parser</li>
+                                <li><b>Text</b> &mdash; UTF-8 string, treated as plain ESC/P text</li>
+                                <li><b>JSON</b> &mdash; control frame (must start with <code>{</code>):<br>
+                                    <code style="font-size:0.74rem;">{"type":"lan-ip","ip":"192.168.x.x","port":8080}</code><br>
+                                    Updates the QR code display automatically.</li>
+                            </ul>
+                            <p style="font-size:0.8rem;font-weight:600;color:var(--color-primary);margin-bottom:2px;">Status indicators</p>
+                            <ul class="code-list" style="margin-left:15px;font-size:0.8rem;line-height:1.6;">
+                                <li><b>CONNECTED</b> &mdash; socket open, data flowing</li>
+                                <li><b>DISCONNECTED</b> &mdash; no active connection</li>
+                                <li><b>LOCKED</b> &mdash; server rejected with close code <code>4001</code>; another client holds an exclusive channel lock</li>
+                                <li><b>ERROR</b> &mdash; connection refused or network fault</li>
+                            </ul>
+                            <p style="font-size:0.8rem;font-weight:600;color:var(--color-primary);margin-bottom:2px;">Secure connections (wss://)</p>
+                            <p>Switch the scheme to <code>wss://</code> when connecting through a Cloudflare Tunnel or any TLS endpoint. Required if this page is served over HTTPS.</p>
+                            <div class="note-box" style="margin-top:6px;font-size:0.75rem;">
+                                <i class="fa-solid fa-circle-info" style="color:var(--color-primary);"></i>
+                                <span>The emulator is a WebSocket <b>client only</b>. It connects outward to your server &mdash; it does not host a server itself.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="guide-card collapsed" id="help-card-ws-testscript">
+                        <div class="guide-header">
+                            <h4>
+                                <span><i class="fa-brands fa-node-js"></i> Node.js Test Server</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </h4>
+                        </div>
+                        <div class="guide-body">
+                            <p>This minimal Node.js script starts a WebSocket server on port <code>8080</code> and sends a formatted ESC/P test print job when the emulator connects.</p>
+                            <p style="font-size:0.8rem;font-weight:600;color:var(--color-primary);margin-bottom:2px;">Prerequisites</p>
+                            <ul class="code-list" style="margin-left:15px;font-size:0.8rem;line-height:1.6;margin-bottom:6px;">
+                                <li>Node.js installed on your machine</li>
+                                <li>Run once in a terminal: <code>npm install ws</code></li>
+                                <li>Then run: <code>node ws-test.js</code></li>
+                            </ul>
+                            <div class="ws-script-wrap">
+                                <button class="btn btn-action ws-copy-btn" id="btnCopyWsScript">
+                                    <i class="fa-solid fa-copy"></i> Copy Script
+                                </button>
+<pre class="ws-script-pre" id="wsTestScriptBlock">// ws-test.js &mdash; EFX-80s WebSocket test server
+// Setup: npm install ws
+// Run:   node ws-test.js
+
+const http = require('http');
+const { WebSocketServer } = require('ws');
+const PORT = 8080;
+
+const server = http.createServer((req, res) => {
+    res.writeHead(200); res.end('WS test server on port ' + PORT);
+});
+
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws, req) => {
+    console.log('\n[+] Client connected  path: ' + req.url);
+
+    const ESC = 0x1B, LF = 0x0A, FF = 0x0C;
+
+    const job = Buffer.concat([
+        Buffer.from([ESC, 0x40]),          // ESC @ &mdash; reset
+        Buffer.from([ESC, 0x45]),          // ESC E &mdash; bold on
+        Buffer.from('WebSocket Test Print\r\n'),
+        Buffer.from([ESC, 0x46]),          // ESC F &mdash; bold off
+        Buffer.from('ws://localhost:' + PORT + req.url + '\r\n'),
+        Buffer.from(new Date().toISOString() + '\r\n'),
+        Buffer.from([LF, LF, FF]),
+    ]);
+
+    setTimeout(() => {
+        ws.send(job);
+        console.log('[>] ESC/P job sent (' + job.length + ' bytes)');
+    }, 400);
+
+    ws.on('close', code => console.log('[-] Disconnected  code:' + code));
+});
+
+server.listen(PORT, () => {
+    console.log('Listening on ws://localhost:' + PORT);
+    console.log('Connect emulator: ws://localhost:' + PORT + '/printer\n');
+});</pre>
+                            </div>
+                            <p style="font-size:0.78rem;color:var(--color-text-muted);margin-top:8px;">
+                                Connect the emulator to <code>ws://localhost:8080/printer</code> &mdash; bold <b>WebSocket Test Print</b> should appear on the paper roll.
+                            </p>
+                        </div>
+                    </div>
+<p class="copyright" style="margin-top: 25px; font-size: 0.75rem; text-align: center; color: var(--color-text-muted);"><a href="https://github.com/nofitnessforpurpose/WebTools">© 2026 NFfP</a></p>
             </div>
         </aside>
 
@@ -285,265 +407,377 @@
             
             <div class="sidebar-body">
                 <!-- Active Printer Settings -->
-                <div class="control-group font-status-card">
-                    <label class="control-label">Active Printer Settings</label>
-                    <table class="status-table">
-                        <tr>
-                            <td>Pitch</td>
-                            <td>
-                                <select id="selectPitch" class="setting-select">
-                                    <option value="pica" selected>Pica (10 CPI)</option>
-                                    <option value="elite">Elite (12 CPI)</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Condensed</td>
-                            <td>
-                                <select id="selectCondensed" class="setting-select">
-                                    <option value="disabled" selected>Disabled</option>
-                                    <option value="enabled">Enabled</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Bold (Emphasized)</td>
-                            <td>
-                                <select id="selectBold" class="setting-select">
-                                    <option value="disabled" selected>Disabled</option>
-                                    <option value="enabled">Enabled</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Italic</td>
-                            <td>
-                                <select id="selectItalic" class="setting-select">
-                                    <option value="disabled" selected>Disabled</option>
-                                    <option value="enabled">Enabled</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Underline</td>
-                            <td>
-                                <select id="selectUnderline" class="setting-select">
-                                    <option value="disabled" selected>Disabled</option>
-                                    <option value="enabled">Enabled</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Double-Strike</td>
-                            <td>
-                                <select id="selectDoubleStrike" class="setting-select">
-                                    <option value="disabled" selected>Disabled</option>
-                                    <option value="enabled">Enabled</option>
-                                </select>
-                            </td>
-                        </tr>
-                    </table>
-                    <button class="btn btn-action" id="btnResetSettings" style="margin-top: 10px; font-size: 0.8rem; padding: 6px 12px; width: 100%;">
-                        <i class="fa-solid fa-arrow-rotate-left"></i> Reset to Defaults
-                    </button>
+                <div class="control-group font-status-card collapsible-card collapsed">
+                    <div class="card-header-toggle">
+                        <label class="control-label">Active Printer Settings</label>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </div>
+                    <div class="card-body-content">
+                        <table class="status-table">
+                            <tr>
+                                <td>Pitch</td>
+                                <td>
+                                    <select id="selectPitch" class="setting-select">
+                                        <option value="pica" selected>Pica (10 CPI)</option>
+                                        <option value="elite">Elite (12 CPI)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Condensed</td>
+                                <td>
+                                    <select id="selectCondensed" class="setting-select">
+                                        <option value="disabled" selected>Disabled</option>
+                                        <option value="enabled">Enabled</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Bold (Emphasized)</td>
+                                <td>
+                                    <select id="selectBold" class="setting-select">
+                                        <option value="disabled" selected>Disabled</option>
+                                        <option value="enabled">Enabled</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Italic</td>
+                                <td>
+                                    <select id="selectItalic" class="setting-select">
+                                        <option value="disabled" selected>Disabled</option>
+                                        <option value="enabled">Enabled</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Underline</td>
+                                <td>
+                                    <select id="selectUnderline" class="setting-select">
+                                        <option value="disabled" selected>Disabled</option>
+                                        <option value="enabled">Enabled</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Double-Strike</td>
+                                <td>
+                                    <select id="selectDoubleStrike" class="setting-select">
+                                        <option value="disabled" selected>Disabled</option>
+                                        <option value="enabled">Enabled</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Stored Pages</td>
+                                <td>
+                                    <input type="number" id="inputStoredPages" min="0" max="100" value="8" style="width: 100%; box-sizing: border-box; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--color-border); background-color: var(--color-bg-dark); color: var(--color-text); font-family: var(--font-mono); font-size: 0.8rem; text-align: center;">
+                                </td>
+                            </tr>
+                        </table>
+                        <button class="btn btn-action" id="btnResetSettings" style="margin-top: 10px; font-size: 0.8rem; padding: 6px 12px; width: 100%;">
+                            <i class="fa-solid fa-arrow-rotate-left"></i> Reset to Defaults
+                        </button>
+                    </div>
                 </div>
                 <!-- Simulation Params -->
-                <div class="control-group font-status-card">
-                    <label class="control-label">Visual Simulation</label>
-                    <table class="status-table">
-                        <tr>
-                            <td>Ribbon Colour</td>
-                            <td>
-                                <select id="selectRibbonColor" class="setting-select">
-                                    <option value="true-black">True Black</option>
-                                    <option value="fresh-black" selected>Fresh Black</option>
-                                    <option value="fresh-violet">Fresh Violet</option>
-                                    <option value="fresh-green">Fresh Green</option>
-                                    <option value="fresh-red">Fresh Red</option>
-                                    <option value="fresh-brown">Fresh Brown</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Paper Format</td>
-                            <td>
-                                <select id="selectPaperFormat" class="setting-select">
-                                    <option value="correspondence" selected>Correspondence (9.5" x 11")</option>
-                                    <option value="correspondence-bordered">Correspondence Bordered (9.5" x 11")</option>
-                                    <option value="mini">Data Processing Mini (8.5" x 7")</option>
-                                    <option value="mini-bordered">DP Mini Bordered (8.5" x 7")</option>
-                                    <option value="dp-12">Data Processing (9.5" x 12")</option>
-                                    <option value="legal-14">Legal Size (8.5" x 14")</option>
-                                    <option value="music-sheet">Computer Music Paper (9.5" x 11")</option>
-                                    <option value="music-sheet-1234">Computer Music Sheet (Form A 1234)</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Paper Stock</td>
-                            <td>
-                                <select id="selectPaperPreset" class="setting-select">
-                                    <option value="green-bar" selected>Green Bar (3-Line)</option>
-                                    <option value="green-bar-2">Green Bar (2-Line)</option>
-                                    <option value="blue-bar">Blue Bar (3-Line)</option>
-                                    <option value="blue-bar-2">Blue Bar (2-Line)</option>
-                                    <option value="grey-bar">Grey Bar (3-Line)</option>
-                                    <option value="grey-bar-2">Grey Bar (2-Line)</option>
-                                    <option value="standard">White Continuous</option>
-                                    <option value="aged">Aged Sepia Paper</option>
-                                    <option value="perforated">Perforated Continuous</option>
-                                    <option value="invoice">Generic Invoice Form</option>
-                                    <option value="carbonless-yellow">Carbonless Yellow (CFB)</option>
-                                    <option value="carbonless-pink">Carbonless Pink (CFB)</option>
-                                    <option value="carbonless-goldenrod">Carbonless Goldenrod (CF)</option>
-                                    <option value="carbonless-blue">Carbonless Blue (CF)</option>
-                                    <option value="music-sheet-1234-stock">Form K 1234 (Mint Green / Cream)</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Export Resolution</td>
-                            <td>
-                                <select id="selectExportRes" class="setting-select">
-                                    <option value="1">Standard (1x)</option>
-                                    <option value="2" selected>High-Res (2x)</option>
-                                    <option value="3">Ultra-Res (3x)</option>
-                                </select>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Auto Scroll</td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <input type="checkbox" id="checkAutoScroll" checked style="accent-color: var(--color-primary);">
-                                    <label for="checkAutoScroll" style="font-size: 11px; user-select: none;">Scroll on Print</label>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Sound Effects</td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <input type="checkbox" id="checkSoundEnabled" style="accent-color: var(--color-primary);">
-                                    <label for="checkSoundEnabled" style="font-size: 11px; user-select: none;">Enable Sound</label>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Paper Creases</td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <input type="checkbox" id="checkPaperCreases" style="accent-color: var(--color-primary);">
-                                    <label for="checkPaperCreases" style="font-size: 11px; user-select: none;">Simulate Page Folds</label>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Paper Texture</td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <input type="checkbox" id="checkPaperTexture" style="accent-color: var(--color-primary);">
-                                    <label for="checkPaperTexture" style="font-size: 11px; user-select: none;">Simulate Fibrous Grain</label>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Ribbon Wear</td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                                    <input type="range" id="sliderRibbonWear" min="0" max="100" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
-                                    <span id="labelRibbonWear" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 28px; text-align: right;">0%</span>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Paper Age</td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                                    <input type="range" id="sliderPaperAge" min="0" max="100" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
-                                    <span id="labelPaperAge" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 28px; text-align: right;">0%</span>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr>
-                            <td>Pin Jitter</td>
-                            <td>
-                                <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
-                                    <input type="range" id="sliderJitter" min="0" max="3" step="0.1" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
-                                    <span id="labelJitter" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 36px; text-align: right;">0.0px</span>
-                                </div>
-                            </td>
-                        </tr>
-                    </table>
+                <div class="control-group font-status-card collapsible-card collapsed">
+                    <div class="card-header-toggle">
+                        <label class="control-label">Visual Simulation</label>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </div>
+                    <div class="card-body-content">
+                        <table class="status-table">
+                            <tr>
+                                <td>Ribbon Colour</td>
+                                <td>
+                                    <select id="selectRibbonColor" class="setting-select">
+                                        <option value="true-black">True Black</option>
+                                        <option value="fresh-black" selected>Fresh Black</option>
+                                        <option value="fresh-violet">Fresh Violet</option>
+                                        <option value="fresh-green">Fresh Green</option>
+                                        <option value="fresh-red">Fresh Red</option>
+                                        <option value="fresh-brown">Fresh Brown</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Paper Format</td>
+                                <td>
+                                    <select id="selectPaperFormat" class="setting-select">
+                                        <option value="correspondence" selected>Correspondence (9.5" x 11")</option>
+                                        <option value="correspondence-bordered">Correspondence Bordered (9.5" x 11")</option>
+                                        <option value="mini">Data Processing Mini (8.5" x 7")</option>
+                                        <option value="mini-bordered">DP Mini Bordered (8.5" x 7")</option>
+                                        <option value="dp-12">Data Processing (9.5" x 12")</option>
+                                        <option value="legal-14">Legal Size (8.5" x 14")</option>
+                                        <option value="music-sheet">Computer Music Paper (9.5" x 11")</option>
+                                        <option value="music-sheet-1234">Computer Music Sheet (Form A 1234)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Paper Stock</td>
+                                <td>
+                                    <select id="selectPaperPreset" class="setting-select">
+                                        <option value="green-bar" selected>Green Bar (3-Line)</option>
+                                        <option value="green-bar-2">Green Bar (2-Line)</option>
+                                        <option value="blue-bar">Blue Bar (3-Line)</option>
+                                        <option value="blue-bar-2">Blue Bar (2-Line)</option>
+                                        <option value="grey-bar">Grey Bar (3-Line)</option>
+                                        <option value="grey-bar-2">Grey Bar (2-Line)</option>
+                                        <option value="standard">White Continuous</option>
+                                        <option value="aged">Aged Sepia Paper</option>
+                                        <option value="perforated">Perforated Continuous</option>
+                                        <option value="invoice">Generic Invoice Form</option>
+                                        <option value="carbonless-yellow">Carbonless Yellow (CFB)</option>
+                                        <option value="carbonless-pink">Carbonless Pink (CFB)</option>
+                                        <option value="carbonless-goldenrod">Carbonless Goldenrod (CF)</option>
+                                        <option value="carbonless-blue">Carbonless Blue (CF)</option>
+                                        <option value="music-sheet-1234-stock">Form K 1234 (Mint Green / Cream)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Pre-Print Full Page Width</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" id="checkRestrictBands" checked style="accent-color: var(--color-primary);">
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Pre-Print Halftone</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" id="checkPrePrintHalftone" style="accent-color: var(--color-primary);">
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Side Perforations</td>
+                                <td>
+                                    <select id="selectSidePerforation" class="setting-select">
+                                        <option value="none">No perforations</option>
+                                        <option value="standard" selected>Perforated</option>
+                                        <option value="micro">Microperforations</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Export Resolution</td>
+                                <td>
+                                    <select id="selectExportRes" class="setting-select">
+                                        <option value="1">Standard (1x)</option>
+                                        <option value="2" selected>High-Res (2x)</option>
+                                        <option value="3">Ultra-Res (3x)</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Auto Scroll</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" id="checkAutoScroll" checked style="accent-color: var(--color-primary);">
+                                        <label for="checkAutoScroll" style="font-size: 11px; user-select: none;">Scroll on Print</label>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Sound Effects</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" id="checkSoundEnabled" style="accent-color: var(--color-primary);">
+                                        <label for="checkSoundEnabled" style="font-size: 11px; user-select: none;">Enable Sound</label>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Paper Creases</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" id="checkPaperCreases" style="accent-color: var(--color-primary);">
+                                        <label for="checkPaperCreases" style="font-size: 11px; user-select: none;">Simulate Page Folds</label>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Paper Texture</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <input type="checkbox" id="checkPaperTexture" style="accent-color: var(--color-primary);">
+                                        <label for="checkPaperTexture" style="font-size: 11px; user-select: none;">Simulate Fibrous Grain</label>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Ribbon Wear</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                        <input type="range" id="sliderRibbonWear" min="0" max="100" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                        <span id="labelRibbonWear" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 28px; text-align: right;">0%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Paper Age</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                        <input type="range" id="sliderPaperAge" min="0" max="100" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                        <span id="labelPaperAge" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 28px; text-align: right;">0%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Pin Jitter</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                        <input type="range" id="sliderJitter" min="0" max="3" step="0.1" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                        <span id="labelJitter" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 36px; text-align: right;">0.0px</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Tractor Wear</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                        <input type="range" id="sliderTractorWear" min="0" max="100" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                        <span id="labelTractorWear" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 36px; text-align: right;">0%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Sprocket Hole Fill</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                        <input type="range" id="sliderSprocketHoleColor" min="0" max="100" value="0" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                        <span id="labelSprocketHoleColor" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 36px; text-align: right;">Black</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr style="border-top: 1px solid var(--border-color);">
+                                <td colspan="2" style="font-weight: 700; color: var(--color-primary); padding-top: 10px; font-size: 0.8rem;">
+                                    <i class="fa-solid fa-stamp"></i> Watermark Settings
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Enable Watermark</td>
+                                <td>
+                                    <label class="switch-small">
+                                        <input type="checkbox" id="checkWatermarkEnabled">
+                                        <span class="slider-small round"></span>
+                                    </label>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Text</td>
+                                <td>
+                                    <input type="text" id="inputWatermarkText" value="NFfP" class="setting-select" style="padding: 3px 6px; font-family: var(--font-mono);">
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Angle</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                        <input type="range" id="sliderWatermarkAngle" min="-180" max="180" value="45" step="5" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                        <span id="labelWatermarkAngle" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 36px; text-align: right;">45°</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Opacity</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                        <input type="range" id="sliderWatermarkOpacity" min="0" max="100" value="28" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                        <span id="labelWatermarkOpacity" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 36px; text-align: right;">8%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td>Coverage Size</td>
+                                <td>
+                                    <div style="display: flex; align-items: center; gap: 8px; width: 100%;">
+                                        <input type="range" id="sliderWatermarkSize" min="10" max="100" value="50" style="flex-grow: 1; accent-color: var(--color-primary);">
+                                        <span id="labelWatermarkSize" style="font-family: var(--font-mono); font-size: 0.75rem; min-width: 36px; text-align: right;">50%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
                 </div>
 
                 <!-- Hardware DIP Switches -->
-                <div class="control-group font-status-card" style="margin-top: 15px;">
-                    <label class="control-label">Hardware DIP Switches</label>
-                    <div class="dip-switch-bank">
-                        <div class="dip-switch-item">
-                            <span class="dip-num">1</span>
-                            <label class="switch-small">
-                                <input type="checkbox" id="dipSw1">
-                                <span class="slider-small"></span>
-                            </label>
-                            <span class="dip-label">Auto LF</span>
-                        </div>
-                        <div class="dip-switch-item">
-                            <span class="dip-num">2</span>
-                            <label class="switch-small">
-                                <input type="checkbox" id="dipSw2">
-                                <span class="slider-small"></span>
-                            </label>
-                            <span class="dip-label">Elite Pitch</span>
-                        </div>
-                        <div class="dip-switch-item">
-                            <span class="dip-num">3</span>
-                            <label class="switch-small">
-                                <input type="checkbox" id="dipSw3">
-                                <span class="slider-small"></span>
-                            </label>
-                            <span class="dip-label">12" Page</span>
-                        </div>
-                        <div class="dip-switch-item">
-                            <span class="dip-num">4</span>
-                            <label class="switch-small">
-                                <input type="checkbox" id="dipSw4">
-                                <span class="slider-small"></span>
-                            </label>
-                            <span class="dip-label">Italic Default</span>
-                        </div>
-                        <div class="dip-switch-item disabled-dip">
-                            <span class="dip-num">5</span>
-                            <label class="switch-small">
-                                <input type="checkbox" id="dipSw5" disabled>
-                                <span class="slider-small"></span>
-                            </label>
-                            <span class="dip-label">Buzzer</span>
-                        </div>
-                        <div class="dip-switch-item disabled-dip">
-                            <span class="dip-num">6</span>
-                            <label class="switch-small">
-                                <input type="checkbox" id="dipSw6" disabled>
-                                <span class="slider-small"></span>
-                            </label>
-                            <span class="dip-label">Uni-Dir</span>
-                        </div>
-                        <div class="dip-switch-item disabled-dip">
-                            <span class="dip-num">7</span>
-                            <label class="switch-small">
-                                <input type="checkbox" id="dipSw7" disabled>
-                                <span class="slider-small"></span>
-                            </label>
-                            <span class="dip-label">USA Set</span>
-                        </div>
-                        <div class="dip-switch-item disabled-dip">
-                            <span class="dip-num">8</span>
-                            <label class="switch-small">
-                                <input type="checkbox" id="dipSw8" disabled>
-                                <span class="slider-small"></span>
-                            </label>
-                            <span class="dip-label">Paper Sensor</span>
+                <div class="control-group font-status-card collapsible-card collapsed" style="margin-top: 15px;">
+                    <div class="card-header-toggle">
+                        <label class="control-label">Hardware DIP Switches</label>
+                        <i class="fa-solid fa-chevron-down fold-icon"></i>
+                    </div>
+                    <div class="card-body-content">
+                        <div class="dip-switch-bank">
+                            <div class="dip-switch-item">
+                                <span class="dip-num">1</span>
+                                <label class="switch-small">
+                                    <input type="checkbox" id="dipSw1">
+                                    <span class="slider-small"></span>
+                                </label>
+                                <span class="dip-label">Auto LF</span>
+                            </div>
+                            <div class="dip-switch-item">
+                                <span class="dip-num">2</span>
+                                <label class="switch-small">
+                                    <input type="checkbox" id="dipSw2">
+                                    <span class="slider-small"></span>
+                                </label>
+                                <span class="dip-label">Elite Pitch</span>
+                            </div>
+                            <div class="dip-switch-item">
+                                <span class="dip-num">3</span>
+                                <label class="switch-small">
+                                    <input type="checkbox" id="dipSw3">
+                                    <span class="slider-small"></span>
+                                </label>
+                                <span class="dip-label">12" Page</span>
+                            </div>
+                            <div class="dip-switch-item">
+                                <span class="dip-num">4</span>
+                                <label class="switch-small">
+                                    <input type="checkbox" id="dipSw4">
+                                    <span class="slider-small"></span>
+                                </label>
+                                <span class="dip-label">Italic Default</span>
+                            </div>
+                            <div class="dip-switch-item disabled-dip">
+                                <span class="dip-num">5</span>
+                                <label class="switch-small">
+                                    <input type="checkbox" id="dipSw5" disabled>
+                                    <span class="slider-small"></span>
+                                </label>
+                                <span class="dip-label">Buzzer</span>
+                            </div>
+                            <div class="dip-switch-item disabled-dip">
+                                <span class="dip-num">6</span>
+                                <label class="switch-small">
+                                    <input type="checkbox" id="dipSw6" disabled>
+                                    <span class="slider-small"></span>
+                                </label>
+                                <span class="dip-label">Uni-Dir</span>
+                            </div>
+                            <div class="dip-switch-item disabled-dip">
+                                <span class="dip-num">7</span>
+                                <label class="switch-small">
+                                    <input type="checkbox" id="dipSw7" disabled>
+                                    <span class="slider-small"></span>
+                                </label>
+                                <span class="dip-label">USA Set</span>
+                            </div>
+                            <div class="dip-switch-item disabled-dip">
+                                <span class="dip-num">8</span>
+                                <label class="switch-small">
+                                    <input type="checkbox" id="dipSw8" disabled>
+                                    <span class="slider-small"></span>
+                                </label>
+                                <span class="dip-label">Paper Sensor</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -553,105 +787,233 @@
         <!-- Slide-out Controls Sidebar Panel -->
         <aside class="sidebar-panel" id="controls-panel">
             <div class="sidebar-header">
-                <h2><i class="fa-solid fa-sliders"></i> Serial & Control Settings</h2>
+                <h2><i class="fa-solid fa-sliders"></i> Serial &amp; Control Settings</h2>
                 <button class="btn-close-sidebar" id="btn-close-controls" title="Close Panel">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
             
             <div class="sidebar-body">
-                <!-- Serial Connection -->
-                <div class="control-group">
-                    <label class="control-label">Physical Interface</label>
-                    <div class="serial-status-container">
-                        <button class="btn btn-primary" id="btnSerialConnect">
-                            <i class="fa-solid fa-plug"></i> Connect Serial
+                <div class="guide-grid-vertical" style="display: flex; flex-direction: column; gap: 15px;">
+
+                <!-- ── Card 1: Web Serial ─────────────────────────── -->
+                <div class="guide-card collapsible-card" id="card-web-serial">
+                    <div class="guide-header card-header-toggle" data-target="card-web-serial">
+                        <h4>
+                            <span><i class="fa-solid fa-plug" style="color:var(--color-primary)"></i>&nbsp; Web Serial</span>
+                            <span style="display:flex;align-items:center;gap:8px;">
+                                <span id="serialBadge" class="ws-badge ws-badge-disconnected">DISCONNECTED</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </span>
+                        </h4>
+                    </div>
+                    <div class="guide-body card-body-content" style="gap:12px;">
+
+                        <!-- Connect button + unsupported alert -->
+                        <div class="control-group" style="margin-bottom:0;">
+                            <label class="control-label">Physical Interface</label>
+                            <div class="serial-status-container">
+                                <button class="btn btn-primary" id="btnSerialConnect">
+                                    <i class="fa-solid fa-plug"></i> Connect Serial
+                                </button>
+                                <span id="serialAlert" class="unsupported-alert" style="display: none;">
+                                    <i class="fa-solid fa-exclamation-triangle"></i> Web Serial not supported in this browser.
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- LEDs -->
+                        <div class="led-card">
+                            <div class="led-row">
+                                <div class="led-item">
+                                    <div class="led led-status" id="ledStatus"></div>
+                                    <span class="led-label">Serial On</span>
+                                </div>
+                                <div class="led-item">
+                                    <div class="led led-rx" id="ledRx"></div>
+                                    <span class="led-label">Active Rx</span>
+                                </div>
+                                <div class="led-item">
+                                    <div class="led led-buffer" id="ledBuffer"></div>
+                                    <span class="led-label">Line Active</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- RS232 Parameters -->
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="selectBaudRate">Baud Rate</label>
+                            <select id="selectBaudRate" class="setting-select">
+                                <option value="300">300 bps</option>
+                                <option value="600">600 bps</option>
+                                <option value="1200">1200 bps</option>
+                                <option value="2400">2400 bps</option>
+                                <option value="4800">4800 bps</option>
+                                <option value="9600" selected>9600 bps</option>
+                                <option value="19200">19200 bps</option>
+                            </select>
+                        </div>
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="selectParity">Parity</label>
+                            <select id="selectParity" class="setting-select">
+                                <option value="none" selected>None</option>
+                                <option value="even">Even</option>
+                                <option value="odd">Odd</option>
+                            </select>
+                        </div>
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="selectDataBits">Data Bits</label>
+                            <select id="selectDataBits" class="setting-select">
+                                <option value="7">7 Bits</option>
+                                <option value="8" selected>8 Bits</option>
+                            </select>
+                        </div>
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="selectStopBits">Stop Bits</label>
+                            <select id="selectStopBits" class="setting-select">
+                                <option value="1" selected>1 Stop Bit</option>
+                                <option value="2">2 Stop Bits</option>
+                            </select>
+                        </div>
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="selectFlowControl">Handshake</label>
+                            <select id="selectFlowControl" class="setting-select">
+                                <option value="none">None (Ignore handshake)</option>
+                                <option value="xonxoff" selected>XON/XOFF (Software)</option>
+                                <option value="hardware">Hardware (RTS/CTS)</option>
+                            </select>
+                        </div>
+
+                        <hr class="divider">
+
+                        <!-- Raw Send Console -->
+                        <div class="control-group" style="margin-bottom:0;">
+                            <label class="control-label">ASCII / Escape Command Console</label>
+                            <textarea class="code-area" id="rawInputText" placeholder="Type text here... Use \e for ESC, \n for LF, \r for CR. E.g.: \eEBold Text\eF\r\n" style="height: 100px; color: var(--color-primary);"></textarea>
+                            <button class="btn btn-action" id="btnSendRawText">
+                                <i class="fa-solid fa-paper-plane"></i> Send to Emulator
+                            </button>
+                        </div>
+
+                        <div class="control-group" style="margin-top: 4px; margin-bottom:0;">
+                            <label class="control-label">Upload Binary Print File (.prn / .bin)</label>
+                            <input type="file" id="fileInputRaw" accept=".bin,.prn,.txt" style="font-size:0.8rem; color:var(--color-text-muted);">
+                        </div>
+
+                    </div><!-- /.card-body-content -->
+                </div><!-- /#card-web-serial -->
+
+                <!-- ── Card 2: WebSocket ──────────────────────────── -->
+                <div class="guide-card collapsible-card collapsed" id="card-websocket">
+                    <div class="guide-header card-header-toggle" data-target="card-websocket">
+                        <h4>
+                            <span><i class="fa-solid fa-network-wired" style="color:var(--color-primary)"></i>&nbsp; Web Socket</span>
+                            <span style="display:flex;align-items:center;gap:8px;">
+                                <span id="wsBadge" class="ws-badge ws-badge-disconnected">DISCONNECTED</span>
+                                <i class="fa-solid fa-chevron-down fold-icon"></i>
+                            </span>
+                        </h4>
+                    </div>
+                    <div class="guide-body card-body-content" style="gap:12px;">
+
+                        <!-- WS LEDs -->
+                        <div class="led-card">
+                            <div class="led-row">
+                                <div class="led-item">
+                                    <div class="led led-status" id="wsLedConn"></div>
+                                    <span class="led-label">Connected</span>
+                                </div>
+                                <div class="led-item">
+                                    <div class="led led-rx" id="wsLedRx"></div>
+                                    <span class="led-label">Rx Data</span>
+                                </div>
+                                <div class="led-item">
+                                    <div class="led" id="wsLedLock" style="background:rgba(244,63,94,0.15);border-color:rgba(244,63,94,0.3);"></div>
+                                    <span class="led-label">Ch. Lock</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Connection Parameters -->
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="selectWsScheme">Scheme</label>
+                            <select id="selectWsScheme" class="setting-select">
+                                <option value="ws" selected>ws:// (local / LAN)</option>
+                                <option value="wss">wss:// (secure / cloud)</option>
+                            </select>
+                        </div>
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="inputWsHost">Host</label>
+                            <input type="text" id="inputWsHost" class="setting-input" value="localhost" placeholder="localhost or IP address" spellcheck="false">
+                        </div>
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="inputWsPort">Port</label>
+                            <input type="number" id="inputWsPort" class="setting-input" value="8080" min="1" max="65535">
+                        </div>
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="selectWsChannel">Channel</label>
+                            <div style="flex:1;display:flex;flex-direction:column;gap:6px;">
+                                <select id="selectWsChannel" class="setting-select">
+                                    <option value="printer" selected>printer</option>
+                                    <option value="plotter">plotter</option>
+                                    <option value="custom">custom…</option>
+                                </select>
+                                <input type="text" id="inputWsChannelCustom" class="setting-input" placeholder="e.g. my-device" spellcheck="false" style="display:none;">
+                            </div>
+                        </div>
+                        <div class="control-group control-group-inline" style="margin-bottom:0;">
+                            <label class="control-label" for="inputWsClientId">Client ID</label>
+                            <div style="flex:1;min-width:0;display:flex;align-items:center;gap:4px;">
+                                <input type="text" id="inputWsClientId" class="setting-input" placeholder="auto-generated" spellcheck="false" style="flex:1;min-width:0;">
+                                <button class="btn btn-action" id="btnWsNewId" title="Generate new random ID" style="width:20px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                    <i class="fa-solid fa-rotate" style="font-size:0.7rem;"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Resolved URL display -->
+                        <div id="wsUrlPreview" class="ws-url-preview" style="display:none;"></div>
+
+                        <!-- Connect button -->
+                        <button class="btn btn-primary ws-connect-btn" id="btnWsConnect">
+                            <i class="fa-solid fa-plug"></i> Connect
                         </button>
-                        <span id="serialAlert" class="unsupported-alert" style="display: none;">
-                            <i class="fa-solid fa-exclamation-triangle"></i> Web Serial not supported in this browser.
-                        </span>
-                    </div>
-                </div>
 
-                <!-- LEDs -->
-                <div class="led-card">
-                    <div class="led-row">
-                        <div class="led-item">
-                            <div class="led led-status" id="ledStatus"></div>
-                            <span class="led-label">Serial On</span>
+                        <hr class="divider">
+
+                        <!-- QR Code section -->
+                        <div class="control-group" style="margin-bottom:0;">
+                            <label class="control-label">Share URL via QR Code</label>
+                            <p style="font-size:0.78rem;color:var(--color-text-muted);margin-bottom:6px;">
+                                Generate a QR code for the current WS URL so other devices on the same network can scan and connect.
+                            </p>
+                            <button class="btn btn-action" id="btnWsQr" style="width:100%;">
+                                <i class="fa-solid fa-qrcode"></i> Generate QR Code
+                            </button>
+                            <div id="wsQrWrap" class="ws-qr-wrap" style="display:none;">
+                                <canvas id="wsQrCanvas"></canvas>
+                                <p id="wsQrLabel" class="ws-qr-label"></p>
+                            </div>
                         </div>
-                        <div class="led-item">
-                            <div class="led led-rx" id="ledRx"></div>
-                            <span class="led-label">Active Rx</span>
+
+                        <hr class="divider">
+
+                        <!-- Protocol note -->
+                        <div class="note-box" style="font-size:0.78rem;">
+                            <i class="fa-solid fa-circle-info" style="color:var(--color-primary);margin-top:2px;flex-shrink:0;"></i>
+                            <div>
+                                <strong>Server Protocol</strong><br>
+                                The emulator accepts raw ESC/P bytes (binary frames) or plain-text via WebSocket. JSON frames with <code>{"type":"lan-ip","ip":"…","port":…}</code> update the QR display automatically. Close code <code>4001</code> signals an exclusive channel lock.
+                            </div>
                         </div>
-                        <div class="led-item">
-                            <div class="led led-buffer" id="ledBuffer"></div>
-                            <span class="led-label">Line Active</span>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- RS232 Comms Parameters -->
-                <div class="control-group">
-                    <label class="control-label" for="selectBaudRate">Baud Rate</label>
-                    <select id="selectBaudRate" class="setting-select">
-                        <option value="300">300 bps</option>
-                        <option value="600">600 bps</option>
-                        <option value="1200">1200 bps</option>
-                        <option value="2400">2400 bps</option>
-                        <option value="4800">4800 bps</option>
-                        <option value="9600" selected>9600 bps</option>
-                        <option value="19200">19200 bps</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label class="control-label" for="selectParity">Parity</label>
-                    <select id="selectParity" class="setting-select">
-                        <option value="none" selected>None</option>
-                        <option value="even">Even</option>
-                        <option value="odd">Odd</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label class="control-label" for="selectDataBits">Data Bits</label>
-                    <select id="selectDataBits" class="setting-select">
-                        <option value="7">7 Bits</option>
-                        <option value="8" selected>8 Bits</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label class="control-label" for="selectStopBits">Stop Bits</label>
-                    <select id="selectStopBits" class="setting-select">
-                        <option value="1" selected>1 Stop Bit</option>
-                        <option value="2">2 Stop Bits</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label class="control-label" for="selectFlowControl">Handshake</label>
-                    <select id="selectFlowControl" class="setting-select">
-                        <option value="none">None (Ignore handshake)</option>
-                        <option value="xonxoff" selected>XON/XOFF (Software)</option>
-                        <option value="hardware">Hardware (RTS/CTS)</option>
-                    </select>
-                </div>
+                    </div><!-- /.card-body-content -->
+                </div><!-- /#card-websocket -->
 
-                <hr class="divider">
-
-                <!-- Raw Send Console -->
-                <div class="control-group">
-                    <label class="control-label">ASCII / Escape Command Console</label>
-                    <textarea class="code-area" id="rawInputText" placeholder="Type text here... Use \e for ESC, \n for LF, \r for CR. E.g.: \eEBold Text\eF\r\n" style="height: 100px; color: var(--color-primary);"></textarea>
-                    <button class="btn btn-action" id="btnSendRawText">
-                        <i class="fa-solid fa-paper-plane"></i> Send to Emulator
-                    </button>
-                </div>
-
-                <div class="control-group" style="margin-top: 10px;">
-                    <label class="control-label">Upload Binary Print File (.prn / .bin)</label>
-                    <input type="file" id="fileInputRaw" accept=".bin,.prn,.txt" style="font-size:0.8rem; color:var(--color-text-muted);">
-                </div>
-            </div>
+                </div><!-- /.guide-grid-vertical -->
+            </div><!-- /.sidebar-body -->
         </aside>
+
 
         <!-- Slide-out Operations Sidebar Panel -->
         <aside class="sidebar-panel" id="operations-panel">
@@ -705,6 +1067,7 @@
     <!-- Toast notifications -->
     <div id="toastContainer" class="toast-container"></div>
     
+    <script src="qr.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
