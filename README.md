@@ -4,7 +4,7 @@ This repository contains a number of web browser tools, comprising classic devic
 
 ### Tool Summary 
 Serial Tools  
-| Tool             | Sources | RS232 | WebSerial |
+| Tool             | Sources | RS232 | WebSocket |
 |------------------|---------|-------|-----------|
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTEREMU/">PrinterEmu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTEREMU">Emulates a dot matric printer with support for RS232 communication<a/> | &#x2714; | &#x2714; |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTERTOOL/">PrinterTool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTERTOOL">Allows prepraration of graphics intended for ESC/P & EFX-80s Printers</a> | N/A | N/A |
