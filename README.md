@@ -4,18 +4,18 @@ This repository contains a number of web browser tools, comprising classic devic
 
 ### Tool Summary 
 Serial Tools  
-| Tool          | Sources | 
-|------------------|---------| 
-| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTEREMU/">PrinterEmu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTEREMU">Emulates a dot matric printer with support for RS232 communication<a/> |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTERTOOL/">PrinterTool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTERTOOL">Allows prepraration of graphics intended for ESC/P & EFX-80s Printers</a> |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2EMU/">Printer2Emu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2EMU">Emulates the PSION Printer II with support for RS232 communication<a/> |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">Printer2Tool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2TOOL">Allows prepraration of graphics intended for the PSION Printer II</a> |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/PLOTTEREMU/">PlotterEmu</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PLOTTEREMU">Emulates a Pen Plotter with support for RS232 communication</a> |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/CIRCULARCHARTRECORDER/">Chart Recorder </a>  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/CIRCULARCHARTRECORDER">Emulates a Circular Chart Recorder with support for RS232 communication</a>|
+| Tool             | Sources | RS232 | WebSerial |
+|------------------|---------|-------|-----------|
+| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTEREMU/">PrinterEmu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTEREMU">Emulates a dot matric printer with support for RS232 communication<a/> | &#x2714; | &#x2714; |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTERTOOL/">PrinterTool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTERTOOL">Allows prepraration of graphics intended for ESC/P & EFX-80s Printers</a> | N/A | N/A |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2EMU/">Printer2Emu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2EMU">Emulates the PSION Printer II with support for RS232 communication<a/> |  &#x2714;  | T.B.C |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">Printer2Tool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2TOOL">Allows prepraration of graphics intended for the PSION Printer II</a> | N/A | N/A |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/PLOTTEREMU/">PlotterEmu</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PLOTTEREMU">Emulates a Pen Plotter with support for RS232 communication</a> | &#x2714; | T.B.C |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/CIRCULARCHARTRECORDER/">Chart Recorder </a>  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/CIRCULARCHARTRECORDER">Emulates a Circular Chart Recorder with support for RS232 communication</a>| &#x2714; | T.B.C |
 | - | - |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/OPKEditor3/">OPK Editor 3</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor3">Latest Organiser II series data pack preparation tool<a/> |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/LinkTool/">LinkTool    </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/LinkTool">A Web serial RS232 data pack pack download tool for Organiser II devices</a> |   
-| OPK Editor 2  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor2">The first enahancement created from JAAP's classic OPK Editor tool</a> |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/OPKEditor3/">OPK Editor 3</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor3">Latest Organiser II series data pack preparation tool<a/> | &#x2714; | T.B.C |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/LinkTool/">LinkTool    </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/LinkTool">A Web serial RS232 data pack pack download tool for Organiser II devices</a> | &#x2714; | N/A |   
+| OPK Editor 2  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor2">The first enahancement created from JAAP's classic OPK Editor tool</a> | &#x2714; | N/A |
 
 <BR>
 
