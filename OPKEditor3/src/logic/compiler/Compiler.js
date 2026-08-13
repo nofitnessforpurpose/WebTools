@@ -2835,6 +2835,9 @@ var OPLCompiler = (function () {
                             var pType = parseType(procName);
 
                             if (peek().type === 'INTEGER' && peek().value === 0) {
+                                if (pType === 2) {
+                                    throw new Error("Error on line " + t.line + ": Type mismatch on RETURN (expected String, got Integer)");
+                                }
                                 // IF Proc is Float, User explicitly requests QCode 86 (FLT) cast for RETURN 0.
                                 // So we DO NOT optimize to 0x7B.
                                 if (pType === 1) {
@@ -2848,6 +2851,9 @@ var OPLCompiler = (function () {
                                     emit(0x7A); // Return Int 0
                                 }
                             } else if (peek().type === 'FLOAT' && peek().value === 0) {
+                                if (pType === 2) {
+                                    throw new Error("Error on line " + t.line + ": Type mismatch on RETURN (expected String, got Float)");
+                                }
                                 next();
                                 if (pType === 0) {
                                     emit(0x7A); // Int Proc: Return 0.0 -> Return Int 0 (7A)
@@ -2858,9 +2864,18 @@ var OPLCompiler = (function () {
                                     emit(0x79); // RET
                                 }
                             } else if (peek().type === 'STRING' && peek().value === "") {
+                                if (pType !== 2) {
+                                    throw new Error("Error on line " + t.line + ": Type mismatch on RETURN (expected Numeric, got String)");
+                                }
                                 next(); emit(0x7C);
                             } else {
                                 var exprType = parseExpression();
+                                if (pType === 2 && exprType !== 2) {
+                                    throw new Error("Error on line " + t.line + ": Type mismatch on RETURN (expected String, got Numeric)");
+                                }
+                                if (pType !== 2 && exprType === 2) {
+                                    throw new Error("Error on line " + t.line + ": Type mismatch on RETURN (expected Numeric, got String)");
+                                }
                                 // Auto-cast return value?
                                 if (pType === 1 && exprType === 0) emit(0x86); // FLT
                                 else if (pType === 0 && exprType === 1) emit(0x87); // INT
