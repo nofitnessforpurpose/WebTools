@@ -19,7 +19,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
     *   Line Numbers
 *   **Bootable Pack Wizard**: Guided bootable pack creation and management. 
 *   **Pack Map**: Visual pack layout tool.
-*   **Visualiser**: Procedure & Global Visualisation
+*   **Visualiser**: Procedure & Global Visualisation.
 *   **Theme Support**: Switch between themes via the Options menu, also with custom themes support.
 *   **Drag and drop**: Supports dropping of pack files directly into the Pack Contents view.
 *   **Pack Management**: Create new packs, open existing ones (.opk, .hex, .bin), and save changes.
