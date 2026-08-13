@@ -11,7 +11,7 @@ var KEYWORDS_SHARED=[
 'POKEB','POKEW','RANDOMIZE','CURSOR','ESCAPE',
 'APPEND','CLOSE','COPY','CREATE','DELETE','ERASE',
 'FIRST','LAST','NEXT','BACK','OPEN','POSITION','RENAME','UPDATE','USE','EDIT',
-'ON', 'OFF',
+'ON','OFF',
 'RAISE','EXT','DIRW$','DISP','INPUT','KSTAT','VIEW','MENU'
 ];
 var KEYWORDS_LZ=[
@@ -465,6 +465,22 @@ var localArrFixups=[];
 var ptr=0;
 function peek(){return tokens[ptr];}
 function next(){return tokens[ptr++];}
+function getConstantIntValue(){
+var p=ptr;
+var sign=1;
+if(p<tokens.length&&(tokens[p].value==='-'||(tokens[p].type==='PUNCTUATION'&&tokens[p].value==='-'))){
+sign=-1;
+p++;
+}
+if(p<tokens.length&&(tokens[p].type==='INTEGER'||tokens[p].type==='HEX')){
+var val=tokens[p].value;
+p++;
+if(p>=tokens.length||tokens[p].type==='EOL'||tokens[p].value===':'||tokens[p].value===','){
+return sign*val;
+}
+}
+return null;
+}
 function error(msg){
 var lineInfo=(t&&t.line)?"Error on line "+t.line+": ":"Error: ";
 throw new Error(lineInfo+msg);
@@ -558,11 +574,23 @@ var rawName=varNameTok.value.toUpperCase();
 if (/^M[0-9]$/.test(rawName)){
 throw new Error("Error on line "+varNameTok.line+": Variable name '"+rawName+"' is reserved for calculator memory.");
 }
+var isDuplicate=locals.some(function (v){return v.name===rawName;})||
+globals.some(function (v){return v.name===rawName;})||
+externals.some(function (v){return v.name===rawName;});
+if(isDuplicate){
+throw new Error("Error on line "+varNameTok.line+": DUPLICATE NAME (Error 214) - The variable name given is already in existence in the current procedure.");
+}
 var type=parseType(rawName);
 var storedName=rawName;
 var dim=[];
+var isEmptyArray=false;
 if(peek()&&peek().value==='('){
 next();
+if(peek()&&peek().value===')'){
+next();
+dim.push(0);
+isEmptyArray=true;
+}else {
 while(true){
 var d=next();
 if(d.type==='INTEGER')dim.push(d.value);
@@ -571,10 +599,13 @@ if(peek()&&peek().value===')'){next();break;}
 if(!peek())break;
 }
 }
+}
 if(dim.length>0){
 if(type===0)type=3;
 else if(type===1)type=4;
-else if(type===2&&dim.length>1)type=5;
+else if(type===2){
+if(dim.length>1||isEmptyArray)type=5;
+}
 }
 if(type===2&&dim.length===0&&!isExt){
 throw new Error("Error on line "+varNameTok.line+": String variable '"+storedName+"' must specify a length.");
@@ -1461,7 +1492,7 @@ skipHeader=true;
 }
 while(ptr<tokens.length){
 var t=next();
-if(t.type==='KEYWORD'&&(t.value==='GLOBAL'||t.value==='LOCAL')){
+if(t.type==='KEYWORD'&&(t.value==='GLOBAL'||t.value==='LOCAL'||t.value==='EXTERNAL')){
 while(ptr<tokens.length&&tokens[ptr].type!=='EOL'&&tokens[ptr].value!==':')ptr++;
 continue;
 }
@@ -1636,9 +1667,29 @@ expect(',');
 parseExpression();
 emitCommand(0x4D);
 }else if(t.value==='AT'){
-parseExpression();
+var colConstVal=getConstantIntValue();
+var colType=parseExpression();
+if(colType!==0){
+error("AT column must be an integer");
+}
+var maxCol=(targetSystem==='LZ')?20:16;
+if(colConstVal!==null){
+if(colConstVal<1||colConstVal>maxCol){
+error("AT column "+colConstVal+" out of range (1 to "+maxCol+")");
+}
+}
 expect(',');
-parseExpression();
+var rowConstVal=getConstantIntValue();
+var rowType=parseExpression();
+if(rowType!==0){
+error("AT row must be an integer");
+}
+var maxRow=(targetSystem==='LZ')?4:2;
+if(rowConstVal!==null){
+if(rowConstVal<1||rowConstVal>maxRow){
+error("AT row "+rowConstVal+" out of range (1 to "+maxRow+")");
+}
+}
 emitCommand(0x4C);
 }else if(t.value==='CLS'){
 emitCommand(0x4E);
@@ -2129,6 +2180,12 @@ emit(0x80);
 continue;
 }
 var sym=getSymbol(targetName,hasIndices);
+var isParam=locals.some(function (l){
+return l.name===targetName&&l.isParam;
+});
+if(isParam){
+error("Bad Assignment - An attempt has been made to assign a value to a procedure parameter");
+}
 if(!sym){
 var suffix=targetName.slice(-1);
 var type=1;

@@ -61,12 +61,18 @@ content.innerHTML=`
             <div class="section">
                 <div class="section-title">Color Guide (Legend)</div>
                 <p>Each block of space is color-coded so you can quickly understand what it is:</p>
-                <ul>
-                    <li><span class="legend-box" style="background:#4CAF50;"></span> <strong>Pack Header:</strong> A tiny piece of system information at the very beginning of the pack.</li>
-                    <li><span class="legend-box" style="background:#2196F3;"></span> <strong>Active Records:</strong> Your normal, safe files (like OPL programs or Notepads).</li>
-                    <li><span class="legend-box" style="background:#f44336;"></span> <strong>Deleted Records:</strong> Files you deleted, but which still take up physical space. Because Flash and EPROM packs cannot erase single files, they leave these "ghosts" behind.</li>
-                    <li><span class="legend-box" style="background:#FF9800;"></span> <strong>Unknown Data:</strong> Blocks of memory filled with data that doesn't look like a standard file.</li>
-                    <li><span class="legend-box" style="background:#E0E0E0; border: 1px solid #ccc;"></span> <strong>Empty Space:</strong> The completely unused, blank area at the end of the pack.</li>
+                <ul style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; padding-left: 0; list-style: none;">
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#808080;"></span> <span><strong>Pack Header:</strong> System header bytes.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#d33682;"></span> <span><strong>OPL Procedure (Proc):</strong> OPL application code.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#268bd2;"></span> <span><strong>Data File:</strong> Psion database tables.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#2aa198;"></span> <span><strong>Notepad:</strong> Notepad text/records.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#b58900;"></span> <span><strong>Diary:</strong> Diary files.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#cb4b16;"></span> <span><strong>Comms Link:</strong> Comms configuration files.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#859900;"></span> <span><strong>Spreadsheet:</strong> Spreadsheet files.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#6c71c4;"></span> <span><strong>Pager / Records:</strong> Pager setup or generic records.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#dc322f;"></span> <span><strong>Unknown Data:</strong> Unrecognized data structures.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background:#073642; border: 1px solid rgba(255,255,255,0.1);"></span> <span><strong>Empty Space (Free):</strong> Unused area at the end.</span></li>
+                    <li style="display: flex; align-items: center; margin-bottom: 0;"><span class="legend-box" style="background: rgba(0, 0, 0, 0.5); background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255, 50, 50, 0.5) 4px, rgba(255, 50, 50, 0.5) 5px); border: 1px solid rgba(255, 50, 50, 0.3);"></span> <span><strong>Deleted Records:</strong> Ghost space of deleted files.</span></li>
                 </ul>
             </div>
             

@@ -124,6 +124,7 @@ this.codeEditorInstance=new CodeEditor(this.codeEditorWrapper,{
 value:s,
 language:'opl',
 readOnly:false,
+currentName:self.item.name,
 lineNumbers:OptionsManager.getOption('showLineNumbers'),
 folding:OptionsManager.getOption('codeFolding'),
 minimap:{enabled:false},
@@ -131,16 +132,41 @@ theme:ThemeManager.currentTheme,
 targetSystem:OptionsManager.getOption('targetSystem'),
 procedureMode:true,
 onHeaderBlur:function (headerValue){
-var match=headerValue.match(/^\s*([a-zA-Z][a-zA-Z0-9]{0,7}[%$]?)\s*:/i);
-if(match&&match[1]){
-var newName=match[1];
-if(self.item.name!==newName){
+var sanitized=self.sanitizeProcedureHeader(headerValue,self.item.name);
+var newName=sanitized.name;
+
+if(sanitized.changed){
+if(self.codeEditorInstance){
+if(self.codeEditorInstance.isSplitMode()&&self.codeEditorInstance.headerInput){
+self.codeEditorInstance.headerInput.value=sanitized.line;
+self.codeEditorInstance.updateFullTextFromParts();
+self.codeEditorInstance.update();
+if(self.codeEditorInstance.validateHeader)self.codeEditorInstance.validateHeader();
+}else {
+var fullText=self.codeEditorInstance.getValue();
+var lines=fullText.split('\n');
+lines[0]=sanitized.line;
+self.codeEditorInstance.setValue(lines.join('\n'));
+}
+}else {
+var sc=document.getElementById('sourcecode');
+if(sc){
+var lines=sc.value.split('\n');
+lines[0]=sanitized.line;
+sc.value=lines.join('\n');
+}
+}
+}
+
+if(newName&&self.item.name!==newName){
 self.item.name=newName;
 self.item.text=newName;
+if(self.codeEditorInstance&&self.codeEditorInstance.options){
+self.codeEditorInstance.options.currentName=newName;
+}
 var fnInput=document.getElementById('filename');
 if(fnInput)fnInput.value=newName;
 if(window.updateInventory)window.updateInventory();
-}
 }
 }
 });
@@ -634,6 +660,79 @@ var chld=this.item.child.child;
 var newdata=this.getProcedureData();
 return!arraysAreEqual(newdata,chld.data);
 }
+ProcedureFileEditor.prototype.sanitizeProcedureHeader=function (headerLine,fallbackName,isLiveTyping){
+if(!headerLine)headerLine="";
+
+var leadingSpaceMatch=headerLine.match(/^\s*/);
+var leadingSpace=leadingSpaceMatch?leadingSpaceMatch[0]:"";
+var trimmed=headerLine.trim();
+
+
+var paramList="";
+var parenIndex=trimmed.indexOf('(');
+if(parenIndex!==-1){
+var lastParen=trimmed.lastIndexOf(')');
+if(lastParen>parenIndex){
+paramList=trimmed.substring(parenIndex,lastParen+1);
+trimmed=trimmed.substring(0,parenIndex).trim();
+}
+}
+
+
+var firstColon=trimmed.indexOf(':');
+var rawIdent="";
+if(firstColon!==-1){
+rawIdent=trimmed.substring(0,firstColon).trim();
+}else {
+rawIdent=trimmed;
+}
+
+var identMatch=rawIdent.match(/^([a-zA-Z][a-zA-Z0-9]*([%$]?))/);
+if(!identMatch){
+if(isLiveTyping){
+return {
+line:headerLine,
+name:null,
+changed:false
+};
+}
+var validName="PROCNAME";
+if(fallbackName){
+var fbMatch=fallbackName.match(/^([a-zA-Z][a-zA-Z0-9]*([%$]?))/i);
+if(fbMatch){
+var fbFull=fbMatch[1];
+var fbSuffix=fbMatch[2]||"";
+var fbBase=fbFull.substring(0,fbFull.length-fbSuffix.length);
+validName=fbBase.substring(0,8)+fbSuffix;
+}
+}
+var sanitizedLine=leadingSpace+validName+":"+paramList;
+return {
+line:sanitizedLine,
+name:validName,
+changed:(sanitizedLine!==headerLine)
+};
+}
+
+var fullIdent=identMatch[1];
+var suffix=identMatch[2]||"";
+var baseName=fullIdent.substring(0,fullIdent.length-suffix.length);
+
+var truncatedBase=baseName.substring(0,8);
+var sanitizedLine;
+if(isLiveTyping&&baseName.length<=8){
+sanitizedLine=headerLine;
+}else {
+sanitizedLine=leadingSpace+truncatedBase+suffix+":"+paramList;
+}
+
+return {
+line:sanitizedLine,
+name:truncatedBase,
+changed:(sanitizedLine!==headerLine)
+};
+};
+
 ProcedureFileEditor.prototype.applyChanges=function (){
 var chld=this.item.child.child;
 
@@ -643,40 +742,16 @@ if(this.codeEditorInstance)txt=this.codeEditorInstance.getValue();
 else txt=document.getElementById("sourcecode").value;
 
 var lines=txt.split('\n');
-var firstLine=lines[0];
-var colonIndex=firstLine.indexOf(':');
-var sanitizedLine=firstLine;
-var nameChanged=false;
+var sanitized=this.sanitizeProcedureHeader(lines[0],this.item.name);
 
-if(colonIndex!==-1){
-var namePart=firstLine.substring(0,colonIndex);
-var rest=firstLine.substring(colonIndex);
-var trimmed=namePart.trim();
-if(trimmed.length>8){
-var leading=namePart.match(/^\s*/)[0];
-var truncated=trimmed.substring(0,8);
-sanitizedLine=leading+truncated+rest;
-nameChanged=true;
-}
-}else {
-var trimmed=firstLine.trim();
-if(trimmed.length>8&&trimmed.indexOf(' ')===-1){
-var match=firstLine.match(/^(\s*)(.*)$/);
-if(match){
-sanitizedLine=match[1]+match[2].substring(0,8)+":";
-nameChanged=true;
-}
-}
-}
-
-if(nameChanged){
-
-lines[0]=sanitizedLine;
+if(sanitized.changed){
+lines[0]=sanitized.line;
 txt=lines.join('\n');
 if(this.codeEditorInstance){
 this.codeEditorInstance.setValue(txt);
 }else {
-document.getElementById("sourcecode").value=txt;
+var sc=document.getElementById("sourcecode");
+if(sc)sc.value=txt;
 }
 }
 
@@ -695,11 +770,7 @@ chld.data[3]=ln&0xff;
 }
 
 
-
-
-
-var match=lines[0].match(/^\s*([a-zA-Z][a-zA-Z0-9]{0,7}[%$]?)\s*:/i);
-var newName=(match&&match[1])?match[1]:null;
+var newName=sanitized.name;
 
 if(newName){
 

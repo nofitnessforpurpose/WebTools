@@ -94,12 +94,13 @@ let pc=qcodeStart;
 
 
 while(pc<qcodeStart+qcodeSize){
-if(pc>=codeBlock.length)break;
+if(pc<0||pc>=codeBlock.length)break;
 const op=codeBlock[pc];
 const def=this.opcodes[op];
 if(!def){
 
-instructions.push({pc,text:`UNK_${op.toString(16)}`,size:1,op:op});
+const opHex=op!==undefined?op.toString(16):'UNDEF';
+instructions.push({pc,text:`UNK_${opHex}`,size:1,op:op});
 pc++;
 continue;
 }
@@ -417,7 +418,7 @@ log(poff,getHexBytes(poff,1),`ParamType`,typeLabel,"");
 
 let qcodeInstructionStart=0;
 if(!is11ByteLZ){
-qcodeInstructionStart=(metadataStart+qcodeTotalLen)-qSize;
+qcodeInstructionStart=Math.max(0,(metadataStart+qcodeTotalLen)-qSize);
 }
 
 const hMeta={
@@ -1680,6 +1681,7 @@ if(typeof window!=='undefined'){
 window.OPLDecompiler=OPLDecompiler;
 }
 if(typeof module!=='undefined'&&module.exports){
-module.exports={OPLDecompiler};
+module.exports=OPLDecompiler;
+module.exports.OPLDecompiler=OPLDecompiler;
 }
 })();

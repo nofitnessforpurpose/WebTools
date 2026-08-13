@@ -120,8 +120,19 @@ this.headerContainer.appendChild(this.headerInput);
 this.container.appendChild(this.headerContainer);
 var self=this;
 this.headerInput.addEventListener('input',function (){
-if(OptionsManager.getOption('autoUppercaseKeywords')){
 var val=this.value;
+var sanitized=self.sanitizeHeaderLine(val,(self.options&&self.options.currentName)||"PROCNAME",true);
+if(sanitized.changed){
+var start=this.selectionStart;
+var end=this.selectionEnd;
+this.value=sanitized.line;
+if(start>sanitized.line.length)start=sanitized.line.length;
+if(end>sanitized.line.length)end=sanitized.line.length;
+this.selectionStart=start;
+this.selectionEnd=end;
+val=sanitized.line;
+}
+if(OptionsManager.getOption('autoUppercaseKeywords')){
 var formatted=self.formatHeaderLine(val);
 if(formatted!==val){
 var start=this.selectionStart;
@@ -135,46 +146,25 @@ self.validateHeader();
 self.updateFullTextFromParts();
 if(self.errorLine!==-1)self.errorLine=-1;
 if(self.onChange)self.onChange();
-self.updateFullTextFromParts();
-if(self.onChange)self.onChange();
 });
 this.headerInput.addEventListener('blur',function (){
 var val=this.value;
-var changed=false;
-var colonIndex=val.indexOf(':');
-if(colonIndex!==-1){
-var namePart=val.substring(0,colonIndex);
-var rest=val.substring(colonIndex);
-var trimmedName=namePart.trim();
-if(trimmedName.length>8){
-var leadingSpace=namePart.match(/^\s*/)[0];
-var truncated=trimmedName.substring(0,8);
-val=leadingSpace+truncated+rest;
-this.value=val;
-changed=true;
-}
-}else {
-if(val.trim().length>8){
-var match=val.match(/^(\s*)(.*)$/);
-val=match[1]+match[2].substring(0,8)+":";
-this.value=val;
-changed=true;
-}
+var sanitized=self.sanitizeHeaderLine(val,(self.options&&self.options.currentName)||"PROCNAME",false);
+if(sanitized.changed){
+this.value=sanitized.line;
+val=sanitized.line;
 }
 if(OptionsManager.getOption('autoUppercaseKeywords')){
 var formatted=self.formatHeaderLine(val);
 if(formatted!==val){
 this.value=formatted;
 val=formatted;
-changed=true;
 }
 }
-if(changed){
 self.updateFullTextFromParts();
 self.update();
 if(self.onChange)self.onChange();
 if(self.validateHeader)self.validateHeader();
-}
 if(self.options.onHeaderBlur){
 self.options.onHeaderBlur(val);
 }
@@ -264,6 +254,21 @@ this.renderContainer.appendChild(this.renderLayer);
 var self=this;
 this.inputLayer.addEventListener('input',function (){
 if(self.errorLine!==-1)self.errorLine=-1;
+if(!self.isSplitMode()){
+var fullText=this.value;
+var lines=fullText.split('\n');
+var sanitized=self.sanitizeHeaderLine(lines[0],(self.options&&self.options.currentName)||"PROCNAME",true);
+if(sanitized.changed){
+var start=this.selectionStart;
+var end=this.selectionEnd;
+lines[0]=sanitized.line;
+this.value=lines.join('\n');
+if(start>this.value.length)start=this.value.length;
+if(end>this.value.length)end=this.value.length;
+this.selectionStart=start;
+this.selectionEnd=end;
+}
+}
 self.updateFullTextFromParts();
 self.update();
 if(self.onChange)self.onChange();
@@ -277,38 +282,16 @@ this.inputLayer.addEventListener('blur',function (){
 if(self.isSplitMode())return;
 var fullText=this.value;
 var lines=fullText.split('\n');
-var firstLine=lines[0];
-var originalFirstLine=firstLine;
-var changed=false;
-var val=firstLine;
-var colonIndex=val.indexOf(':');
-if(colonIndex!==-1){
-var namePart=val.substring(0,colonIndex);
-var rest=val.substring(colonIndex);
-var trimmedName=namePart.trim();
-if(trimmedName.length>8){
-var leadingSpace=namePart.match(/^\s*/)[0];
-var truncated=trimmedName.substring(0,8);
-val=leadingSpace+truncated+rest;
-changed=true;
-}
-}else {
-if(val.trim().length>8&&val.trim().indexOf(' ')===-1){
-var match=val.match(/^(\s*)(.*)$/);
-if(match){
-val=match[1]+match[2].substring(0,8)+":";
-changed=true;
-}
-}
-}
-if(changed){
-lines[0]=val;
+var sanitized=self.sanitizeHeaderLine(lines[0],(self.options&&self.options.currentName)||"PROCNAME",false);
+if(sanitized.changed){
+lines[0]=sanitized.line;
 this.value=lines.join('\n');
 self.updateFullTextFromParts();
+self.update();
 if(self.onChange)self.onChange();
 }
 if(self.options.onHeaderBlur){
-self.options.onHeaderBlur(val);
+self.options.onHeaderBlur(sanitized.line);
 }
 });
 this.inputLayer.addEventListener('keydown',function (e){
@@ -395,6 +378,69 @@ self.update();
 self.updateStickyHeader();
 });
 },
+sanitizeHeaderLine:function (headerLine,fallbackName,isLiveTyping){
+if(!headerLine)headerLine="";
+var leadingSpaceMatch=headerLine.match(/^\s*/);
+var leadingSpace=leadingSpaceMatch?leadingSpaceMatch[0]:"";
+var trimmed=headerLine.trim();
+var paramList="";
+var parenIndex=trimmed.indexOf('(');
+if(parenIndex!==-1){
+var lastParen=trimmed.lastIndexOf(')');
+if(lastParen>parenIndex){
+paramList=trimmed.substring(parenIndex,lastParen+1);
+trimmed=trimmed.substring(0,parenIndex).trim();
+}
+}
+var firstColon=trimmed.indexOf(':');
+var rawIdent="";
+if(firstColon!==-1){
+rawIdent=trimmed.substring(0,firstColon).trim();
+}else {
+rawIdent=trimmed;
+}
+var identMatch=rawIdent.match(/^([a-zA-Z][a-zA-Z0-9]*([%$]?))/);
+if(!identMatch){
+if(isLiveTyping){
+return {
+line:headerLine,
+name:null,
+changed:false
+};
+}
+var validName="PROCNAME";
+if(fallbackName){
+var fbMatch=fallbackName.match(/^([a-zA-Z][a-zA-Z0-9]*([%$]?))/i);
+if(fbMatch){
+var fbFull=fbMatch[1];
+var fbSuffix=fbMatch[2]||"";
+var fbBase=fbFull.substring(0,fbFull.length-fbSuffix.length);
+validName=fbBase.substring(0,8)+fbSuffix;
+}
+}
+var sanitizedLine=leadingSpace+validName+":"+paramList;
+return {
+line:sanitizedLine,
+name:validName,
+changed:(sanitizedLine!==headerLine)
+};
+}
+var fullIdent=identMatch[1];
+var suffix=identMatch[2]||"";
+var baseName=fullIdent.substring(0,fullIdent.length-suffix.length);
+var truncatedBase=baseName.substring(0,8);
+var sanitizedLine;
+if(isLiveTyping&&baseName.length<=8){
+sanitizedLine=headerLine;
+}else {
+sanitizedLine=leadingSpace+truncatedBase+suffix+":"+paramList;
+}
+return {
+line:sanitizedLine,
+name:truncatedBase,
+changed:(sanitizedLine!==headerLine)
+};
+},
 validateHeader:function (){
 if(!this.headerInput)return;
 var val=this.headerInput.value;
@@ -447,6 +493,7 @@ var lines=val.split('\n');
 var first=lines.length>0?lines[0]:"";
 var rest=lines.length>1?lines.slice(1).join('\n'):"";
 this.headerInput.value=first;
+if(this.validateHeader)this.validateHeader();
 }else {
 }
 this.foldState={};
@@ -860,11 +907,7 @@ var isKeyword=SyntaxHighlighter.keywordMap&&SyntaxHighlighter.keywordMap.hasOwnP
 if(isKeyword){
 output+=upper;
 }else {
-if (/\bPROC\s+$/i.test(output)){
-output+=upper;
-}else {
 output+=word;
-}
 }
 j+=word.length;
 continue;

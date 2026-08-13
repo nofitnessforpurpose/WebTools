@@ -411,6 +411,7 @@ element.innerHTML=
 "<p>Original by <b>Jaap Scherphuis</b></p>" +
 "<p>Icons by <b>Font Awesome</b></p>" +
 "<p>Implemented with precision by <b>Antigravity</b>.</p>" +
+"<p>Special thanks to: <b>Martin Reid</b></p>" +
 "<p>Reimagined by <b>NFfP</b>.</p>" +
 "</div>";
 
@@ -428,18 +429,18 @@ element.innerHTML=`
             <div style="text-align: center; padding: 10px; font-family: sans-serif;">
                 <h2 style="margin-top: 5px;">Key Map</h2>
                 <div style="text-align: left; margin-top: 15px; display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; font-size: 14px;">
-                    <div style="font-weight: bold;">F1</div><div>Help / About</div>
-                    <div style="font-weight: bold;">F2</div><div>New Pack</div>
-                    <div style="font-weight: bold;">F3</div><div>Open Pack</div>
-                    <div style="font-weight: bold;">F4</div><div>Save Pack</div>
-                    <div style="font-weight: bold;">F5</div><div>Toggle File Menu</div>
-                    <div style="font-weight: bold;">F6</div><div>Delete Item</div>
-                    <div style="font-weight: bold;">F7</div><div>Import Item</div>
-                    <div style="font-weight: bold;">F8</div><div>Export Hex</div>
-                    <div style="font-weight: bold;">F9</div><div>Apply Changes</div>
-                    <div style="font-weight: bold;">F10</div><div>Discard Changes</div>
-                    <div style="font-weight: bold;">F11</div><div>Options</div>
-                    <div style="font-weight: bold;">F12</div><div>Key Map (This Dialog)</div>
+                    <div style="font-weight: bold;">Ctrl + F1</div><div>Help / About</div>
+                    <div style="font-weight: bold;">Ctrl + F2</div><div>New Pack</div>
+                    <div style="font-weight: bold;">Ctrl + F3</div><div>Open Pack</div>
+                    <div style="font-weight: bold;">Ctrl + F4</div><div>Save Pack</div>
+                    <div style="font-weight: bold;">Ctrl + F5</div><div>Toggle File Menu</div>
+                    <div style="font-weight: bold;">Ctrl + F6</div><div>Delete Item</div>
+                    <div style="font-weight: bold;">Ctrl + F7</div><div>Import Item</div>
+                    <div style="font-weight: bold;">Ctrl + F8</div><div>Export Hex</div>
+                    <div style="font-weight: bold;">Ctrl + F9</div><div>Apply Changes</div>
+                    <div style="font-weight: bold;">Ctrl + F10</div><div>Discard Changes</div>
+                    <div style="font-weight: bold;">Ctrl + F11</div><div>Options</div>
+                    <div style="font-weight: bold;">Ctrl + F12</div><div>Key Map (This Dialog)</div>
                 </div>
                 <hr style="margin: 15px auto; width: 100%; border: 0; border-top: 1px solid #ccc;">
                 <p style="font-size: 12px; opacity: 0.8;">Function keys are enabled in <b>Options > Visuals</b>.</p>
@@ -535,7 +536,7 @@ return `
                         <h4>UI Visibility</h4>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-show-toolbar"> Show Icon Toolbar</label></div>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-show-menubar"> Show File/Help Menubar</label></div>
-                        <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-enable-fkeys"> Enable Function Keys (F1-F12)</label></div>
+                        <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-enable-fkeys"> Enable Function Keys (Ctrl + F1-F12)</label></div>
                         <div style="margin-bottom: 10px;"><label><input type="checkbox" id="opt-splash"> Show Splash Screen on Startup</label></div>
                     </div>
                     <div>

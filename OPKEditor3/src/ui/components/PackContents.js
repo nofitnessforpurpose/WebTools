@@ -5,6 +5,7 @@ class PackContentsView{
 constructor(containerElement){
 this.container=containerElement;
 this.dragSrcInfo=null;
+this.dragPackSrcIdx=null;
 
 
 this.handleDragOver=this.handleDragOver.bind(this);
@@ -153,8 +154,6 @@ container.appendChild(fragment);
 
 
 
-
-
 }else {
 if(typeof fileinfoelement!=='undefined'&&fileinfoelement)fileinfoelement.innerText="No Packs";
 }
@@ -262,6 +261,76 @@ packHeader.appendChild(toggle);
 
 
 var self=this;
+packHeader.setAttribute('draggable','true');
+
+packHeader.addEventListener('dragstart',function (e){
+self.dragPackSrcIdx=pIdx;
+e.dataTransfer.effectAllowed='move';
+e.dataTransfer.setData('text/plain',String(pIdx));
+packWrapper.classList.add('dragElem');
+});
+
+packHeader.addEventListener('dragover',function (e){
+if(self.dragPackSrcIdx===null||self.dragPackSrcIdx===undefined)return;
+e.preventDefault();
+e.dataTransfer.dropEffect='move';
+packHeader.classList.add('over');
+});
+
+packHeader.addEventListener('dragenter',function (e){
+if(self.dragPackSrcIdx===null||self.dragPackSrcIdx===undefined)return;
+e.preventDefault();
+});
+
+packHeader.addEventListener('dragleave',function (){
+packHeader.classList.remove('over');
+});
+
+packHeader.addEventListener('drop',function (e){
+if(self.dragPackSrcIdx===null||self.dragPackSrcIdx===undefined)return;
+e.preventDefault();
+e.stopPropagation();
+
+var src=self.dragPackSrcIdx;
+var dest=pIdx;
+
+packHeader.classList.remove('over');
+packWrapper.classList.remove('dragElem');
+self.dragPackSrcIdx=null;
+
+if(src!==dest){
+
+var packToMove=packs.splice(src,1)[0];
+packs.splice(dest,0,packToMove);
+
+
+if(typeof currentPackIndex!=='undefined'){
+if(currentPackIndex===src)currentPackIndex=dest;
+else if(currentPackIndex>src&&currentPackIndex<=dest)currentPackIndex--;
+else if(currentPackIndex<src&&currentPackIndex>=dest)currentPackIndex++;
+}
+if(typeof selectedPackIndex!=='undefined'){
+if(selectedPackIndex===src)selectedPackIndex=dest;
+else if(selectedPackIndex>src&&selectedPackIndex<=dest)selectedPackIndex--;
+else if(selectedPackIndex<src&&selectedPackIndex>=dest)selectedPackIndex++;
+}
+
+
+if(typeof saveSession==='function'){
+saveSession();
+}
+
+self.render();
+}
+});
+
+packHeader.addEventListener('dragend',function (){
+packHeader.classList.remove('over');
+packWrapper.classList.remove('dragElem');
+self.dragPackSrcIdx=null;
+});
+
+
 packHeader.addEventListener('focus',function (){
 
 if(typeof selectedPackIndex!=='undefined'&&selectedPackIndex!==pIdx){
@@ -284,6 +353,7 @@ selectPack(pIdx);
 
 title.addEventListener('dblclick',function (e){
 e.stopPropagation();
+packHeader.setAttribute('draggable','false');
 var input=document.createElement('input');
 input.type='text';
 input.className='rename-input';

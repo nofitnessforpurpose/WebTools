@@ -629,6 +629,7 @@ element.innerHTML=
 "<p>Original by <b>Jaap Scherphuis</b></p>" +
 "<p>Icons by <b>Font Awesome</b></p>" +
 "<p>Implemented with precision by <b>Antigravity</b>.</p>" +
+"<p>Special thanks to: <b>Martin Reid</b></p>" +
 "<p>Reimagined by <b>NFfP</b>.</p>" +
 "</div>";
 
@@ -3418,25 +3419,7 @@ if(m.menu.classList.contains('show'))activeDropdown=m.menu;
 
 var isCtrl=e.ctrlKey||e.metaKey;
 
-if(isCtrl){
-if(e.key==='n'||e.key==='N'){
-e.preventDefault();
-
-var btn=document.getElementById('btn-file-menu');
-if(btn)btn.click();
-}else if(e.key==='o'||e.key==='O'){
-e.preventDefault();
-
-var link=document.getElementById('menu-open-pack');
-if(link)link.click();
-}else if(e.key==='s'||e.key==='S'){
-e.preventDefault();
-
-packSaved();
-}
-}else {
-
-if(OptionsManager.getOption('enableFunctionKeys')){
+if(OptionsManager.getOption('enableFunctionKeys')&&isCtrl&&e.key.match(/^F(1[0-2]|[1-9])$/)){
 if(e.key==='F1'){
 e.preventDefault();
 if(typeof DialogManager!=='undefined'&&DialogManager.showAboutDialog)DialogManager.showAboutDialog();
@@ -3475,8 +3458,23 @@ if(typeof DialogManager!=='undefined'&&DialogManager.showOptionsDialog)DialogMan
 e.preventDefault();
 if(typeof DialogManager!=='undefined'&&DialogManager.showKeyMapDialog)DialogManager.showKeyMapDialog();
 }
-}
+}else if(isCtrl){
+if(e.key==='n'||e.key==='N'){
+e.preventDefault();
 
+var btn=document.getElementById('btn-file-menu');
+if(btn)btn.click();
+}else if(e.key==='o'||e.key==='O'){
+e.preventDefault();
+
+var link=document.getElementById('menu-open-pack');
+if(link)link.click();
+}else if(e.key==='s'||e.key==='S'){
+e.preventDefault();
+
+packSaved();
+}
+}else {
 
 if(activeDropdown){
 if(e.key==='Escape'){
