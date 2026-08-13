@@ -17,6 +17,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
     *   Syntax Highlighting (OPL keywords, strings, comments)
     *   Code Folding (collapse IF, DO, WHILE blocks)
     *   Line Numbers
+*   **Bootable Pack Wizard**: Guided bootable pack creation and management. 
 *   **Pack Map**: Visual pack layout tool
 *   **Visualiser**: Procedure & Global Visualisation
 *   **Theme Support**: Switch between themes via the Options menu, also with custom themes support.
@@ -24,6 +25,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 *   **Pack Management**: Create new packs, open existing ones (.opk, .hex, .bin), and save changes.
 *   **Item Management**: Add, delete, and import items (procedures, data files, notepad entries).
 *   **Multiple Pack Support**: View multiple packs simultaneously
+*   **Extensive Help**: OPL command and tool use help.
 *   **Intel HEX Export**: Export packs to Intel HEX format for burning to EPROMs.
 *   **Chrome, Firefox & IE**: Supports multiple browsers.
     
