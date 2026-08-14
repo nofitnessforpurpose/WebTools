@@ -1852,7 +1852,7 @@ checkData=it.child.getFullData();
 
 var selectedEditor=null;
 
-var isNative=(typeof NativeDecoder!=='undefined'&&tp!==3&&tp!==0x83)?NativeDecoder.isNative(checkData,tp):false;
+var isNative=(typeof NativeDecoder!=='undefined'&&tp!==3&&tp!==0x83&&!(tp>=16&&tp<=126))?NativeDecoder.isNative(checkData,tp):false;
 
 if(checkData){
 var hex="";

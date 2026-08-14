@@ -14,20 +14,16 @@ return NativeDecoder.prototype.isNative(data,type);
 NativeDecoder.prototype={
 isNative:function (data,type){
 if(!data||data.length<10)return false;
-if(type===0x83||type===0x03)return false;
-if(type===0x10)return true;
-var syncIdx=(data[0]+2<=data.length&&(data[1]===0x00||data[1]===0x02))?2:0;
-var isSync=(data[syncIdx]===0x02&&data[syncIdx+1]===0x80);
-if(!isSync)return false;
-var offsets=[syncIdx+6,syncIdx+8];
-var foundHeader=false;
-for(var i=0;i<offsets.length;i++){
-if(this.isHeaderPlausible(data,offsets[i])){
-foundHeader=true;
-break;
+if(type===0x83||type===0x03||type===0x81||type===0x01||(type>=16&&type<=126))return false;
+if(data[0]===0x02&&((data[1]&0x7f)===0x00)){
+if(this.isHeaderPlausible(data,6)||this.isHeaderPlausible(data,8)){
+return true;
 }
 }
-return foundHeader;
+if(this.isHeaderPlausible(data,2)||this.isHeaderPlausible(data,4)){
+return true;
+}
+return false;
 },
 isHeaderPlausible:function (data,hOff){
 if(!data||hOff+6>data.length)return false;
@@ -42,25 +38,30 @@ return (maxVec>=0&&maxVec<=64)&&
 },
 parse:function (data,type,absoluteOffset){
 if(!data||data.length<4)return null;
-var start=0;
-var hasLenByte=false;
-if(data[0]+2<=data.length&&(data[1]===0x00||data[1]===0x02||data[1]===0x10||data[1]===0x83)){
-hasLenByte=true;
-start=2;
+var hasRecordHeader=false;
+if(data.length>=4&&data[0]===0x02&&((data[1]&0x7f)===0x00)){
+hasRecordHeader=true;
 }
-var syncIdx=hasLenByte?2:0;
-var isSync=(data[syncIdx]===0x02&&data[syncIdx+1]===0x80);
-if(!isSync&&type!==0x02&&type!==0x10&&type!==0x00){
-return null;
+var longRecLen=0;
+var execLen=0;
+var offset=0;
+if(hasRecordHeader){
+longRecLen=(data[2]<<8)|data[3];
+execLen=(data[4]<<8)|data[5];
+offset=6;
+}else {
+execLen=(data[0]<<8)|data[1];
+longRecLen=execLen;
+offset=2;
 }
-var longRecLen=(data[syncIdx+2]<<8)|data[syncIdx+3];
-var execLen=(data[syncIdx+4]<<8)|data[syncIdx+5];
-var offset=syncIdx+6;
 if(offset+8<=data.length){
 if(!this.isHeaderPlausible(data,offset)&&this.isHeaderPlausible(data,offset+2)){
 offset+=2;
 execLen-=2;
 }
+}
+if(!this.isHeaderPlausible(data,offset)){
+return null;
 }
 if(offset+execLen>data.length){
 execLen=data.length-offset;
@@ -77,9 +78,9 @@ this.syncBootAddress(metadata,absoluteOffset+offset,execBlock.length,function (n
 if(newStart<codeStart)codeStart=newStart;
 });
 }
-var relocations=this.parseFixups(execBlock,fixups,syncIdx,execLen,metadata);
-var fullPayload=data.slice(syncIdx+6);
-metadata.headerOffset=offset-(syncIdx+6);
+var relocations=this.parseFixups(execBlock,fixups,hasRecordHeader?0:0,execLen,metadata);
+var fullPayload=data.slice(offset);
+metadata.headerOffset=0;
 var instructions=this.disassemble(fullPayload,vectors,codeStart,metadata,relocations);
 return {
 longRecLen:longRecLen,
