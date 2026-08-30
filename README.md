@@ -14,7 +14,7 @@ Serial Tools
 | <a href="https://nofitnessforpurpose.github.io/WebTools/CIRCULARCHARTRECORDER/">Chart Recorder </a>  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/CIRCULARCHARTRECORDER">Emulates a Circular Chart Recorder with support for RS232 communication</a>| &#x2714; | T.B.C |
 | - | - |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/OPKEditor3/">OPK Editor 3</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor3">Latest Organiser II series data pack preparation tool<a/> | T.B.C  | T.B.C |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/LinkTool/">LinkTool    </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/LinkTool">A Web serial RS232 data pack pack download tool for Organiser II devices</a> | &#x2714; | N/A |   
+| <a href="https://nofitnessforpurpose.github.io/WebTools/LinkTool/">LinkTool    </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/LinkTool">Beta - Some technical inconsistencies have been identified. - A Web serial RS232 data pack pack download tool for Organiser II devices</a> | &#x2714; | N/A |   
 | OPK Editor 2  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor2">The first enahancement created from JAAP's classic OPK Editor tool</a> | &#x2714; | N/A |
 
 <BR>
