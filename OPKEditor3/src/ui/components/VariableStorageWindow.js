@@ -45,12 +45,15 @@ titleBar.style.cssText=`
             flex-shrink: 0;
         `;
 titleBar.innerHTML='<span>Decompilation Variable Storage</span><div class="controls" style="display:flex; align-items:center;">' +
-'<i class="fas fa-copy copy-btn" title="Copy to Clipboard" style="cursor:pointer; font-size:14px; margin-right:15px;"></i>' +
+'<button type="button" class="icon-btn copy-btn" title="Copy to Clipboard" style="background:transparent; border:none; color:inherit; cursor:pointer; padding:0; margin-right:15px; display:flex; align-items:center;">' +
+'<i data-lucide="copy" style="width:14px; height:14px;"></i>' +
+'</button>' +
 '<span class="close-btn" style="cursor:pointer; font-size:16px;">&times;</span>' +
 '</div>';
 
 
-titleBar.querySelector('.copy-btn').addEventListener('click',()=>{
+titleBar.querySelector('.copy-btn').addEventListener('click',(e)=>{
+e.stopPropagation();
 this.copyToClipboard();
 });
 
@@ -139,6 +142,7 @@ this.element.appendChild(titleBar);
 this.element.appendChild(header);
 this.element.appendChild(this.content);
 document.body.appendChild(this.element);
+if(typeof lucide!=='undefined')lucide.createIcons({root:titleBar});
 
 
 titleBar.querySelector('.close-btn').addEventListener('click',()=>{
@@ -153,7 +157,7 @@ let isDragging=false;
 let startX,startY,initialLeft,initialTop;
 
 titleBar.addEventListener('mousedown',(e)=>{
-if(e.target.classList.contains('close-btn'))return;
+if(e.target.closest('.close-btn')||e.target.closest('.copy-btn'))return;
 isDragging=true;
 startX=e.clientX;
 startY=e.clientY;

@@ -74,9 +74,9 @@ content.innerHTML=`
                 <p>A uniquely powerful feature of the Pack Contents view is its full Drag and Drop support. Note that all drag-and-drop file operations are applied instantly to the memory structure.</p>
                 <ul>
                     <li><strong>Opening Files:</strong> You can drag a <span class="code-mono">.OPK</span> or <span class="code-mono">.HEX</span> file directly from your computer into the application to instantly open a new pack view.</li>
-                    <li><strong>Multi-Select:</strong> You can hold the <strong>Ctrl</strong> or <strong>Shift</strong> keys on your keyboard while clicking to highlight multiple records at once. This is perfect for bulk reorganizing.</li>
+                    <li><strong>Multi-Select:</strong> You can hold the <strong>Ctrl</strong> (or <strong>Cmd &#8984;</strong> on Mac) or <strong>Shift</strong> keys on your keyboard while clicking to highlight multiple records at once. This is perfect for bulk reorganizing.</li>
                     <li><strong>Changing Order:</strong> You can reorganize files by clicking and dragging them up or down within the same Datapak.</li>
-                    <li><strong>Copying and Moving:</strong> You can drag single or multi-selected records across into completely different Datapak windows. The interface follows standard window behaviors, where you can easily Copy or Move items between packs to organize your libraries.</li>
+                    <li><strong>Copying and Moving:</strong> You can drag single or multi-selected records across into completely different Datapak windows. The interface follows standard window behaviors: hold <strong>Ctrl</strong> (or <strong>Option &#8997; / Cmd &#8984;</strong> on Mac) while dragging to Copy rather than Move items between packs.</li>
                 </ul>
 
                 <details class="tech-note" style="margin-bottom: 15px;">
@@ -102,20 +102,20 @@ content.innerHTML=`
                 <div class="section-title">Understanding the Icons</div>
                 <p>The small icons next to the file names give you important clues about their status and structural type:</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; margin-bottom: 15px;">
-                    <div><i class="fa-regular fa-file-code" style="width:20px; color:var(--text-color);"></i> <strong>OPL Procedure</strong></div>
-                    <div><i class="fas fa-table" style="width:20px; color:var(--text-color);"></i> <strong>Data File</strong></div>
-                    <div><i class="fas fa-note-sticky" style="width:20px; color:var(--text-color);"></i> <strong>Notepad</strong></div>
-                    <div><i class="fas fa-file-lines" style="width:20px; color:var(--text-color);"></i> <strong>Data Record</strong></div>
-                    <div><i class="fas fa-microchip" style="width:20px; color:var(--text-color);"></i> <strong>Compiled OPL (QCode)</strong></div>
-                    <div><i class="fas fa-book" style="width:20px; color:var(--text-color);"></i> <strong>Diary</strong></div>
-                    <div><i class="fas fa-table-cells" style="width:20px; color:var(--text-color);"></i> <strong>Spreadsheet</strong></div>
-                    <div><i class="fas fa-receipt" style="width:20px; color:var(--text-color);"></i> <strong>Pack Header</strong></div>
+                    <div><i data-lucide="file-code" style="width:20px; color:var(--text-color);"></i> <strong>OPL Procedure</strong></div>
+                    <div><i data-lucide="table" style="width:20px; color:var(--text-color);"></i> <strong>Data File</strong></div>
+                    <div><i data-lucide="sticky-note" style="width:20px; color:var(--text-color);"></i> <strong>Notepad</strong></div>
+                    <div><i data-lucide="file-text" style="width:20px; color:var(--text-color);"></i> <strong>Data Record</strong></div>
+                    <div><i data-lucide="cpu" style="width:20px; color:var(--text-color);"></i> <strong>Compiled OPL (QCode)</strong></div>
+                    <div><i data-lucide="book-text" style="width:20px; color:var(--text-color);"></i> <strong>Diary</strong></div>
+                    <div><i data-lucide="grid" style="width:20px; color:var(--text-color);"></i> <strong>Spreadsheet</strong></div>
+                    <div><i data-lucide="receipt-text" style="width:20px; color:var(--text-color);"></i> <strong>Pack Header</strong></div>
                 </div>
 
                 <ul>
-                    <li><strong><i class="fas fa-rectangle-xmark" style="color:#d32f2f;"></i> End Of Pack:</strong> The structural boundary closing the Datapak.</li>
-                    <li><strong><i class="fas fa-trash-can" style="color:#f44336;"></i> Strikethrough Text:</strong> This indicates a <em>Deleted</em> item. On the original Psion devices, files are "marked" as deleted but the data isn't erased until the pack is reformatted. This leaves behind "dead space" that still takes up memory.</li>
-                    <li><strong><i class="fas fa-circle-question" style="color:#FF9800;"></i> Unrecognized Item:</strong> This means the editor found a block of data, but doesn't know what application it belongs to. You can still open it as raw data (Hexadecimal).</li>
+                    <li><strong><i data-lucide="x-square" style="color:#d32f2f;"></i> End Of Pack:</strong> The structural boundary closing the Datapak.</li>
+                    <li><strong><i data-lucide="trash-2" style="color:#f44336;"></i> Strikethrough Text:</strong> This indicates a <em>Deleted</em> item. On the original Psion devices, files are "marked" as deleted but the data isn't erased until the pack is reformatted. This leaves behind "dead space" that still takes up memory.</li>
+                    <li><strong><i data-lucide="help-circle" style="color:#FF9800;"></i> Unrecognized Item:</strong> This means the editor found a block of data, but doesn't know what application it belongs to. You can still open it as raw data (Hexadecimal).</li>
                 </ul>
 
                 <details class="tech-note" style="margin-bottom: 15px;">
@@ -125,6 +125,7 @@ content.innerHTML=`
             </div>
         `;
 doc.body.appendChild(content);
+if(typeof lucide!=='undefined')lucide.createIcons({root:content});
 }
 return {openWindow:openWindow};
 })();

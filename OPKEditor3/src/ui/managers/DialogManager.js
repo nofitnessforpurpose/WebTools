@@ -286,6 +286,30 @@ OptionsManager.setOption('spreadsheetMode',this.value);
 if(AppStore.state.currentEditor instanceof SpreadsheetFileEditor)AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
 });
 
+var iconStyleSelect=element.querySelector('#opt-icon-style');
+if(iconStyleSelect){
+iconStyleSelect.value=OptionsManager.getOption('iconStyle')||'regular';
+iconStyleSelect.addEventListener('change',function (){
+OptionsManager.setOption('iconStyle',this.value);
+});
+}
+
+var iconSizeSelect=element.querySelector('#opt-icon-size');
+if(iconSizeSelect){
+iconSizeSelect.value=OptionsManager.getOption('iconSize')||'standard';
+iconSizeSelect.addEventListener('change',function (){
+OptionsManager.setOption('iconSize',this.value);
+});
+}
+
+var iconColoringSelect=element.querySelector('#opt-icon-coloring');
+if(iconColoringSelect){
+iconColoringSelect.value=OptionsManager.getOption('iconColoring')||'monochrome';
+iconColoringSelect.addEventListener('change',function (){
+OptionsManager.setOption('iconColoring',this.value);
+});
+}
+
 
 addListener('#opt-mm-pagebreaks','memoryMapShowPageBreaks',()=>{
 if(AppStore.state.currentEditor instanceof MemoryMapEditor)AppStore.state.currentEditor.initialise(AppStore.state.currentEditor.item);
@@ -409,7 +433,7 @@ element.innerHTML=
 "<p>Version "+(typeof APP_VERSION!=='undefined'?APP_VERSION:'3.0.x')+"</p>" +
 "<hr style='margin: 15px auto; width: 80%; border: 0; border-top: 1px solid #ccc;'>" +
 "<p>Original by <b>Jaap Scherphuis</b></p>" +
-"<p>Icons by <b>Font Awesome</b></p>" +
+"<p>Icons by <b>Lucide</b> - <a href=\"https://github.com/lucide-icons/lucide/blob/main/LICENSE\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color: inherit; text-decoration: none;\">ISC License</a></p>" +
 "<p>Implemented with precision by <b>Antigravity</b>.</p>" +
 "<p>Special thanks to: <b>Martin Reid</b></p>" +
 "<p>Reimagined by <b>NFfP</b>.</p>" +
@@ -424,26 +448,57 @@ setTimeout(()=>dialog.stop(),3000);
 },
 
 showKeyMapDialog:function (){
+var isMacPlatform=(typeof window!=='undefined'&&window.isMac)||(typeof navigator!=='undefined'&&(/Mac|iPod|iPhone|iPad/.test(navigator.platform||'')|| /Mac/.test(navigator.userAgent||'')));
+var mod=isMacPlatform?'⌘':'Ctrl';
+var alt=isMacPlatform?'⌥':'Alt';
 var element=document.createElement('div');
 element.innerHTML=`
-            <div style="text-align: center; padding: 10px; font-family: sans-serif;">
+            <div style="text-align: center; padding: 10px; font-family: sans-serif; max-width: 520px;">
                 <h2 style="margin-top: 5px;">Key Map</h2>
-                <div style="text-align: left; margin-top: 15px; display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; font-size: 14px;">
-                    <div style="font-weight: bold;">Ctrl + F1</div><div>Help / About</div>
-                    <div style="font-weight: bold;">Ctrl + F2</div><div>New Pack</div>
-                    <div style="font-weight: bold;">Ctrl + F3</div><div>Open Pack</div>
-                    <div style="font-weight: bold;">Ctrl + F4</div><div>Save Pack</div>
-                    <div style="font-weight: bold;">Ctrl + F5</div><div>Toggle File Menu</div>
-                    <div style="font-weight: bold;">Ctrl + F6</div><div>Delete Item</div>
-                    <div style="font-weight: bold;">Ctrl + F7</div><div>Import Item</div>
-                    <div style="font-weight: bold;">Ctrl + F8</div><div>Export Hex</div>
-                    <div style="font-weight: bold;">Ctrl + F9</div><div>Apply Changes</div>
-                    <div style="font-weight: bold;">Ctrl + F10</div><div>Discard Changes</div>
-                    <div style="font-weight: bold;">Ctrl + F11</div><div>Options</div>
-                    <div style="font-weight: bold;">Ctrl + F12</div><div>Key Map (This Dialog)</div>
+                
+                <h4 style="margin: 12px 0 6px 0; text-align: left; color: var(--header-text-color, #444); border-bottom: 1px solid var(--border-color, #ccc); padding-bottom: 4px;">Universal Shortcuts</h4>
+                <div style="text-align: left; margin-top: 8px; display: grid; grid-template-columns: auto 1fr; gap: 6px 20px; font-size: 13px;">
+                    <div style="font-weight: bold;">${mod} + S</div><div>Save Pack (.opk)</div>
+                    <div style="font-weight: bold;">${mod} + O</div><div>Open Pack</div>
+                    <div style="font-weight: bold;">${mod} + Shift + S</div><div>Export Pack to Hex (.hex)</div>
+                    <div style="font-weight: bold;">${mod} + Enter</div><div>Apply Changes</div>
+                    <div style="font-weight: bold;">${mod} + N</div><div>Toggle File Menu</div>
+                    <div style="font-weight: bold;">${mod} + Click / Shift + Click</div><div>Multi-Select Items (Toggle / Range)</div>
+                    <div style="font-weight: bold;">Delete / Backspace</div><div>Erase Item (Shift to Recycle / Undelete)</div>
                 </div>
-                <hr style="margin: 15px auto; width: 100%; border: 0; border-top: 1px solid #ccc;">
-                <p style="font-size: 12px; opacity: 0.8;">Function keys are enabled in <b>Options > Visuals</b>.</p>
+
+                <h4 style="margin: 16px 0 6px 0; text-align: left; color: var(--header-text-color, #444); border-bottom: 1px solid var(--border-color, #ccc); padding-bottom: 4px;">Function Keys (${mod} + F1..F12)</h4>
+                <div style="text-align: left; margin-top: 8px; display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 6px 14px; font-size: 12px;">
+                    <div style="font-weight: bold;">${mod} + F1</div><div>Help / About</div>
+                    <div style="font-weight: bold;">${mod} + F2</div><div>New Pack</div>
+                    <div style="font-weight: bold;">${mod} + F3</div><div>Open Pack</div>
+                    <div style="font-weight: bold;">${mod} + F4</div><div>Save Pack</div>
+                    <div style="font-weight: bold;">${mod} + F5</div><div>Toggle File Menu</div>
+                    <div style="font-weight: bold;">${mod} + F6</div><div>Delete Item</div>
+                    <div style="font-weight: bold;">${mod} + F7</div><div>Import Item</div>
+                    <div style="font-weight: bold;">${mod} + F8</div><div>Export Hex</div>
+                    <div style="font-weight: bold;">${mod} + F9</div><div>Apply Changes</div>
+                    <div style="font-weight: bold;">${mod} + F10</div><div>Discard Changes</div>
+                    <div style="font-weight: bold;">${mod} + F11</div><div>Options</div>
+                    <div style="font-weight: bold;">${mod} + F12</div><div>Key Map Dialog</div>
+                </div>
+
+                <h4 style="margin: 16px 0 6px 0; text-align: left; color: var(--header-text-color, #444); border-bottom: 1px solid var(--border-color, #ccc); padding-bottom: 4px;">Code Visualizer</h4>
+                <div style="text-align: left; margin-top: 8px; display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 6px 14px; font-size: 12px;">
+                    <div style="font-weight: bold;">${alt} + C</div><div>Toggle Code</div>
+                    <div style="font-weight: bold;">${alt} + K</div><div>Toggle Legend</div>
+                    <div style="font-weight: bold;">${alt} + P</div><div>Toggle Calls</div>
+                    <div style="font-weight: bold;">${alt} + A / U</div><div>Access / Usage</div>
+                    <div style="font-weight: bold;">+ / -</div><div>Zoom In / Out</div>
+                    <div style="font-weight: bold;">${mod} + Wheel</div><div>Canvas Zoom</div>
+                </div>
+
+                <hr style="margin: 15px auto; width: 100%; border: 0; border-top: 1px solid var(--border-color, #ccc);">
+                <p style="font-size: 11px; opacity: 0.8; margin-bottom: 0;">
+                    ${isMacPlatform 
+                        ? '<b>macOS Note:</b> To use F1-F12 keys, enable <i>"Use F1, F2, etc. keys as standard function keys"</i> in System Settings > Keyboard, or use Fn. Universal letter shortcuts (⌘S, ⌘O, ⌘Enter) work unconditionally.' 
+                        : 'Function keys are enabled in <b>Options > Visuals</b>.'}
+                </p>
             </div>`;
 
 var dialog=new ModalDialog(element,null);
@@ -455,17 +510,19 @@ var element=document.createElement('div');
 element.innerHTML=`
             <div style="padding: 10px; font-family: sans-serif; min-width: 400px;">
                 <h3 style="margin-top: 0; color: #d32f2f; border-bottom: 2px solid #d32f2f; padding-bottom: 10px;">
-                    <i class="fas fa-exclamation-triangle"></i> Compilation Error
+                    <i data-lucide="alert-triangle"></i> Compilation Error
                 </h3>
                 <div style="background: var(--input-bg, #f5f5f5); border: 1px solid var(--border-color, #ccc); padding: 15px; margin: 15px 0; max-height: 300px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; color: var(--text-color, #333); font-size: 13px;">${msg}</div>
                 <div style="text-align: right;">
                     <button id="btn-copy-error" class="modal-btn" style="margin-right: 10px;">
-                        <i class="fa-copy copy-btn fas"></i> Copy Error
+                        <i data-lucide="copy" class="copy-btn"></i> Copy Error
                     </button>
                 </div>
             </div>`;
 
 var dialog=new ModalDialog(element,null,null,"Close");
+dialog.start();
+if(typeof lucide!=='undefined')lucide.createIcons({root:element});
 
 
 var copyBtn=element.querySelector('#btn-copy-error');
@@ -474,10 +531,12 @@ copyBtn.addEventListener('click',function (e){
 e.preventDefault();
 navigator.clipboard.writeText(msg).then(function (){
 var originalHTML=copyBtn.innerHTML;
-copyBtn.innerHTML='<i class="fas fa-check"></i> Copied!';
+copyBtn.innerHTML='<i data-lucide="check"></i> Copied!';
+if(typeof lucide!=='undefined')lucide.createIcons({root:copyBtn});
 copyBtn.style.color='green';
 setTimeout(function (){
 copyBtn.innerHTML=originalHTML;
+if(typeof lucide!=='undefined')lucide.createIcons({root:copyBtn});
 copyBtn.style.color='';
 },2000);
 }).catch(function (err){
@@ -541,8 +600,33 @@ return `
                     </div>
                     <div>
                         <h4>Icons</h4>
-                        <div style="margin-bottom: 10px;"><label>Version: <select id="opt-icon-version" style="margin-left: 5px; padding: 2px;"><option value="6">Version 6 (Latest)</option><option value="5">Version 5 (Legacy)</option></select></label></div>
-                        <div style="margin-bottom: 10px;"><label>Style: <select id="opt-icon-style" style="margin-left: 5px; padding: 2px;"><option value="solid">Solid</option><option value="regular">Regular</option></select></label></div>
+                        <div style="margin-bottom: 10px;">
+                            <label>Style:
+                                <select id="opt-icon-style" style="margin-left: 5px; padding: 2px;">
+                                    <option value="thin">Thin (1.5px)</option>
+                                    <option value="regular">Regular (2.0px - Default)</option>
+                                    <option value="medium">Medium (2.5px)</option>
+                                    <option value="bold">Bold (3.0px)</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label>Size / Scale:
+                                <select id="opt-icon-size" style="margin-left: 5px; padding: 2px;">
+                                    <option value="compact">Compact (85%)</option>
+                                    <option value="standard">Standard (100% - Default)</option>
+                                    <option value="comfortable">Comfortable (115%)</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <label>Coloring:
+                                <select id="opt-icon-coloring" style="margin-left: 5px; padding: 2px;">
+                                    <option value="monochrome">Monochrome (Theme Text)</option>
+                                    <option value="semantic">Semantic (Theme File Types)</option>
+                                </select>
+                            </label>
+                        </div>
                     </div>
                 </div>
                  <hr style="margin: 15px 0; border: 0; border-top: 1px solid var(--border-color);">

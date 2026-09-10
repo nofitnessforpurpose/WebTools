@@ -1,0 +1,619 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Psion OPK Editor — Quick Reference & Icon Guide</title><script src="src/vendor/lucide.min.js"></script><style>
+:root {
+--bg-color: #1a1a1a;
+--surface-bg: #242424;
+--surface-border: #383838;
+--text-main: #f0f0f0;
+--text-muted: #a0a0a0;
+--accent: #007acc;
+--accent-glow: rgba(0, 122, 204, 0.25);
+--badge-bg: #333333;
+--badge-text: #66b2ff;
+--card-hover: #2b2b2b;
+--table-stripe: #212121;
+--highlight: #e6b800;
+}body.light-theme {
+--bg-color: #f5f5f7;
+--surface-bg: #ffffff;
+--surface-border: #dcdcdc;
+--text-main: #1f1f1f;
+--text-muted: #666666;
+--accent: #0066cc;
+--accent-glow: rgba(0, 102, 204, 0.15);
+--badge-bg: #e8f0fe;
+--badge-text: #0055b3;
+--card-hover: #f9f9fb;
+--table-stripe: #fafafa;
+--highlight: #b38600;
+}* {
+box-sizing: border-box;
+margin: 0;
+padding: 0;
+}body {
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+background-color: var(--bg-color);
+color: var(--text-main);
+line-height: 1.6;
+padding: 30px 20px;
+transition: background-color 0.25s ease, color 0.25s ease;
+}.container {
+max-width: 1200px;
+margin: 0 auto;
+}header {
+display: flex;
+align-items: center;
+justify-content: space-between;
+padding-bottom: 20px;
+border-bottom: 1px solid var(--surface-border);
+margin-bottom: 30px;
+flex-wrap: wrap;
+gap: 15px;
+}.header-title {
+display: flex;
+align-items: center;
+gap: 14px;
+}.header-title h1 {
+font-size: 26px;
+font-weight: 700;
+letter-spacing: -0.5px;
+}.header-title .version-badge {
+background: var(--accent);
+color: white;
+font-size: 12px;
+padding: 3px 8px;
+border-radius: 12px;
+font-weight: 600;
+}.header-actions {
+display: flex;
+align-items: center;
+gap: 12px;
+}.btn {
+display: inline-flex;
+align-items: center;
+gap: 8px;
+background: var(--surface-bg);
+color: var(--text-main);
+border: 1px solid var(--surface-border);
+padding: 8px 14px;
+border-radius: 6px;
+font-size: 13px;
+font-weight: 500;
+cursor: pointer;
+text-decoration: none;
+transition: all 0.2s ease;
+}.btn:hover {
+border-color: var(--accent);
+box-shadow: 0 2px 8px var(--accent-glow);
+}.btn-primary {
+background: var(--accent);
+color: #ffffff;
+border-color: var(--accent);
+}.btn-primary:hover {
+background: #005999;
+}/* Search and Filter Bar */
+.controls-row {
+display: flex;
+gap: 15px;
+margin-bottom: 25px;
+flex-wrap: wrap;
+}.search-box {
+flex: 1;
+min-width: 260px;
+position: relative;
+}.search-box input {
+width: 100%;
+padding: 10px 14px 10px 38px;
+background: var(--surface-bg);
+border: 1px solid var(--surface-border);
+border-radius: 8px;
+color: var(--text-main);
+font-size: 14px;
+outline: none;
+transition: border-color 0.2s;
+}.search-box input:focus {
+border-color: var(--accent);
+box-shadow: 0 0 0 2px var(--accent-glow);
+}.search-box i {
+position: absolute;
+left: 12px;
+top: 50%;
+transform: translateY(-50%);
+color: var(--text-muted);
+width: 18px;
+height: 18px;
+}.filter-buttons {
+display: flex;
+gap: 8px;
+flex-wrap: wrap;
+}.filter-btn {
+background: var(--surface-bg);
+color: var(--text-muted);
+border: 1px solid var(--surface-border);
+padding: 8px 12px;
+border-radius: 6px;
+font-size: 13px;
+cursor: pointer;
+transition: all 0.2s;
+}.filter-btn.active, .filter-btn:hover {
+background: var(--accent);
+color: #ffffff;
+border-color: var(--accent);
+}/* Sections */
+section {
+margin-bottom: 45px;
+}h2 {
+font-size: 20px;
+font-weight: 600;
+margin-bottom: 16px;
+display: flex;
+align-items: center;
+gap: 10px;
+border-bottom: 1px solid var(--surface-border);
+padding-bottom: 8px;
+}/* Screenshot Showcase */
+.showcase-grid {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+gap: 22px;
+margin-bottom: 25px;
+}.screenshot-card {
+background: var(--surface-bg);
+border: 1px solid var(--surface-border);
+border-radius: 8px;
+overflow: hidden;
+box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+transition: transform 0.2s, box-shadow 0.2s;
+}.screenshot-card:hover {
+transform: translateY(-3px);
+box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+border-color: var(--accent);
+}.screenshot-card img {
+width: 100%;
+height: 220px;
+object-fit: cover;
+display: block;
+border-bottom: 1px solid var(--surface-border);
+cursor: pointer;
+}.screenshot-info {
+padding: 14px 16px;
+}.screenshot-title {
+font-size: 15px;
+font-weight: 600;
+margin-bottom: 6px;
+color: var(--text-main);
+}.screenshot-desc {
+font-size: 12.5px;
+color: var(--text-muted);
+line-height: 1.45;
+}/* Icon Grid */
+.icon-grid {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+gap: 14px;
+}.icon-card {
+background: var(--surface-bg);
+border: 1px solid var(--surface-border);
+border-radius: 8px;
+padding: 12px 14px;
+display: flex;
+align-items: flex-start;
+gap: 14px;
+transition: all 0.2s;
+}.icon-card:hover {
+background: var(--card-hover);
+border-color: var(--accent);
+box-shadow: 0 2px 10px var(--accent-glow);
+}.icon-badge {
+display: flex;
+align-items: center;
+justify-content: center;
+width: 40px;
+height: 40px;
+min-width: 40px;
+background: var(--badge-bg);
+border: 1px solid var(--surface-border);
+border-radius: 8px;
+color: var(--badge-text);
+}.icon-badge svg, .icon-badge i {
+width: 20px;
+height: 20px;
+stroke-width: 2;
+}.icon-details {
+flex: 1;
+min-width: 0;
+}.icon-title-row {
+display: flex;
+align-items: center;
+justify-content: space-between;
+margin-bottom: 4px;
+gap: 8px;
+}.icon-feature-name {
+font-size: 14px;
+font-weight: 600;
+color: var(--text-main);
+white-space: nowrap;
+overflow: hidden;
+text-overflow: ellipsis;
+}.icon-tag {
+font-size: 10.5px;
+font-weight: 600;
+text-transform: uppercase;
+padding: 2px 6px;
+border-radius: 4px;
+background: rgba(0, 122, 204, 0.15);
+color: var(--badge-text);
+border: 1px solid rgba(0, 122, 204, 0.3);
+}.icon-name-code {
+font-family: 'Consolas', monospace;
+font-size: 11px;
+color: var(--text-muted);
+margin-bottom: 4px;
+display: block;
+}.icon-feature-desc {
+font-size: 12px;
+color: var(--text-muted);
+line-height: 1.4;
+}/* Table */
+.reference-table {
+width: 100%;
+border-collapse: collapse;
+background: var(--surface-bg);
+border: 1px solid var(--surface-border);
+border-radius: 8px;
+overflow: hidden;
+}.reference-table th, .reference-table td {
+padding: 10px 14px;
+text-align: left;
+border-bottom: 1px solid var(--surface-border);
+font-size: 13px;
+}.reference-table th {
+background: var(--surface-border);
+font-weight: 600;
+color: var(--text-main);
+}.reference-table tr:nth-child(even) {
+background: var(--table-stripe);
+}.key-badge {
+background: var(--surface-bg);
+border: 1px solid var(--surface-border);
+box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+padding: 2px 7px;
+border-radius: 4px;
+font-family: monospace;
+font-weight: bold;
+color: var(--highlight);
+display: inline-block;
+}/* Modal for full size screenshot */
+#img-modal {
+display: none;
+position: fixed;
+top: 0;
+left: 0;
+width: 100vw;
+height: 100vh;
+background: rgba(0,0,0,0.85);
+z-index: 9999;
+align-items: center;
+justify-content: center;
+cursor: pointer;
+}#img-modal img {
+max-width: 90vw;
+max-height: 90vh;
+border-radius: 8px;
+box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}@media print {
+:root {
+--bg-color: #ffffff !important;
+--surface-bg: #ffffff !important;
+--surface-border: #d0d7de !important;
+--text-main: #1f2328 !important;
+--text-muted: #495057 !important;
+--accent: #0969da !important;
+--badge-bg: #f3f6f9 !important;
+--badge-text: #0969da !important;
+--card-hover: #ffffff !important;
+--table-stripe: #f8fafc !important;
+--highlight: #9a6700 !important;
+}
+body {
+background: #ffffff !important;
+color: #1f2328 !important;
+padding: 0 !important;
+-webkit-print-color-adjust: exact !important;
+print-color-adjust: exact !important;
+}
+.header-actions, .controls-row, #img-modal {
+display: none !important;
+}
+.container {
+max-width: 100% !important;
+padding: 0 !important;
+}
+header {
+padding-bottom: 12px !important;
+margin-bottom: 20px !important;
+border-bottom: 2px solid #0969da !important;
+}
+.header-title h1 {
+font-size: 22px !important;
+color: #1f2328 !important;
+}
+h2 {
+font-size: 16px !important;
+color: #0969da !important;
+border-bottom: 1.5px solid #d0d7de !important;
+margin-bottom: 14px !important;
+break-after: avoid;
+}
+.showcase-grid {
+grid-template-columns: repeat(3, 1fr) !important;
+gap: 14px !important;
+margin-bottom: 20px !important;
+}
+.screenshot-card {
+break-inside: avoid;
+border: 1px solid #d0d7de !important;
+box-shadow: none !important;
+background: #ffffff !important;
+}
+.screenshot-card img {
+height: 140px !important;
+border-bottom: 1px solid #d0d7de !important;
+}
+.screenshot-info {
+padding: 10px !important;
+}
+.screenshot-title {
+font-size: 13px !important;
+font-weight: 700 !important;
+color: #1f2328 !important;
+}
+.screenshot-desc {
+font-size: 11px !important;
+color: #495057 !important;
+line-height: 1.35 !important;
+}
+.icon-grid {
+grid-template-columns: repeat(2, 1fr) !important;
+gap: 10px !important;
+}
+.icon-card {
+break-inside: avoid;
+border: 1px solid #d0d7de !important;
+box-shadow: none !important;
+background: #ffffff !important;
+padding: 8px 10px !important;
+gap: 10px !important;
+}
+.icon-badge {
+width: 32px !important;
+height: 32px !important;
+min-width: 32px !important;
+background: #f0f4f9 !important;
+border: 1px solid #d0d7de !important;
+color: #0969da !important;
+}
+.icon-badge svg, .icon-badge i {
+width: 18px !important;
+height: 18px !important;
+}
+.icon-feature-name {
+font-size: 13px !important;
+color: #1f2328 !important;
+}
+.icon-tag {
+font-size: 9.5px !important;
+background: #eef2f6 !important;
+color: #0969da !important;
+border-color: #d0d7de !important;
+}
+.icon-name-code {
+font-size: 10px !important;
+color: #656d76 !important;
+}
+.icon-feature-desc {
+font-size: 11px !important;
+color: #495057 !important;
+line-height: 1.35 !important;
+}
+.reference-table {
+break-inside: avoid;
+border: 1px solid #d0d7de !important;
+width: 100% !important;
+}
+.reference-table th {
+background: #f6f8fa !important;
+color: #1f2328 !important;
+border-bottom: 2px solid #d0d7de !important;
+font-size: 12px !important;
+padding: 6px 10px !important;
+}
+.reference-table td {
+color: #1f2328 !important;
+border-bottom: 1px solid #e1e4e8 !important;
+font-size: 11.5px !important;
+padding: 6px 10px !important;
+}
+.reference-table tr:nth-child(even) {
+background: #f9fafb !important;
+}
+.key-badge {
+background: #ffffff !important;
+border: 1px solid #c0c6cc !important;
+color: #0969da !important;
+font-size: 11px !important;
+padding: 1px 5px !important;
+}
+@page {
+size: A4 portrait;
+margin: 12mm 12mm 12mm 12mm;
+}
+}
+</style>
+</head><body><div class="container"><header><div class="header-title"><i data-lucide="package" style="width: 32px; height: 32px; color: var(--accent);"></i><div><h1>Psion OPK Editor — Quick Reference Guide</h1><div style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">
+Psion Organiser II Datapak Architecture, OPL Compiler, and Feature Reference
+</div>
+</div><span class="version-badge">v03.00.26</span>
+</div><div class="header-actions"><button class="btn" id="theme-toggle-btn" onclick="toggleTheme()"><i data-lucide="moon" id="theme-icon"></i> Theme
+</button><a href="index.html" class="btn btn-primary"><i data-lucide="arrow-left"></i> Open Editor
+</a><a href="key_template.html" target="_blank" class="btn"><i data-lucide="keyboard"></i> Key Template
+</a>
+</div>
+</header><section><h2><i data-lucide="eye" style="width: 20px; height: 20px; color: var(--accent);"></i> Application Workspace & Key Views</h2><div class="showcase-grid"><div class="screenshot-card"><img src="assets/pics/screenshot_editor_main.jpg" alt="OPK Editor Main Workspace" onclick="openModal(this.src)"><div class="screenshot-info"><div class="screenshot-title">1. Main OPL Editor & Pack Contents</div><div class="screenshot-desc">Dark theme workspace featuring the Pack Contents hierarchy tree, OPL syntax highlighting, line numbering, folding, and real-time status checksums.</div>
+</div>
+</div><div class="screenshot-card"><img src="assets/pics/screenshot_memory_map.jpg" alt="Datapak Memory Map and Header" onclick="openModal(this.src)"><div class="screenshot-info"><div class="screenshot-title">2. Linear Memory Map & Header Inspector</div><div class="screenshot-desc">Color-coded linear memory allocation bar showing Datapak segments ($0000-$FFFF), free space calculations, and hex byte inspection.</div>
+</div>
+</div><div class="screenshot-card"><img src="assets/pics/screenshot_code_visualizer.jpg" alt="OPL Code Visualizer Graph" onclick="openModal(this.src)"><div class="screenshot-info"><div class="screenshot-title">3. OPL Code Visualizer & Dependency Graph</div><div class="screenshot-desc">Interactive directed call-tree diagram illustrating procedure invocation chains and bytecode-accurate global variable references.</div>
+</div>
+</div>
+</div>
+</section><div class="controls-row"><div class="search-box"><i data-lucide="search"></i><input type="text" id="icon-search" placeholder="Search icons, features, keywords, or shortcuts..." oninput="filterIcons()">
+</div><div class="filter-buttons"><button class="filter-btn active" data-filter="all" onclick="setFilter('all', this)">All (53)</button><button class="filter-btn" data-filter="file" onclick="setFilter('file', this)">Pack & File</button><button class="filter-btn" data-filter="edit" onclick="setFilter('edit', this)">Editor & Code</button><button class="filter-btn" data-filter="view" onclick="setFilter('view', this)">View & Analyze</button><button class="filter-btn" data-filter="tool" onclick="setFilter('tool', this)">Tools & Preferences</button><button class="filter-btn" data-filter="help" onclick="setFilter('help', this)">Help & Transfer</button>
+</div>
+</div><section><h2><i data-lucide="sparkles" style="width: 20px; height: 20px; color: var(--accent);"></i> Comprehensive Icon & Feature Reference</h2><div class="icon-grid" id="icon-container">
+</div>
+</section><section><h2><i data-lucide="keyboard" style="width: 20px; height: 20px; color: var(--accent);"></i> Keyboard Shortcuts Reference</h2><div style="background: var(--surface-bg); border: 1px solid var(--surface-border); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; line-height: 1.5; color: var(--text-muted);"><strong style="color: var(--text-main);"><i data-lucide="info" style="width: 16px; height: 16px; vertical-align: -2px; margin-right: 4px; color: var(--accent);"></i> Platform &amp; Configuration Notes:</strong><br>
+• <strong>macOS Users:</strong> Use <span class="key-badge">⌘ Cmd</span> instead of <span class="key-badge">Ctrl</span>, and <span class="key-badge">⌥ Option</span> instead of <span class="key-badge">Alt</span>.<br>
+• <strong>Psion Function Keys (Ctrl + F1–F12):</strong> Require <strong>"Enable Psion Function Keys"</strong> enabled in <em>Options &gt; Visuals</em> to prevent browser conflicts (e.g., F5 page reload). On macOS, enable <em>"Use F1, F2, etc. keys as standard function keys"</em> in macOS System Settings.
+</div><h3 style="margin: 18px 0 10px 0; font-size: 16px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px;"><i data-lucide="sliders" style="width: 18px; height: 18px; color: var(--accent);"></i> General &amp; File Operations (Everyday Shortcuts)
+</h3><table class="reference-table" style="margin-bottom: 25px;"><thead><tr><th style="width: 200px;">Shortcut</th><th style="width: 220px;">Action</th><th>Description</th>
+</tr>
+</thead><tbody><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">S</span></td><td>Save Pack (.opk)</td><td>Downloads the active pack as an emulator-ready .opk binary file.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">O</span></td><td>Open Pack</td><td>Prompts browser file picker to load an existing .opk, .hex, or .bin pack.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">Shift</span> + <span class="key-badge">S</span></td><td>Export Intel HEX (.hex)</td><td>Exports the full pack image as Intel HEX for burning to physical EPROM chips.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">Enter</span></td><td>Apply Changes</td><td>Validates, recompiles, and writes pending edits into active pack memory.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">N</span></td><td>Toggle File Menu</td><td>Expands or closes the primary File Menu dropdown.</td></tr><tr><td><span class="key-badge">Delete</span> / <span class="key-badge">Backspace</span></td><td>Delete Item</td><td>Marks the selected record as deleted ($00). Guarded while editing text.</td></tr><tr><td><span class="key-badge">Shift</span> + <span class="key-badge">Delete</span></td><td>Recycle / Undelete</td><td>Toggles deleted status (undeletes an erased record or marks active record as deleted).</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">Click</span></td><td>Toggle Selection</td><td>Adds or removes non-contiguous items from the multi-selection.</td></tr><tr><td><span class="key-badge">Shift</span> + <span class="key-badge">Click</span></td><td>Range Selection</td><td>Selects a continuous range of records in the sidebar list.</td></tr>
+</tbody>
+</table><h3 style="margin: 18px 0 10px 0; font-size: 16px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px;"><i data-lucide="cpu" style="width: 18px; height: 18px; color: var(--accent);"></i> Psion Function Keys (Ctrl + F1 – F12)
+</h3><table class="reference-table" style="margin-bottom: 25px;"><thead><tr><th style="width: 200px;">Shortcut</th><th style="width: 220px;">Action</th><th>Description</th>
+</tr>
+</thead><tbody><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F1</span></td><td>Help / About</td><td>Opens editor overview, documentation tutorial, and software credits.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F2</span></td><td>New Pack</td><td>Initializes a fresh virtual Datapak image (8KB, 16KB, 32KB, 64KB, 128KB, etc.).</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F3</span></td><td>Open Pack</td><td>Prompts browser file picker to load an existing .opk, .hex, or .bin pack.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F4</span></td><td>Save Pack (.opk)</td><td>Downloads the active pack as an emulator-ready .opk binary file.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F5</span></td><td>Toggle File Menu</td><td>Expands or closes the primary File Menu dropdown.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F6</span></td><td>Delete Item</td><td>Marks the selected record or procedure as deleted ($00).</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F7</span></td><td>Import Item</td><td>Imports external procedure files (.opl), data tables (.odb), or binary blocks.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F8</span></td><td>Export Hex (.hex)</td><td>Exports the full pack image as Intel HEX for burning to physical EPROM chips.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F9</span></td><td>Apply Changes</td><td>Validates, recompiles, and writes pending edits into active pack memory.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F10</span></td><td>Discard Changes</td><td>Discards uncommitted modifications and reverts editor buffer.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F11</span></td><td>Options</td><td>Opens the preferences modal for themes, line numbers, guidelines, and compiler target.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">F12</span></td><td>Key Map</td><td>Displays the on-screen function key mapping sheet.</td></tr>
+</tbody>
+</table><h3 style="margin: 18px 0 10px 0; font-size: 16px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px;"><i data-lucide="network" style="width: 18px; height: 18px; color: var(--accent);"></i> Code Visualizer Controls
+</h3><table class="reference-table" style="margin-bottom: 25px;"><thead><tr><th style="width: 200px;">Shortcut</th><th style="width: 220px;">Action</th><th>Description</th>
+</tr>
+</thead><tbody><tr><td><span class="key-badge">Alt</span> + <span class="key-badge">C</span></td><td>Toggle Code Window</td><td>Shows or hides the procedure source code preview sidebar.</td></tr><tr><td><span class="key-badge">Alt</span> + <span class="key-badge">K</span></td><td>Toggle Legend</td><td>Shows or hides the visualizer color legend and key window.</td></tr><tr><td><span class="key-badge">Alt</span> + <span class="key-badge">P</span></td><td>Toggle Calls</td><td>Toggles procedure call tree connection links on/off.</td></tr><tr><td><span class="key-badge">Alt</span> + <span class="key-badge">A</span></td><td>Toggle Access (Reads)</td><td>Toggles global variable access / read lines on/off.</td></tr><tr><td><span class="key-badge">Alt</span> + <span class="key-badge">U</span></td><td>Toggle Usage (Writes)</td><td>Toggles global variable write / modification lines on/off.</td></tr><tr><td><span class="key-badge">Alt</span> + <span class="key-badge">G</span></td><td>Toggle All Globals</td><td>Atomically toggles both global read access and write usage lines.</td></tr><tr><td><span class="key-badge">+</span> or <span class="key-badge">=</span></td><td>Zoom In</td><td>Increments the diagram zoom magnification level.</td></tr><tr><td><span class="key-badge">-</span> or <span class="key-badge">_</span></td><td>Zoom Out</td><td>Decrements the diagram zoom magnification level.</td></tr><tr><td><span class="key-badge">Ctrl</span> + <span class="key-badge">Wheel</span></td><td>Canvas Zoom</td><td>Smoothly zooms diagram centered at cursor position.</td></tr>
+</tbody>
+</table><h3 style="margin: 18px 0 10px 0; font-size: 16px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px;"><i data-lucide="folder" style="width: 18px; height: 18px; color: var(--accent);"></i> Datapak Sidebar &amp; Editor Controls
+</h3><table class="reference-table"><thead><tr><th style="width: 200px;">Shortcut</th><th style="width: 220px;">Context</th><th>Action &amp; Description</th>
+</tr>
+</thead><tbody><tr><td><span class="key-badge">Enter</span></td><td>Sidebar Item Row</td><td>Opens and selects the highlighted record or procedure in its editor.</td></tr><tr><td><span class="key-badge">↑</span> / <span class="key-badge">↓</span></td><td>Sidebar List</td><td>Navigates selection up or down through pack items and volume headers.</td></tr><tr><td><span class="key-badge">Shift</span> + <span class="key-badge">↑</span> / <span class="key-badge">↓</span></td><td>Sidebar List</td><td>Extends multi-selection range across items up or down.</td></tr><tr><td><span class="key-badge">→</span> / <span class="key-badge">←</span></td><td>Sidebar Pack Header</td><td>Expands (<span class="key-badge">→</span>) or collapses (<span class="key-badge">←</span>) the Datapak folder tree.</td></tr><tr><td><span class="key-badge">Escape</span></td><td>Dropdown Menu</td><td>Closes any open dropdown or popup menu without triggering an action.</td></tr><tr><td><span class="key-badge">Arrow Keys</span></td><td>UDG Editor</td><td>Navigates the cursor across the 5×8 User Defined Graphic pixel matrix.</td></tr><tr><td><span class="key-badge">Space</span> / <span class="key-badge">Enter</span></td><td>UDG Editor</td><td>Toggles the active matrix pixel on or off.</td></tr><tr><td><span class="key-badge">0</span> – <span class="key-badge">7</span></td><td>UDG Editor</td><td>Directly switches active UDG character slot (0 through 7).</td></tr><tr><td><span class="key-badge">C</span></td><td>UDG Editor</td><td>Copies the generated OPL character definition code directly to clipboard.</td></tr><tr><td><span class="key-badge">Space</span> / <span class="key-badge">Enter</span></td><td>OPL Code Editor</td><td>Automatically uppercases OPL keywords (when enabled in Options).</td></tr>
+</tbody>
+</table>
+</section></div><div id="img-modal" onclick="closeModal()"><img id="img-modal-target" src="" alt="Enlarged View">
+</div><script>
+const ICON_DICTIONARY = [
+// Pack & File
+{ name: 'menu', cat: 'file', title: 'File Menu', desc: 'Consolidated dropdown for pack creation, opening, saving, and export options.' },
+{ name: 'package', cat: 'file', title: 'Datapak Archive', desc: 'Psion Datapak archive container representation in sidebar and tree.' },
+{ name: 'package-plus', cat: 'file', title: 'New Pack', desc: 'Initializes a formatted blank Datapak image with selected size and model.' },
+{ name: 'folder-open', cat: 'file', title: 'Open Pack', desc: 'Loads an existing .opk, .hex, .ihx, or raw .bin pack file from local storage.' },
+{ name: 'link', cat: 'file', title: 'Open from URL', desc: 'Downloads and opens a Datapak image directly from a remote CORS URL.' },
+{ name: 'save', cat: 'file', title: 'Save Pack (.opk)', desc: 'Downloads the modified virtual Datapak in standard Psion OPK format.' },
+{ name: 'file-code', cat: 'file', title: 'Save Pack (.hex)', desc: 'Exports the full pack as an Intel HEX file for burning to physical EPROMs.' },
+{ name: 'square-arrow-right-enter', cat: 'file', title: 'Import Item', desc: 'Imports external OPL source, data records, or raw binary machine code blocks.' },
+{ name: 'square-arrow-right-exit', cat: 'file', title: 'Export Item', desc: 'Extracts the currently selected procedure or file to disk or clipboard.' },
+{ name: 'sparkles', cat: 'file', title: 'Bootable Pack Wizard', desc: 'Automates creation of autostart bootable packs with machine code payloads.' },
+{ name: 'folder', cat: 'file', title: 'Folder (Collapsed)', desc: 'Represents a collapsed pack directory or group in the contents tree.' },
+{ name: 'package-open', cat: 'file', title: 'Open Datapak', desc: 'Indicates currently active and open Datapak volume in sidebar.' },// Records & Structures
+{ name: 'file-code', cat: 'file', title: 'OPL Procedure', desc: 'Psion Open Programming Language procedure source or compiled bytecode.' },
+{ name: 'sticky-note', cat: 'file', title: 'LZ Notepad Entry', desc: 'Psion Model LZ multi-page text notes, memos, and password-protected records.' },
+{ name: 'database', cat: 'file', title: 'Psion Data File', desc: 'Multi-record structured database table with field definitions (.odb).' },
+{ name: 'table', cat: 'file', title: 'Data Record', desc: 'Individual data records and rows belonging to a Psion data table.' },
+{ name: 'phone', cat: 'file', title: 'Pager Setup', desc: 'Telephone dialer and Comms Link pager configuration record.' },
+{ name: 'x-square', cat: 'file', title: 'End of Pack', desc: 'Physical Datapak terminal marker (0xFF 0xFF) showing boundary of free space.' },// Editor & Code Operations
+{ name: 'trash-2', cat: 'edit', title: 'Delete Item', desc: 'Marks the selected record as deleted (0x00 status byte).' },
+{ name: 'recycle', cat: 'edit', title: 'Undelete / Discard', desc: 'Restores a deleted record or discards uncommitted editor modifications.' },
+{ name: 'check-circle', cat: 'edit', title: 'Apply Changes', desc: 'Validates and writes current editor buffer into Datapak virtual memory.' },
+{ name: 'feather', cat: 'edit', title: 'Pretty Print', desc: 'Automatically reformats and beautifies OPL code with structured indentation.' },
+{ name: 'hammer', cat: 'edit', title: 'Minify & Compress', desc: 'Strips comments (REM) and extraneous spaces to minimize bytecode size.' },
+{ name: 'settings', cat: 'edit', title: 'Compile OPL', desc: 'Compiles OPL source into executable HD6303 machine-language QCode.' },
+{ name: 'file-archive', cat: 'edit', title: 'Extract QCode', desc: 'Extracts the compiled binary executable object (.ob3 / .opo) from a procedure.' },
+{ name: 'file-plus', cat: 'edit', title: 'Extract Source', desc: 'Extracts decompiled source code into an independent new procedure file.' },
+{ name: 'indent', cat: 'edit', title: 'Indent Block', desc: 'Shifts selected code block rightward by the configured indentation width.' },
+{ name: 'outdent', cat: 'edit', title: 'Outdent Block', desc: 'Shifts selected code block leftward.' },
+{ name: 'mouse-pointer', cat: 'edit', title: 'Select All', desc: 'Highlights all code or text in the active editor buffer.' },
+{ name: 'copy', cat: 'edit', title: 'Copy to Clipboard', desc: 'Copies selected text or binary hex dump to the operating system clipboard.' },
+{ name: 'clipboard-paste', cat: 'edit', title: 'Paste from Clipboard', desc: 'Inserts clipboard contents at active cursor position.' },
+{ name: 'check', cat: 'edit', title: 'Copy Confirmation', desc: 'Transient checkmark confirming successful clipboard write operation.' },// View & Analyze
+{ name: 'eye', cat: 'view', title: 'View Menu', desc: 'Dropdown accessing architectural analyzers, maps, and reports.' },
+{ name: 'receipt-text', cat: 'view', title: 'Pack Header', desc: 'Inspects pack magic signature, capacity, write-protect flags, and header bytes.' },
+{ name: 'scroll-text', cat: 'view', title: 'Pack Summary Report', desc: 'Comprehensive audit of procedures, databases, memory allocation, and slack space.' },
+{ name: 'map', cat: 'view', title: 'Linear Memory Map', desc: 'Visual bar mapping physical allocation from $0000 to End-of-Pack.' },
+{ name: 'network', cat: 'view', title: 'Code Visualizer', desc: 'Interactive graph diagramming procedure call trees and global variable usage.' },
+{ name: 'cpu', cat: 'view', title: 'CM/XP Architecture', desc: 'Compiler flag indicator targeting Series 2 Classic 2-line hardware (CM, XP, LA).' },
+{ name: 'hard-drive', cat: 'view', title: 'LZ Architecture', desc: 'Compiler flag indicator targeting Advanced 4-line hardware (Psion Model LZ).' },
+{ name: 'chevron-down', cat: 'view', title: 'Expand Section', desc: 'Toggles open collapsible tree folders and section accordions.' },
+{ name: 'chevron-up', cat: 'view', title: 'Collapse Section', desc: 'Collapses open tree folders and section accordions.' },
+{ name: 'chevron-right', cat: 'view', title: 'Submenu / Next', desc: 'Expands submenu items or steps to next sequential record.' },
+{ name: 'chevron-left', cat: 'view', title: 'Submenu Flyout', desc: 'Indicates nested submenu flyout direction.' },// Tools & Preferences
+{ name: 'sliders', cat: 'tool', title: 'Options & Preferences', desc: 'Configures visual themes, syntax colors, memory map heights, and compiler.' },
+{ name: 'grid', cat: 'tool', title: 'UDG Character Editor', desc: '5x8 pixel custom graphic matrix editor for User Defined Graphics font creation.' },
+{ name: 'type', cat: 'tool', title: 'Character Map', desc: 'Explorer for the complete 256-character Psion font with ASCII/Hex codes.' },
+{ name: 'keyboard', cat: 'tool', title: 'Key Template Sheet', desc: 'Opens the printable function key template sheet for keyboard overlays.' },
+{ name: 'maximize', cat: 'tool', title: 'Fullscreen', desc: 'Expands the editor window to occupy full monitor display.' },
+{ name: 'minimize', cat: 'tool', title: 'Exit Fullscreen', desc: 'Restores editor window to normal layout.' },
+{ name: 'alert-triangle', cat: 'tool', title: 'Compiler Alert', desc: 'Highlights compilation syntax errors, invalid tokens, and model mismatches.' },
+{ name: 'x', cat: 'tool', title: 'Close Modal', desc: 'Closes dialog windows, options screens, and reference tools.' },
+{ name: 'list-plus', cat: 'tool', title: 'New Record Menu', desc: 'Dynamic contextual injection for appending records into a data file.' },// Help & Hardware Transfer
+{ name: 'help-circle', cat: 'help', title: 'Help System', desc: 'Integrated documentation guides and tutorials for all editor capabilities.' },
+{ name: 'play-circle', cat: 'help', title: 'Start Here', desc: 'Quickstart walkthrough guiding new users through pack loading and basics.' },
+{ name: 'plug', cat: 'help', title: 'Hardware Transfer', desc: 'Technical specifications for RS-232 serial cable and Comms Link connections.' },
+{ name: 'bug', cat: 'help', title: 'OPL Error Codes', desc: 'Exhaustive lookup table for all Psion OS error numbers and runtime conditions.' },
+{ name: 'book-text', cat: 'help', title: 'OPL Command Reference', desc: 'Syntax reference guide for all OPL statements, functions, and model constraints.' },
+{ name: 'book-open', cat: 'help', title: 'OPL Library Routines', desc: 'Guide to built-in machine-code SWI vector hooks and calculator utilities.' },
+{ name: 'info', cat: 'help', title: 'About Dialog', desc: 'Displays software release version (v03.00.26), author credits, and license info.' }
+];let activeFilter = 'all';function renderIcons(list) {
+const container = document.getElementById('icon-container');
+container.innerHTML = '';
+list.forEach(item => {
+const card = document.createElement('div');
+card.className = 'icon-card';
+card.innerHTML = `
+<div class="icon-badge"><i data-lucide="${item.name}"></i>
+</div><div class="icon-details"><div class="icon-title-row"><span class="icon-feature-name">${item.title}</span><span class="icon-tag">${item.cat}</span>
+</div><span class="icon-name-code">${item.name}</span><div class="icon-feature-desc">${item.desc}</div>
+</div>
+`;
+container.appendChild(card);
+});
+if (window.lucide) {
+lucide.createIcons({ root: container });
+}
+}function setFilter(cat, btn) {
+activeFilter = cat;
+document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+btn.classList.add('active');
+filterIcons();
+}function filterIcons() {
+const query = document.getElementById('icon-search').value.toLowerCase().trim();
+const filtered = ICON_DICTIONARY.filter(item => {
+const matchesCat = (activeFilter === 'all' || item.cat === activeFilter);
+const matchesQuery = !query ||
+item.title.toLowerCase().includes(query) ||
+item.name.toLowerCase().includes(query) ||
+item.desc.toLowerCase().includes(query) ||
+item.cat.toLowerCase().includes(query);
+return matchesCat && matchesQuery;
+});
+renderIcons(filtered);// Also filter shortcuts tables
+document.querySelectorAll('.reference-table tbody tr').forEach(row => {
+if (!query) {
+row.style.display = '';
+} else {
+const text = row.textContent.toLowerCase();
+row.style.display = text.includes(query) ? '' : 'none';
+}
+});
+}function toggleTheme() {
+document.body.classList.toggle('light-theme');
+const isLight = document.body.classList.contains('light-theme');
+const icon = document.getElementById('theme-icon');
+icon.setAttribute('data-lucide', isLight ? 'sun' : 'moon');
+if (window.lucide) lucide.createIcons();
+}function openModal(src) {
+document.getElementById('img-modal-target').src = src;
+document.getElementById('img-modal').style.display = 'flex';
+}function closeModal() {
+document.getElementById('img-modal').style.display = 'none';
+}document.addEventListener('DOMContentLoaded', () => {
+renderIcons(ICON_DICTIONARY);
+if (window.lucide) lucide.createIcons();
+});
+</script></body>
+</html>

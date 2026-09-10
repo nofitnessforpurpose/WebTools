@@ -28,8 +28,9 @@ free:'#073642'
 memoryMapShowPageBreaks:true,
 memoryMapDisplaySize:8192,
 memoryMapBarHeight:30,
-iconVersion:'6',
-iconStyle:'solid',
+iconStyle:'regular',
+iconSize:'standard',
+iconColoring:'monochrome',
 restorePacks:true,
 groupDataRecords:false,
 collapseDataFiles:false,
@@ -68,11 +69,43 @@ var stored=localStorage.getItem('opkedit_options');
 if(stored){
 try{
 var parsed=JSON.parse(stored);
+var legacyCleaned=false;
+
+
+if('iconVersion' in parsed){
+delete parsed.iconVersion;
+legacyCleaned=true;
+}
+if(parsed.iconStyle==='solid'||(parsed.iconStyle&&!['thin','regular','medium','bold'].includes(parsed.iconStyle))){
+parsed.iconStyle='regular';
+legacyCleaned=true;
+}
+if(parsed.iconSize&&!['compact','standard','comfortable'].includes(parsed.iconSize)){
+parsed.iconSize='standard';
+legacyCleaned=true;
+}
+if(parsed.iconColoring&&!['monochrome','semantic'].includes(parsed.iconColoring)){
+parsed.iconColoring='monochrome';
+legacyCleaned=true;
+}
+
+
+if(localStorage.getItem('opkedit_icon_version')){
+localStorage.removeItem('opkedit_icon_version');
+}
+if(localStorage.getItem('opkedit_icon_style')){
+localStorage.removeItem('opkedit_icon_style');
+}
+
 
 for(var key in parsed){
 if(this.options.hasOwnProperty(key)){
 this.options[key]=parsed[key];
 }
+}
+
+if(legacyCleaned){
+localStorage.setItem('opkedit_options',JSON.stringify(this.options));
 }
 }catch(e){
 
@@ -95,66 +128,51 @@ this.saveOptions();
 window.dispatchEvent(new CustomEvent('optionsChanged',{detail:{key:key,value:value}}));
 },
 
+getStrokeWidth:function (){
+var style=this.options.iconStyle||'regular';
+switch(style){
+case 'thin':return 1.5;
+case 'medium':return 2.5;
+case 'bold':return 3.0;
+case 'regular':
+default:return 2.0;
+}
+},
+
+getIconScale:function (){
+var size=this.options.iconSize||'standard';
+switch(size){
+case 'compact':return 0.85;
+case 'comfortable':return 1.15;
+case 'standard':
+default:return 1.0;
+}
+},
+
 applyOptions:function (){
 
-var version=this.options.iconVersion;
-var style=this.options.iconStyle;
-
-var cssLink=document.getElementById('font-awesome-css');
-if(cssLink){
-var newUrl="";
-if(version==='6'){
-newUrl="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css";
-}else if(version==='5'){
-newUrl="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css";
-}
-
-if(cssLink.href!==newUrl){
-cssLink.href=newUrl;
-}
-}
+var strokeWidth=this.getStrokeWidth();
+var iconScale=this.getIconScale();
+document.documentElement.style.setProperty('--lucide-stroke-width',strokeWidth);
+document.documentElement.style.setProperty('--lucide-scale',iconScale);
 
 
-
-
-
-var icons=document.querySelectorAll('i.fas, i.far, i.fa-solid, i.fa-regular, i.pack-icon, i.item-icon i');
-icons.forEach(function (icon){
-
-
-
-
-icon.classList.remove('fas','far','fa-solid','fa-regular');
-
-
-if(style==='solid'){
-icon.classList.add('fas');
+if(document.documentElement&&document.documentElement.classList){
+if(this.options.iconColoring==='semantic'){
+document.documentElement.classList.add('icons-semantic');
 }else {
-
-
-var forceSolid=[
-'fa-file-import',
-'fa-sliders','fa-sliders-h',
-'fa-angle-down','fa-caret-down',
-'fa-chevron-down','fa-chevron-right',
-'fa-filter','fa-bars','fa-list'
-];
-
-var needsSolid=false;
-for(var i=0;i<forceSolid.length;i++){
-if(icon.classList.contains(forceSolid[i])){
-needsSolid=true;
-break;
+document.documentElement.classList.remove('icons-semantic');
 }
 }
 
-if(needsSolid){
-icon.classList.add('fas');
-}else {
-icon.classList.add('far');
-}
+
+if(typeof lucide!=='undefined'){
+lucide.createIcons({
+attrs:{
+'stroke-width':strokeWidth
 }
 });
+}
 
 
 var iconToolbar=document.getElementById('icon-toolbar');

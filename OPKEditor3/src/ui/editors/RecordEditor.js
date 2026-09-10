@@ -15,7 +15,7 @@ this.myelement=document.createElement('div');
 this.myelement.className='legacy-editor-container';
 this.myelement.innerHTML=
 "<form action='#'><fieldset><legend>Record</legend>" +
-"<div>File id: <span id='fileid'></span></div>" +
+"<div>File id: <select id='fileid'></select></div>" +
 "<div><input type='checkbox' id='deleted'><label for='deleted'>Deleted</label></div>" +
 "<div>Size of record: <span id='recordsize'></span> bytes</div>" +
 "<div><textarea id='record' rows=20 cols=60></textarea></div>" +
@@ -25,6 +25,42 @@ this.editorelement.appendChild(this.myelement);
 
 
 this.item=item;
+
+
+var existingFiles=this.callback(EditorMessage.GETFILEIDS)||{};
+var currentFileId=item.type-0x0f;
+
+var fileidSelect=document.getElementById("fileid");
+while(fileidSelect.firstChild){
+fileidSelect.removeChild(fileidSelect.firstChild);
+}
+
+var fileIds=[];
+for(var k in existingFiles){
+if(existingFiles.hasOwnProperty(k)){
+fileIds.push(parseInt(k,10));
+}
+}
+fileIds.sort(function (a,b){return a-b;});
+
+
+if(fileIds.indexOf(currentFileId)===-1){
+fileIds.push(currentFileId);
+fileIds.sort(function (a,b){return a-b;});
+}
+
+var selectedIndex=0;
+for(var i=0;i<fileIds.length;i++){
+var fid=fileIds[i];
+var opt=document.createElement("option");
+opt.value=fid;
+var fname=existingFiles[fid];
+opt.textContent=fname?(fid+": "+fname):(fid+": (No Header)");
+fileidSelect.appendChild(opt);
+if(fid===currentFileId){
+selectedIndex=i;
+}
+}
 
 var ln=item.data[0];
 var s="";
@@ -36,7 +72,7 @@ else s+=String.fromCharCode(c);
 initialiseForm("record",s,this,this.updateSize);
 this.updateSize();
 initialiseForm("deleted",item.deleted,this);
-document.getElementById("fileid").innerHTML=""+item.type-0xf;
+initialiseForm("fileid",selectedIndex,this);
 }
 RecordEditor.prototype.updateSize=function (){
 document.getElementById("recordsize").innerHTML=""+document.getElementById("record").value.length;
@@ -50,11 +86,15 @@ txt=txt.substr(0,254);
 if(txt.length==0)txt=" ";
 var newln=txt.length;
 
+var fileidElem=document.getElementById("fileid");
+var fileId=fileidElem?parseInt(fileidElem.value,10):(this.item.type-0x0f);
+var newType=fileId+0x0f;
+
 var newdata=new Uint8Array(newln+2);
 newdata[0]=newln;
-newdata[1]=this.item.type+(deleted?0:0x80);
+newdata[1]=newType+(deleted?0:0x80);
 for(var i=0;i<newln;i++){
-var c=txt.charCodeAt(i)
+var c=txt.charCodeAt(i);
 newdata[2+i]=c==10?9:c;
 }
 return newdata;

@@ -56,6 +56,13 @@ var selectedItems=[];
 var lastFocusedItemIndex=-1;
 
 
+var isMac=typeof navigator!=='undefined'&&(
+(/Mac|iPod|iPhone|iPad/.test(navigator.platform||''))||
+(/Mac/.test(navigator.userAgent||''))||
+(typeof navigator.userAgentData!=='undefined'&&navigator.userAgentData&&navigator.userAgentData.platform==='macOS')
+);
+window.isMac=isMac;
+
 Object.defineProperty(window,'syntaxHighlightingEnabled',{get:function (){return AppStore.state.syntaxHighlightingEnabled;},set:function (v){AppStore.state.syntaxHighlightingEnabled=v;}});
 var decompilerLogWindow;
 var packReportWindow;
@@ -91,6 +98,11 @@ new MemoryMapEditor(legacyEditorElement,handleEditorMessage)
 var discardbutton=new Button("btn-discard",discardEdits);
 var applybutton=new Button("btn-apply",applyEdits);
 var eraseitembutton=new Button("btn-delete-item",eraseItem);
+var recycleitembutton=new Button("btn-recycle-item",function (){
+if(typeof PackContents!=='undefined'&&PackContents.toggleRecycle){
+PackContents.toggleRecycle();
+}
+});
 var optionsbutton=new Button("btn-options",function (){DialogManager.showOptionsDialog();});
 
 
@@ -400,13 +412,14 @@ if(separator)separator.style.display='block';
 
 var a=document.createElement('a');
 a.href="#";
-a.innerHTML='<i class="fas fa-table-list" style="width: 20px;"></i> New Record...';
+a.innerHTML='<i data-lucide="list-plus" style="width: 20px;"></i> New Record...';
 a.addEventListener('click',function (e){
 e.preventDefault();
 closeAllMenus();
 createNewRecord();
 });
 container.appendChild(a);
+if(typeof lucide!=='undefined')lucide.createIcons({root:container});
 }
 }
 }
@@ -618,6 +631,10 @@ alert("Character Map component not loaded.");
 
 
 function showAboutDialog(isSplash){
+if(typeof DialogManager!=='undefined'&&DialogManager.showAboutDialog){
+DialogManager.showAboutDialog(isSplash);
+return;
+}
 var element=document.createElement('div');
 element.innerHTML=
 "<div style='text-align: center; padding: 20px;'>" +
@@ -627,7 +644,7 @@ element.innerHTML=
 "<p>Version "+APP_VERSION+"</p>" +
 "<hr style='margin: 15px auto; width: 80%; border: 0; border-top: 1px solid #ccc;'>" +
 "<p>Original by <b>Jaap Scherphuis</b></p>" +
-"<p>Icons by <b>Font Awesome</b></p>" +
+"<p>Icons by <b>Lucide</b> - <a href=\"https://github.com/lucide-icons/lucide/blob/main/LICENSE\" target=\"_blank\" rel=\"noopener noreferrer\" style=\"color: inherit; text-decoration: none;\">ISC License</a></p>" +
 "<p>Implemented with precision by <b>Antigravity</b>.</p>" +
 "<p>Special thanks to: <b>Martin Reid</b></p>" +
 "<p>Reimagined by <b>NFfP</b>.</p>" +
@@ -738,9 +755,9 @@ updateInventory();
 setStatus("Restored "+packs.length+" pack(s).");
 }
 }
-}else {
-
 }
+
+if(typeof lucide!=='undefined')lucide.createIcons();
 
 
 window.addEventListener('themeChanged',function (e){
@@ -949,11 +966,11 @@ var hasZip=(typeof ZipUtils!=='undefined');
 var pickerStatus="";
 
 if(supportsPicker&&isSecure){
-pickerStatus="<div style='color: #2e7d32; margin-top: 5px; font-size: 11px;'><i class='fas fa-circle-check'></i> Folder selection supported. You will be prompted to choose a target directory.</div>";
+pickerStatus="<div style='color: #2e7d32; margin-top: 5px; font-size: 11px;'><i data-lucide='check-circle'></i> Folder selection supported. You will be prompted to choose a target directory.</div>";
 }else if(hasZip){
-pickerStatus="<div style='color: #2e7d32; margin-top: 5px; font-size: 11px;'><i class='fas fa-file-zipper'></i> Folder selection not available. Exporting as a single <b>.ZIP</b> file.</div>";
+pickerStatus="<div style='color: #2e7d32; margin-top: 5px; font-size: 11px;'><i data-lucide='file-archive'></i> Folder selection not available. Exporting as a single <b>.ZIP</b> file.</div>";
 }else {
-pickerStatus="<div style='color: #d32f2f; margin-top: 5px; font-size: 11px;'><i class='fas fa-triangle-exclamation'></i> Batch export not supported. Falling back to individual downloads.</div>";
+pickerStatus="<div style='color: #d32f2f; margin-top: 5px; font-size: 11px;'><i data-lucide='alert-triangle'></i> Batch export not supported. Falling back to individual downloads.</div>";
 }
 
 element.innerHTML=
@@ -966,7 +983,7 @@ element.innerHTML=
 "</div>" +
 pickerStatus +
 "<div style='font-size: 11px; opacity: 0.7; margin-top: 10px;'>" +
-"<i class='fas fa-info-circle'></i> Untranslated OPL source will be exported as .OPL but excluded from the .BLD file." +
+"<i data-lucide='info'></i> Untranslated OPL source will be exported as .OPL but excluded from the .BLD file." +
 "</div>" +
 "</div>";
 
@@ -975,6 +992,7 @@ var baseName=element.querySelector('#export-base-name').value.trim()||defaultNam
 performPackExport(pack,baseName);
 });
 dialog.start();
+if(typeof lucide!=='undefined')lucide.createIcons({root:element});
 }
 
 async function performPackExport(pack,baseName){
@@ -1133,6 +1151,40 @@ var canDelete=(!isDirty&&((currentItem&&currentItem.type>=0)||selectedPackIndex>
 eraseitembutton.setActive(canDelete);
 
 
+var canRecycle=false;
+var hasDeleted=false;
+
+if(!isDirty&&selectedPackIndex<0){
+var targets=[];
+if(typeof selectedItems!=='undefined'&&selectedItems.length>0){
+targets=selectedItems;
+}else if(currentItem){
+targets=[currentItem];
+}
+
+var validRecycleTargets=targets.filter(function (it){
+return it&&it.type>=0&&it.type!==255&&it.name!=="MAIN";
+});
+
+if(validRecycleTargets.length>0){
+canRecycle=true;
+hasDeleted=validRecycleTargets.some(function (it){return it.deleted;});
+}
+}
+
+if(typeof recycleitembutton!=='undefined'&&recycleitembutton){
+recycleitembutton.setActive(canRecycle);
+var recycleEl=document.getElementById('btn-recycle-item');
+if(recycleEl){
+recycleEl.title=hasDeleted?"Undelete Record (Recycle)":"Mark as Deleted (Recycle)";
+}
+}
+
+if(typeof PackContents!=='undefined'&&PackContents.updateRecycleButtonState){
+PackContents.updateRecycleButtonState(canRecycle,hasDeleted);
+}
+
+
 if(toolbarButtons){
 toolbarButtons.btnNewPack.setActive(!isDirty);
 toolbarButtons.btnOpenPack.setActive(!isDirty);
@@ -1146,6 +1198,13 @@ if(toolbarButtons.btnBootablePack){
 toolbarButtons.btnBootablePack.setActive(!isDirty);
 }
 toolbarButtons.btnDelete.setActive(canDelete);
+if(toolbarButtons.btnRecycle){
+toolbarButtons.btnRecycle.setActive(canRecycle);
+var tbtnRecycle=document.getElementById('tbtn-recycle');
+if(tbtnRecycle){
+tbtnRecycle.title=hasDeleted?"Undelete Record (Recycle)":"Mark as Deleted (Recycle)";
+}
+}
 toolbarButtons.btnApply.setActive(isDirty);
 toolbarButtons.btnDiscard.setActive(isDirty);
 
@@ -1184,7 +1243,7 @@ var btn=document.createElement('button');
 btn.className='tool-btn';
 btn.id=id;
 btn.title=title;
-btn.innerHTML='<i class="'+icon+'"></i>';
+btn.innerHTML='<i data-lucide="'+icon+'"></i>';
 container.appendChild(btn);
 return new Button(id,callback);
 }
@@ -1202,31 +1261,37 @@ container.appendChild(spacer);
 }
 
 toolbarButtons={};
+var modKey=isMac?'⌘':'Ctrl+';
 
-toolbarButtons.btnNewPack=createToolbarBtn('tbtn-new-pack','fas fa-box','New Pack',createNew);
-toolbarButtons.btnOpenPack=createToolbarBtn('tbtn-open-pack','fas fa-folder-open','Open Pack',function (){if(fileInputPack)fileInputPack.click();});
-toolbarButtons.btnSavePack=createToolbarBtn('tbtn-save-pack','fas fa-save','Save Pack',packSaved);
-
-createSeparator();
-
-toolbarButtons.btnImportItem=createToolbarBtn('tbtn-import-item','fas fa-file-import','Import Item',function (){if(fileInputItem)fileInputItem.click();});
-toolbarButtons.btnExportItem=createToolbarBtn('tbtn-export-item','fas fa-file-export','Export Item',exportCurrentItem);
+toolbarButtons.btnNewPack=createToolbarBtn('tbtn-new-pack','package-plus','New Pack ('+modKey+'F2)',createNew);
+toolbarButtons.btnOpenPack=createToolbarBtn('tbtn-open-pack','folder-open','Open Pack ('+modKey+'O / '+modKey+'F3)',function (){if(fileInputPack)fileInputPack.click();});
+toolbarButtons.btnSavePack=createToolbarBtn('tbtn-save-pack','save','Save Pack ('+modKey+'S / '+modKey+'F4)',packSaved);
 
 createSeparator();
 
-toolbarButtons.btnDelete=createToolbarBtn('tbtn-delete','fas fa-trash-can','Delete',eraseItem);
+toolbarButtons.btnImportItem=createToolbarBtn('tbtn-import-item','square-arrow-right-enter','Import Item ('+modKey+'F7)',function (){if(fileInputItem)fileInputItem.click();});
+toolbarButtons.btnExportItem=createToolbarBtn('tbtn-export-item','square-arrow-right-exit','Export Item',exportCurrentItem);
 
 createSeparator();
 
-toolbarButtons.btnNewProc=createToolbarBtn('tbtn-new-proc','fas fa-file-code','New OPL Procedure',function (){
+toolbarButtons.btnDelete=createToolbarBtn('tbtn-delete','trash-2','Delete ('+modKey+'F6 / Del)',eraseItem);
+toolbarButtons.btnRecycle=createToolbarBtn('tbtn-recycle','recycle','Recycle / Undelete Record (Shift+Del)',function (){
+if(typeof PackContents!=='undefined'&&PackContents.toggleRecycle){
+PackContents.toggleRecycle();
+}
+});
+
+createSeparator();
+
+toolbarButtons.btnNewProc=createToolbarBtn('tbtn-new-proc','file-code','New OPL Procedure',function (){
 var data=[0x00,0x00,0x00,0x0A,80,82,79,67,78,65,77,69,58,0];
 createBlockFile(data,"PROCNAME",3);
 });
-toolbarButtons.btnNewNotepad=createToolbarBtn('tbtn-new-notepad','fas fa-sticky-note','New Notepad Entry',function (){
+toolbarButtons.btnNewNotepad=createToolbarBtn('tbtn-new-notepad','sticky-note','New Notepad Entry',function (){
 var data=[0x00,0x02,8,0,0x00,0x09,78,79,84,69,80,65,68,58,0];
 createBlockFile(data,"NOTEPAD",7);
 });
-toolbarButtons.btnNewData=createToolbarBtn('tbtn-new-data','fas fa-database','New Data File',function (){
+toolbarButtons.btnNewData=createToolbarBtn('tbtn-new-data','database','New Data File',function (){
 var id=getFreeFileId();
 if(id>0){
 var hdritem=createFileHeader("DATA"+id,1,id+0x8f);
@@ -1234,17 +1299,17 @@ addItemToPack(hdritem);
 updateInventory();
 }
 });
-toolbarButtons.btnBootablePack=createToolbarBtn('tbtn-bootable-pack','fa-solid fa-splotch','Bootable Pack Wizard',openBootableWizard);
+toolbarButtons.btnBootablePack=createToolbarBtn('tbtn-bootable-pack','sparkles','Bootable Pack Wizard',openBootableWizard);
 
 createSeparator();
 
-toolbarButtons.btnApply=createToolbarBtn('tbtn-apply','fas fa-circle-check','Apply Changes',applyEdits);
-toolbarButtons.btnDiscard=createToolbarBtn('tbtn-discard','fas fa-rotate-left','Discard Changes',discardEdits);
+toolbarButtons.btnApply=createToolbarBtn('tbtn-apply','check-circle','Apply Changes ('+modKey+'Enter / '+modKey+'F9)',applyEdits);
+toolbarButtons.btnDiscard=createToolbarBtn('tbtn-discard','recycle','Discard Changes ('+modKey+'F10)',discardEdits);
 
 createSeparator();
 
 
-toolbarButtons.btnCopyObj=createToolbarBtn('tbtn-copy-obj','fa-solid fa-file-zipper','Copy Object Code (Extract)',function (){
+toolbarButtons.btnCopyObj=createToolbarBtn('tbtn-copy-obj','file-digit','Copy Object Code (Extract)',function (){
 if(typeof selectedItems==='undefined'||selectedItems.length===0)return;
 var targets=selectedItems.filter(function (it){return it.type===3;});
 if(targets.length===0)return;
@@ -1264,7 +1329,7 @@ procEditor.item=oldItem;
 
 createSeparator();
 
-toolbarButtons.btnPackHeader=createToolbarBtn('tbtn-pack-header','fas fa-receipt','Pack Header / Contents',function (){
+toolbarButtons.btnPackHeader=createToolbarBtn('tbtn-pack-header','receipt-text','Pack Header / Contents',function (){
 if(currentPackIndex>=0&&packs[currentPackIndex]){
 var pack=packs[currentPackIndex];
 var headerIdx=-1;
@@ -1284,7 +1349,7 @@ selectPack(currentPackIndex);
 }
 });
 
-toolbarButtons.btnPackReport=createToolbarBtn('tbtn-pack-report','fas fa-clipboard-list','Pack Summary Report',function (){
+toolbarButtons.btnPackReport=createToolbarBtn('tbtn-pack-report','scroll-text','Pack Summary Report',function (){
 var pack=currentPack;
 if(!pack&&typeof packs!=='undefined'&&currentPackIndex>=0){
 pack=packs[currentPackIndex];
@@ -1295,29 +1360,29 @@ packReportWindow.open(pack);
 }
 });
 
-toolbarButtons.btnMemoryMap=createToolbarBtn('tbtn-memory-map','fas fa-map','Memory Map',function (){
+toolbarButtons.btnMemoryMap=createToolbarBtn('tbtn-memory-map','map','Memory Map',function (){
 if(currentPackIndex>=0)selectPack(currentPackIndex);
 });
 
-toolbarButtons.btnVisualizer=createToolbarBtn('tbtn-visualizer','fas fa-diagram-project','Code Visualizer',function (){
+toolbarButtons.btnVisualizer=createToolbarBtn('tbtn-visualizer','network','Code Visualizer',function (){
 if(typeof CodeVisualizer!=='undefined')CodeVisualizer.showSystemMap(packs);
 });
 
 createSpacer();
 
-toolbarButtons.btnOptions=createToolbarBtn('tbtn-options','fas fa-sliders','Options',function (){
+toolbarButtons.btnOptions=createToolbarBtn('tbtn-options','sliders','Options',function (){
 if(typeof DialogManager!=='undefined'&&DialogManager.showOptionsDialog)DialogManager.showOptionsDialog();
 });
 
-toolbarButtons.btnOplRef=createToolbarBtn('tbtn-opl-ref','fas fa-book','OPL Command Reference',function (){
+toolbarButtons.btnOplRef=createToolbarBtn('tbtn-opl-ref','book-text','OPL Command Reference',function (){
 if(typeof OPLCommandReference!=='undefined')new OPLCommandReference().open();
 });
 
-toolbarButtons.btnAbout=createToolbarBtn('tbtn-about','fas fa-circle-info','About',function (){
+toolbarButtons.btnAbout=createToolbarBtn('tbtn-about','info','About',function (){
 if(typeof showAboutDialog==='function')showAboutDialog();
 });
 
-toolbarButtons.btnMaxMin=createToolbarBtn('tbtn-max-min','fas fa-expand','Toggle Fullscreen',function (){
+toolbarButtons.btnMaxMin=createToolbarBtn('tbtn-max-min','maximize','Toggle Fullscreen',function (){
 if(!document.fullscreenElement){
 document.documentElement.requestFullscreen().catch(function (e){
 
@@ -1331,15 +1396,15 @@ document.exitFullscreen();
 
 
 document.addEventListener('fullscreenchange',function (){
-var icon=document.querySelector('#tbtn-max-min i');
-if(icon){
-if(document.fullscreenElement){
-icon.className='fas fa-compress';
-}else {
-icon.className='fas fa-expand';
-}
+var btn=document.getElementById('tbtn-max-min');
+if(btn){
+var isFs=!!document.fullscreenElement;
+btn.innerHTML='<i data-lucide="'+(isFs?'minimize':'maximize')+'"></i>';
+if(typeof lucide!=='undefined')lucide.createIcons({root:btn});
 }
 });
+
+if(typeof lucide!=='undefined')lucide.createIcons({root:container});
 
 if(typeof OptionsManager!=='undefined')OptionsManager.applyOptions();
 updateItemButtons(false);
@@ -1736,7 +1801,7 @@ selectedPackIndex=index;
 currentPackIndex=index;
 currentItem=null;
 selectedItems=[];
-var lastFocusedItemIndex=-1;
+lastFocusedItemIndex=-1;
 updateInventory();
 
 
@@ -1775,10 +1840,9 @@ var pack=packs[packIndex];
 var item=pack.items[itemIndex];
 if(!item)return false;
 
+var isToggleModifier=event&&(event.ctrlKey||event.metaKey);
 
-lastFocusedItemIndex=itemIndex;
-
-if(currentItem==item&&(!event||(!event.ctrlKey&&!event.shiftKey))){
+if(currentItem==item&&(!event||(!isToggleModifier&&!event.shiftKey))){
 
 if(typeof PackContents!=='undefined'&&PackContents.selectItem){
 PackContents.selectItem(packIndex,itemIndex);
@@ -1789,16 +1853,16 @@ return true;
 if(!closeEditor())return false;
 
 
-var isSpecial=(item.name==="MAIN"||item.type===255);
-
-
 if(currentPackIndex!==packIndex){
 selectedItems=[];
 lastFocusedItemIndex=-1;
 }
 
+
+var isSpecial=(itemIndex===0||item.name==="MAIN"||item.type===255||item.type===-1);
+
 if(event&&!isSpecial){
-if(event.ctrlKey){
+if(isToggleModifier){
 
 var idx=selectedItems.indexOf(item);
 if(idx>=0){
@@ -1806,26 +1870,37 @@ selectedItems.splice(idx,1);
 }else {
 selectedItems.push(item);
 }
+lastFocusedItemIndex=itemIndex;
 }else if(event.shiftKey&&lastFocusedItemIndex!==-1){
 
 selectedItems=[];
 var start=Math.min(lastFocusedItemIndex,itemIndex);
 var end=Math.max(lastFocusedItemIndex,itemIndex);
 for(var k=start;k<=end;k++){
-selectedItems.push(pack.items[k]);
+var cand=pack.items[k];
+if(cand&&cand.name!=="MAIN"&&cand.type!==255&&cand.type!==-1&&k!==0){
+selectedItems.push(cand);
 }
-}else {
+}
+if(selectedItems.length===0){
 selectedItems=[item];
+}
+
+}else {
+
+selectedItems=[item];
+lastFocusedItemIndex=itemIndex;
 }
 }else {
 
 selectedItems=[item];
+lastFocusedItemIndex=itemIndex;
 }
 
 
 if(selectedItems.length>1){
 setStatus(selectedItems.length+" items selected");
-}else if(event&&!event.ctrlKey&&!event.shiftKey){
+}else if(event&&!isToggleModifier&&!event.shiftKey){
 if(typeof statusmessageelement!=='undefined'&&statusmessageelement){
 if(statusmessageelement.innerText.indexOf("selected")!==-1){
 statusmessageelement.innerText="";
@@ -3459,20 +3534,35 @@ e.preventDefault();
 if(typeof DialogManager!=='undefined'&&DialogManager.showKeyMapDialog)DialogManager.showKeyMapDialog();
 }
 }else if(isCtrl){
-if(e.key==='n'||e.key==='N'){
+if(e.shiftKey&&(e.key==='s'||e.key==='S')){
 e.preventDefault();
 
-var btn=document.getElementById('btn-file-menu');
-if(btn)btn.click();
+exportHex();
+}else if(e.key==='s'||e.key==='S'){
+e.preventDefault();
+
+packSaved();
 }else if(e.key==='o'||e.key==='O'){
 e.preventDefault();
 
 var link=document.getElementById('menu-open-pack');
 if(link)link.click();
-}else if(e.key==='s'||e.key==='S'){
+}else if(e.key==='n'||e.key==='N'){
 e.preventDefault();
 
-packSaved();
+var btn=document.getElementById('btn-file-menu');
+if(btn)btn.click();
+}else if(e.key==='Enter'){
+
+e.preventDefault();
+applyEdits();
+}else if(e.key==='Backspace'||e.key==='Delete'){
+var activeEl=document.activeElement;
+var isTextInput=activeEl&&(activeEl.tagName==='INPUT'||activeEl.tagName==='TEXTAREA'||activeEl.isContentEditable);
+if(!isTextInput&&typeof eraseItem==='function'){
+e.preventDefault();
+eraseItem(e.shiftKey);
+}
 }
 }else {
 
@@ -3645,10 +3735,11 @@ var element=document.createElement('div');
 element.style.padding='10px';
 element.innerHTML="<h3>Confirm Import</h3>" +
 "<p>"+message+"</p>" +
-(note?"<p style='font-size: 11px; opacity: 0.7; border-top: 1px solid var(--border-color); padding-top: 5px;'><i class='fas fa-info-circle'></i> "+note+"</p>":"");
+(note?"<p style='font-size: 11px; opacity: 0.7; border-top: 1px solid var(--border-color); padding-top: 5px;'><i data-lucide='info'></i> "+note+"</p>":"");
 
 var dialog=new ModalDialog(element,function (){resolve(true);},function (){resolve(false);},"Yes","No");
 dialog.start();
+if(typeof lucide!=='undefined')lucide.createIcons({root:element});
 });
 }
 
@@ -3841,7 +3932,7 @@ element.innerHTML="<h3>Open from URL</h3>" +
 "<input type='checkbox' id='use-proxy' checked style='margin-right: 8px;'> Use CORS Proxy (Recommended for external links)" +
 "</label>" +
 "</div>" +
-"<p style='font-size: 11px; opacity: 0.7;'><i class='fas fa-info-circle'></i> Use the proxy if you encounter a 'CORS restriction' error. This routes the request through <i>allorigins.win</i> to bypass security blocks.</p>";
+"<p style='font-size: 11px; opacity: 0.7;'><i data-lucide='info'></i> Use the proxy if you encounter a 'CORS restriction' error. This routes the request through <i>allorigins.win</i> to bypass security blocks.</p>";
 
 var dialog=new ModalDialog(element,async function (){
 var url=element.querySelector('#import-url').value.trim();
@@ -3851,6 +3942,7 @@ await loadPackFromURLHelper(url,useProxy);
 },null,"Open","Cancel");
 
 dialog.start();
+if(typeof lucide!=='undefined')lucide.createIcons({root:element});
 
 var inputEl=element.querySelector('#import-url');
 var proxyEl=element.querySelector('#use-proxy');

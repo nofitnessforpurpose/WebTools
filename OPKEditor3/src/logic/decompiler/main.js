@@ -70,6 +70,9 @@ this.instHandler.procMap=options.procMap||{};
 let offset=0;
 this.oplBase=0;
 const header=this.parseHeader(codeBlock,offset,options);
+if(header.hasQCode===false||header.qcodeSize===0){
+return {instructions:[],flow:{},varMap:{}};
+}
 this.oplBase=header.oplBase||0;
 const finalProcName=procName==="main"?(header.extractedName||procName):procName;
 const varMap=this.scanVariables(codeBlock,header,options);
@@ -311,7 +314,35 @@ log(offset-2,getHexBytes(offset-2,2),"LongRec Len",longRecLen.toString(),"Length
 qcodeTotalLen=readWordBE();
 log(offset-2,getHexBytes(offset-2,2),"Total Len",qcodeTotalLen.toString(),"Total Object Size");
 if(qcodeTotalLen===0){
-qcodeTotalLen=longRecLen;
+
+const srcLen=(offset+2<=codeBlock.length)?readWordBE():0;
+let srcText="";
+if(srcLen>0&&offset+srcLen<=codeBlock.length){
+for(let i=0;i<srcLen;i++){
+const ch=readByte();
+srcText+=(ch===0?'\n':String.fromCharCode(ch));
+}
+}
+return {
+extractedName,
+magic:(sync<<8)|type,
+varSpaceSize:0,
+qcodeSize:0,
+numParams:0,
+paramTypes:[],
+qcodeStart:offset,
+qcodeInstructionStart:offset,
+oplBase:this.oplBase,
+isProcedure,
+isLZ:false,
+isCMXP:false,
+hasQCode:false,
+sourceText:srcText,
+globals:[],
+externals:[],
+stringFixups:[],
+arrayFixups:{}
+};
 }
 metadataStart=offset;
 
@@ -338,7 +369,35 @@ log(2,getHexBytes(2,2),"LongRec Len",longRecLen.toString(),"Length of Data Block
 qcodeTotalLen=readWordBE();
 log(4,getHexBytes(4,2),"Total Len",qcodeTotalLen.toString(),"Total Object Size");
 if(qcodeTotalLen===0){
-qcodeTotalLen=longRecLen;
+
+const srcLen=(offset+2<=codeBlock.length)?readWordBE():0;
+let srcText="";
+if(srcLen>0&&offset+srcLen<=codeBlock.length){
+for(let i=0;i<srcLen;i++){
+const ch=readByte();
+srcText+=(ch===0?'\n':String.fromCharCode(ch));
+}
+}
+return {
+extractedName,
+magic:(sync<<8)|type,
+varSpaceSize:0,
+qcodeSize:0,
+numParams:0,
+paramTypes:[],
+qcodeStart:offset,
+qcodeInstructionStart:offset,
+oplBase:this.oplBase,
+isProcedure,
+isLZ:false,
+isCMXP:false,
+hasQCode:false,
+sourceText:srcText,
+globals:[],
+externals:[],
+stringFixups:[],
+arrayFixups:{}
+};
 }
 
 this.oplBase=offset;
@@ -601,6 +660,9 @@ globalTableSize:globalTableSize
 }
 
 scanVariables(codeBlock,header,options={}){
+if(!header||header.hasQCode===false||!header.qcodeSize){
+return {};
+}
 const toEvenHex=(val,bytes=1)=>this.toEvenHex(val,bytes);
 
 const log=(msg)=>{

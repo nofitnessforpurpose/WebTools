@@ -76,17 +76,17 @@ content.innerHTML=`
                 <div class="section-title">Editor Toolbar</div>
                 <p>Located at the top of the editor workspace, the toolbar provides quick access to essential OPL coding actions. The layout uses standard icons to assist user orientation:</p>
                 <ul>
-                    <li style="margin-bottom: 8px;"><strong><i class="fas fa-circle-check"></i> Apply Changes</strong>: Saves your pure text edits to the Datapak memory. The <i class="fas fa-undo"></i> <strong>Discard</strong> button safely reverts any unsaved modifications.</li>
-                    <li style="margin-bottom: 8px;"><strong><i class="fa-solid fa-feather-pointed"></i> Pretty Print / <i class="fa-solid fa-hammer"></i> Minify</strong>: Automatically formats your selection for readability, or strips out comments and excess spacing to heavily optimize Datapak memory use.</li>
-                    <li style="margin-bottom: 8px;"><strong><i class="fas fa-indent"></i> / <i class="fas fa-outdent"></i> Indent</strong>: Rapidly shifts code blocks left or right to maintain structural clarity.</li>
-                    <li style="margin-bottom: 8px;"><strong><i class="fas fa-mouse-pointer"></i> Select / <i class="far fa-copy"></i> Copy / <i class="fas fa-paste"></i> Paste</strong>: Standard text manipulation utilities context-aware to the OPL framework.</li>
-                    <li style="margin-bottom: 8px;"><strong><i class="fas fa-gears"></i> Translate</strong>: Actively compiles your OPL source text into functional, executable Q-Code.</li>
-                    <li style="margin-bottom: 8px;"><strong><i class="fa-solid fa-file-zipper"></i> Copy Object Code</strong>: Extracts the raw compiled binary payload to the clipboard for advanced debugging or system-level analysis.</li>
-                    <li style="margin-bottom: 8px;"><strong><i class="fa-solid fa-file-circle-plus"></i> Extract Source</strong>: Isolates your OPL code from the QCode, moving it into a brand new OPL Text record.</li>
+                    <li style="margin-bottom: 8px;"><strong><i data-lucide="check-circle"></i> Apply Changes</strong>: Saves your pure text edits to the Datapak memory. The <i data-lucide="recycle"></i> <strong>Discard</strong> button safely reverts any unsaved modifications.</li>
+                    <li style="margin-bottom: 8px;"><strong><i data-lucide="feather"></i> Pretty Print / <i data-lucide="hammer"></i> Minify</strong>: Automatically formats your selection for readability, or strips out comments and excess spacing to heavily optimize Datapak memory use.</li>
+                    <li style="margin-bottom: 8px;"><strong><i data-lucide="indent"></i> / <i data-lucide="outdent"></i> Indent</strong>: Rapidly shifts code blocks left or right to maintain structural clarity.</li>
+                    <li style="margin-bottom: 8px;"><strong><i data-lucide="mouse-pointer"></i> Select / <i data-lucide="clipboard-copy"></i> Copy / <i data-lucide="clipboard-paste"></i> Paste</strong>: Standard text manipulation utilities context-aware to the OPL framework.</li>
+                    <li style="margin-bottom: 8px;"><strong><i data-lucide="monitor-cog"></i> Translate</strong>: Actively compiles your OPL source text into functional, executable Q-Code.</li>
+                    <li style="margin-bottom: 8px;"><strong><i data-lucide="file-digit"></i> Copy Object Code (QCode) to New Record</strong>: Extracts the raw compiled binary QCode payload to a new record, removing OPL source to conserve space on a data pack.</li>
+                    <li style="margin-bottom: 8px;"><strong><i data-lucide="file-code-corner"></i> Extract Source</strong>: Isolates your OPL code from the QCode, moving it into a brand new OPL Text record.</li>
                 </ul>
                 <details class="tech-note">
                     <summary><strong>Technical Details (Space Efficiency & Minification):</strong></summary>
-                    OPL source text consumes significantly more Datapak space than compiled Q-Code—often taking up more than twice the memory even for simple, uncommented logic. On smaller hardware Datapaks, this can rapidly exhaust available space. If you must store the original text alongside the executable code, using the <strong>Minify</strong> tool (<i class="fa-solid fa-hammer"></i>) prior to applying changes will strip out non-essential spaces and comments, heavily optimizing the text payload.
+                    OPL source text consumes significantly more Datapak space than compiled Q-Code—often taking up more than twice the memory even for simple, uncommented logic. On smaller hardware Datapaks, this can rapidly exhaust available space. If you must store the original text alongside the executable code, using the <strong>Minify</strong> tool (<i data-lucide="hammer"></i>) prior to applying changes will strip out non-essential spaces and comments, heavily optimizing the text payload.
                 </details>
             </div>
             
@@ -105,8 +105,8 @@ content.innerHTML=`
             
             <div class="section">
                 <div class="section-title">Applying and Translating Changes</div>
-                <p>When you finish typing your code, you must click the <strong>Apply</strong> button (<i class="fas fa-circle-check"></i>) to save the text. However, simply applying the text does <em>not</em> automatically make the program runnable by the device. The readable OPL text (Source Text) and the compiled instructions (Q-Code) are stored as two completely separate pieces inside the file record.</p>
-                <p>It is your responsibility to actively <strong>Translate</strong> the code (<i class="fas fa-gears"></i>) when you are ready. Clicking Translate will start a process that thoroughly checks your work for spelling mistakes or missing brackets. If it finds a problem, the editor will highlight the error exactly where it stops in the code flow.</p>
+                <p>When you finish typing your code, you must click the <strong>Apply</strong> button (<i data-lucide="check-circle"></i>) to save the text. However, simply applying the text does <em>not</em> automatically make the program runnable by the device. The readable OPL text (Source Text) and the compiled instructions (Q-Code) are stored as two completely separate pieces inside the file record.</p>
+                <p>It is your responsibility to actively <strong>Translate</strong> the code (<i data-lucide="monitor-cog"></i>) when you are ready. Clicking Translate will start a process that thoroughly checks your work for spelling mistakes or missing brackets. If it finds a problem, the editor will highlight the error exactly where it stops in the code flow.</p>
                 <p>Once the translation is completely successful, the editor converts your OPL text into new Q-Code instructions, updating the actual executable portion of that specific file record.</p>
                 
                 <details class="tech-note">
@@ -121,6 +121,7 @@ content.innerHTML=`
             </div>
         `;
 doc.body.appendChild(content);
+if(typeof lucide!=='undefined')lucide.createIcons({root:content});
 }
 return {openWindow:openWindow};
 })();

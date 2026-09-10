@@ -56,7 +56,14 @@ if(fn)fn.disabled=false;
 this.createToobarButtons();
 
 
-var chld=this.item.child.child;
+var chld=(this.item.child&&this.item.child.child)?this.item.child.child:null;
+if(!chld||!chld.data||chld.data.length<4){
+document.getElementById("objectcode").innerHTML="0";
+var ckEl=document.getElementById("status-checksum");
+if(ckEl)ckEl.style.display="none";
+if(this.codeEditorInstance)this.codeEditorInstance.setValue("");
+return;
+}
 var lncode=chld.data[0]*256+chld.data[1];
 document.getElementById("objectcode").innerHTML=""+lncode;
 
@@ -64,7 +71,7 @@ document.getElementById("objectcode").innerHTML=""+lncode;
 var ckEl=document.getElementById("status-checksum");
 if(ckEl)ckEl.style.display="none";
 
-var lnsrc=chld.data[lncode+2]*256+chld.data[lncode+3];
+var lnsrc=(chld.data.length>=lncode+4)?(chld.data[lncode+2]*256+chld.data[lncode+3]):0;
 
 setTimeout(function (){
 var s="";
@@ -228,7 +235,7 @@ leftTools.style.marginRight='10px';
 
 function createHeaderBtn(iconClass,title,clickHandler){
 var b=document.createElement('button');
-b.innerHTML='<i class="'+iconClass+'"></i>';
+b.innerHTML='<i data-lucide="'+iconClass+'"></i>';
 b.className='icon-btn';
 b.title=title;
 b.addEventListener('click',function (e){
@@ -240,7 +247,7 @@ return b;
 }
 
 
-var applyBtn=createHeaderBtn('fas fa-circle-check','Apply Changes',function (){
+var applyBtn=createHeaderBtn('check-circle','Apply Changes',function (){
 if(self.item.deleted)return;
 self.applyChanges();
 });
@@ -249,7 +256,7 @@ leftTools.appendChild(applyBtn);
 this.applyBtn=applyBtn;
 
 
-var discardBtn=createHeaderBtn('fas fa-undo','Discard Changes',function (){
+var discardBtn=createHeaderBtn('recycle','Discard Changes',function (){
 if(self.item.deleted)return;
 if(confirm("Discard unsaved changes?")){
 self.updateEditorContent(self.originalSource);
@@ -271,7 +278,7 @@ divFormat.style.opacity='0.5';
 leftTools.appendChild(divFormat);
 
 
-var formatBtn=createHeaderBtn('fa-solid fa-feather-pointed','Pretty Print (Format Selection)',function (){
+var formatBtn=createHeaderBtn('feather','Pretty Print (Format Selection)',function (){
 if(self.item.deleted)return;
 if(self.codeEditorInstance){
 self.codeEditorInstance.formatSelection();
@@ -280,7 +287,7 @@ self.codeEditorInstance.formatSelection();
 leftTools.appendChild(formatBtn);
 this.formatBtn=formatBtn;
 
-var minifyBtn=createHeaderBtn('fa-solid fa-hammer','Minify & Compress (Selection)',function (){
+var minifyBtn=createHeaderBtn('hammer','Minify & Compress (Selection)',function (){
 if(self.item.deleted)return;
 var suppressed=OptionsManager.getOption('suppressConfirmations');
 if(!suppressed){
@@ -304,7 +311,7 @@ div1.style.opacity='0.5';
 leftTools.appendChild(div1);
 
 
-var indentBtn=createHeaderBtn('fas fa-indent','Increase Indent',function (){
+var indentBtn=createHeaderBtn('indent','Increase Indent',function (){
 if(self.item.deleted)return;
 if(self.codeEditorInstance){
 self.codeEditorInstance.indentSelection();
@@ -313,7 +320,7 @@ self.codeEditorInstance.indentSelection();
 leftTools.appendChild(indentBtn);
 this.indentBtn=indentBtn;
 
-var outdentBtn=createHeaderBtn('fas fa-outdent','Decrease Indent',function (){
+var outdentBtn=createHeaderBtn('outdent','Decrease Indent',function (){
 if(self.item.deleted)return;
 if(self.codeEditorInstance){
 self.codeEditorInstance.outdentSelection();
@@ -330,7 +337,7 @@ div2.style.color='var(--border-color)';
 div2.style.opacity='0.5';
 leftTools.appendChild(div2);
 
-leftTools.appendChild(createHeaderBtn('fas fa-mouse-pointer','Select All',function (){
+leftTools.appendChild(createHeaderBtn('mouse-pointer','Select All',function (){
 if(self.codeEditorInstance){
 self.codeEditorInstance.selectAll();
 }else {
@@ -339,11 +346,11 @@ if(ta)ta.select();
 }
 }));
 
-leftTools.appendChild(createHeaderBtn('far fa-copy','Copy the selected text to clipboard',function (){
+leftTools.appendChild(createHeaderBtn('clipboard-list','Copy the selected text to clipboard',function (){
 document.execCommand('copy');
 }));
 
-leftTools.appendChild(createHeaderBtn('fas fa-file-export','Copy the entire source code to clipboard',function (){
+leftTools.appendChild(createHeaderBtn('clipboard-copy','Copy the entire source code to clipboard',function (){
 if(self.codeEditorInstance){
 var text=self.codeEditorInstance.getValue();
 navigator.clipboard.writeText(text);
@@ -353,7 +360,7 @@ if(ta)navigator.clipboard.writeText(ta.value);
 }
 }));
 
-var pasteBtn=createHeaderBtn('fas fa-paste','Paste text from clipboard at cursor position',function (){
+var pasteBtn=createHeaderBtn('clipboard-paste','Paste text from clipboard at cursor position',function (){
 if(self.item.deleted)return;
 navigator.clipboard.readText().then(function (text){
 if(!text)return;
@@ -363,20 +370,26 @@ if(self.codeEditorInstance)target=self.codeEditorInstance.inputLayer;
 else target=document.getElementById('sourcecode');
 
 if(target){
-if(typeof target.setRangeText==='function'){
-target.setRangeText(text,target.selectionStart,target.selectionEnd,'end');
-target.dispatchEvent(new Event('input'));
-}else {
-target.value+=text;
-target.dispatchEvent(new Event('input'));
-}
+var start=target.selectionStart;
+var end=target.selectionEnd;
+var val=target.value;
+target.value=val.substring(0,start)+text+val.substring(end);
+target.selectionStart=target.selectionEnd=start+text.length;
 
-if(self.codeEditorInstance)self.codeEditorInstance.onChange();
+
+if(self.codeEditorInstance){
+self.codeEditorInstance.syncRender();
+self.codeEditorInstance.onCursorActivity();
+}else {
+target.dispatchEvent(new Event('input'));
 }
-}).catch(function (e){console.error(e);});
+self.updateToolbarButtons();
+}
+});
 });
 if(this.item.deleted)pasteBtn.disabled=true;
 leftTools.appendChild(pasteBtn);
+this.pasteBtn=pasteBtn;
 
 var div=document.createElement('span');
 div.innerHTML='|';
@@ -387,7 +400,7 @@ leftTools.appendChild(div);
 
 
 var btn=document.createElement('button');
-btn.innerHTML='<i class="fas fa-gears"></i>';
+btn.innerHTML='<i data-lucide="monitor-cog"></i>';
 btn.className='icon-btn';
 btn.title='Translate (Compile Source to Object Code)';
 btn.addEventListener('click',function (e){
@@ -401,10 +414,10 @@ this.translateBtn=btn;
 
 
 var stripBtn=document.createElement('button');
-stripBtn.innerHTML='<i class="fa-solid fa-file-zipper"></i>';
+stripBtn.innerHTML='<i data-lucide="file-digit"></i>';
 stripBtn.className='icon-btn';
 stripBtn.style.marginLeft='5px';
-stripBtn.title='Copy Object Code';
+stripBtn.title='Copy Object Code to New Record';
 stripBtn.addEventListener('click',function (e){
 if(self.item.deleted)return;
 self.copyObjectCode();
@@ -415,7 +428,7 @@ this.stripBtn=stripBtn;
 
 
 var extractBtn=document.createElement('button');
-extractBtn.innerHTML='<i class="fa-solid fa-file-circle-plus"></i>';
+extractBtn.innerHTML='<i data-lucide="file-code-corner"></i>';
 extractBtn.className='icon-btn';
 extractBtn.style.marginLeft='5px';
 extractBtn.title='Extract Source to New Record';
@@ -457,8 +470,9 @@ targetIndicator.title='Current Compiler Target';
 var updateTargetLabel=function (){
 var current=OptionsManager.getOption('targetSystem')||'Standard';
 var label=(current==='LZ')?'LZ Mode':'XP Mode';
-var icon=(current==='LZ')?'fa-memory':'fa-microchip';
-targetIndicator.innerHTML='<i class="fas '+icon+'"></i> '+label;
+var icon=(current==='LZ')?'hard-drive':'cpu';
+targetIndicator.innerHTML='<i data-lucide="'+icon+'"></i> '+label;
+if(typeof lucide!=='undefined')lucide.createIcons({root:targetIndicator});
 };
 updateTargetLabel();
 rightTools.appendChild(targetIndicator);
@@ -475,6 +489,7 @@ self.codeEditorInstance.setTargetSystem(OptionsManager.getOption('targetSystem')
 window.addEventListener('optionsChanged',this.targetOptionListener);
 
 header.appendChild(rightTools);
+if(typeof lucide!=='undefined')lucide.createIcons({root:header});
 };
 
 ProcedureFileEditor.prototype.updateToolbarButtons=function (){
@@ -487,7 +502,7 @@ this.translateBtn.title=hasChanges?"Save changes before Translating":"Translate 
 }
 if(this.stripBtn){
 this.stripBtn.disabled=isDeleted||hasChanges;
-this.stripBtn.title=hasChanges?"Save changes before Copying Object Code":"Copy Object Code";
+this.stripBtn.title=hasChanges?"Save changes before Copying Object Code":"Copy Object Code to New Record";
 }
 if(this.extractBtn){
 this.extractBtn.disabled=isDeleted||hasChanges;

@@ -520,7 +520,7 @@ e.preventDefault();
 }else if(e.key>='0'&&e.key<='7'){
 charSelect.value=e.key;
 updateUI();
-}else if(e.key==='c'||e.key==='C'){
+}else if(e.code==='KeyC'||e.key==='c'||e.key==='C'){
 copyBtn.click();
 }
 });

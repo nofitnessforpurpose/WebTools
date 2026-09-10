@@ -20,11 +20,12 @@ if(!packs||packs.length===0)return system;
 
 
 packs.forEach(function (pack,pIdx){
+var packId="P"+pIdx;
 var packData={
 name:pack.filename||"Pack "+(pIdx+1),
 index:pIdx,
+id:packId,
 procedures:[],
-
 globals:[],
 dataFiles:[],
 fileIdMap:{}
@@ -34,7 +35,7 @@ fileIdMap:{}
 pack.items.forEach(function (item){
 if(!item.deleted&&item.type===1){
 var fileId=item.data[10]&0x7f;
-packData.fileIdMap[fileId]="DATA_"+item.name.toUpperCase();
+packData.fileIdMap[fileId]=packId+"::DATA_"+item.name.toUpperCase();
 }
 });
 
@@ -42,13 +43,16 @@ packData.fileIdMap[fileId]="DATA_"+item.name.toUpperCase();
 pack.items.forEach(function (item){
 if(item.deleted)return;
 if(item.type===1){
-var nodeName="DATA_"+item.name.toUpperCase();
+var nodeName=packId+"::DATA_"+item.name.toUpperCase();
 system.nodes[nodeName]={
 type:'DATA_FILE',
+id:nodeName,
 packIndex:pIdx,
+packId:packId,
+packName:packData.name,
 name:item.name,
 label:item.name,
-id:item.data[10]&0x7f,
+fileId:item.data[10]&0x7f,
 records:[],
 degree:0
 };
@@ -67,7 +71,10 @@ var uniqueId=parentName+"_REC_"+idx;
 if(!system.nodes[uniqueId]){
 system.nodes[uniqueId]={
 type:'DATA_RECORD',
+id:uniqueId,
 packIndex:pIdx,
+packId:packId,
+packName:packData.name,
 name:item.name,
 label:item.name,
 parent:parentName,
@@ -84,7 +91,7 @@ system.links.push({
 from:parentName,
 to:uniqueId,
 type:'OWNERSHIP',
-tooltip:parentName+" owns "+item.name
+tooltip:(system.nodes[parentName]?system.nodes[parentName].label:parentName)+" owns "+item.name
 });
 }
 }
@@ -96,9 +103,13 @@ if(item.deleted)return;
 
 
 if(item.type===3){
-system.nodes[item.name.toUpperCase()]={
+var procNodeId=packId+"::PROC_"+item.name.toUpperCase();
+system.nodes[procNodeId]={
 type:'PROC',
+id:procNodeId,
 packIndex:pIdx,
+packId:packId,
+packName:packData.name,
 name:item.name,
 label:item.name,
 params:[],
@@ -106,7 +117,7 @@ locals:[],
 globals:[],
 degree:0
 };
-packData.procedures.push(item.name);
+packData.procedures.push(procNodeId);
 
 
 if(item.child){
@@ -129,6 +140,7 @@ globalProcMap[item.name.toUpperCase()]={paramCount:header.numParams};
 
 
 if(item.type===3){
+var procNodeId=packId+"::PROC_"+item.name.toUpperCase();
 if(item.child&&item.child.child&&item.child.child.data){
 
 
@@ -138,10 +150,14 @@ var data=(item.child.getFullData)?item.child.getFullData():item.child.child.data
 function parseRec(d){
 var off=0;while(off<d.length&&d[off]===0)off++;
 var sync=-1;for(var i=off;i<d.length-1;i++){if(d[i]===0x02&&d[i+1]===0x80){sync=i;break;}}
-if(sync===-1)return (d.length>=2&&(2+((d[0]<<8)|d[1])<=d.length))?{valid:true,off:0,len:(d[0]<<8)|d[1],base:0}:{valid:false};
+if(sync===-1){
+var rawQLen=(d.length>=2)?((d[0]<<8)|d[1]):0;
+return (d.length>=2&&(2+rawQLen<=d.length))?{valid:true,off:0,len:rawQLen,base:0,qCodeLen:rawQLen}:{valid:false};
+}
 var lnOff=sync+2;if(lnOff+1>=d.length)return {valid:false};
+var qCodeLen=(lnOff+3<d.length)?((d[lnOff+2]<<8)|d[lnOff+3]):0;
 
-return {valid:true,off:lnOff,len:(d[lnOff]<<8)|d[lnOff+1],base:lnOff,sync:sync};
+return {valid:true,off:lnOff,len:(d[lnOff]<<8)|d[lnOff+1],base:lnOff,sync:sync,qCodeLen:qCodeLen};
 }
 
 if(data.length>=2){
@@ -153,7 +169,7 @@ var base=struct.valid?struct.base:2;
 var startOff=(struct.valid&&struct.sync!==undefined)?struct.sync:base;
 var totalLen=(struct.valid&&struct.sync!==undefined)?(obLen+2):obLen;
 
-if(obLen>0&&data.length>=startOff+totalLen){
+if(obLen>0&&struct.qCodeLen>0&&data.length>=startOff+totalLen){
 var objCode=data.slice(startOff,startOff+totalLen);
 try{
 if(typeof OPLDecompiler!=='undefined'){
@@ -164,9 +180,10 @@ var header=decompiler.parseHeader(objCode,0);
 decompiler.scanVariables(objCode,header);
 
 if(header&&header.globals){
-var procNode=system.nodes[item.name.toUpperCase()];
+var procNode=system.nodes[procNodeId];
 header.globals.forEach(function (g){
 var gName=g.name.toUpperCase();
+var gNodeId=packId+"::GLOBAL_"+gName;
 
 
 var displayName=g.name;
@@ -183,19 +200,27 @@ displayName+="("+g.maxLen+")";
 }
 
 
-if(!system.nodes[gName]){
-
-system.nodes[gName]={type:'GLOBAL',packIndex:pIdx,name:g.name,label:displayName,degree:0,addr:g.addr};
+if(!system.nodes[gNodeId]){
+system.nodes[gNodeId]={
+type:'GLOBAL',
+id:gNodeId,
+packIndex:pIdx,
+packId:packId,
+packName:packData.name,
+name:g.name,
+label:displayName,
+degree:0,
+addr:g.addr
+};
 }
 
-if(packData.globals.indexOf(g.name)===-1){
-packData.globals.push(g.name);
+if(packData.globals.indexOf(gNodeId)===-1){
+packData.globals.push(gNodeId);
 }
 
 
-
-if(procNode&&procNode.globals.indexOf(gName)===-1){
-procNode.globals.push(gName);
+if(procNode&&procNode.globals.indexOf(gNodeId)===-1){
+procNode.globals.push(gNodeId);
 }
 });
 }
@@ -210,21 +235,23 @@ system.packs.push(packData);
 });
 
 packs.forEach(function (pack,pIdx){
+var packId="P"+pIdx;
 
 var globalAddrMap={};
 if(system.packs[pIdx]&&system.packs[pIdx].globals){
-system.packs[pIdx].globals.forEach(function (gName){
-var gNode=system.nodes[gName.toUpperCase()];
+system.packs[pIdx].globals.forEach(function (gNodeId){
+var gNode=system.nodes[gNodeId];
 if(gNode&&gNode.addr!==undefined){
 var normAddr=gNode.addr;
 if(normAddr>32767)normAddr-=65536;
-globalAddrMap[normAddr]=gName;
+globalAddrMap[normAddr]=gNodeId;
 }
 });
 }
 
 pack.items.forEach(function (item){
 if(item.deleted||item.type!==3)return;
+var procNodeId=packId+"::PROC_"+item.name.toUpperCase();
 
 var instructions=[];
 if(item.child&&item.child.child&&item.child.child.data){
@@ -237,11 +264,15 @@ function parseRecS(d){
 var off=0;while(off<d.length&&d[off]===0)off++;
 var sync=-1;for(var i=off;i<d.length-1;i++){if(d[i]===0x02&&d[i+1]===0x80){sync=i;break;}}
 
-if(sync===-1)return (d.length>=2&&(2+((d[0]<<8)|d[1])<=d.length))?
-{valid:true,len:(d[0]<<8)|d[1],base:2,start:0,type:'raw'}:{valid:false};
+if(sync===-1){
+var rawQLen=(d.length>=2)?((d[0]<<8)|d[1]):0;
+return (d.length>=2&&(2+rawQLen<=d.length))?
+{valid:true,len:rawQLen,base:2,start:0,type:'raw',qCodeLen:rawQLen}:{valid:false};
+}
 
 var lnOff=sync+2;if(lnOff+1>=d.length)return {valid:false};
-return {valid:true,len:(d[lnOff]<<8)|d[lnOff+1],base:lnOff+2,start:sync,type:'long'};
+var qCodeLen=(lnOff+3<d.length)?((d[lnOff+2]<<8)|d[lnOff+3]):0;
+return {valid:true,len:(d[lnOff]<<8)|d[lnOff+1],base:lnOff+2,start:sync,type:'long',qCodeLen:qCodeLen};
 }
 
 var st=parseRecS(data);
@@ -254,7 +285,7 @@ var baseStart=st.valid?st.base:2;
 
 
 
-if(st.valid&&st.type==='long'){
+if(st.valid&&st.type==='long'&&st.qCodeLen>0){
 var sliceEnd=st.start+4 + st.len;
 if(sliceEnd<=data.length){
 var objCode=data.slice(st.start,sliceEnd);
@@ -268,7 +299,7 @@ item.varMap=analysis.varMap;
 }
 }catch(e){}
 }
-}else if(obLen>0&&data.length>=baseStart+obLen){
+}else if(obLen>0&&st.qCodeLen>0&&data.length>=baseStart+obLen){
 
 
 var objCode=data.slice(baseStart,baseStart+obLen);
@@ -327,7 +358,7 @@ fullCode=d.decompile(objCode,item.name,{});
 }
 }
 
-var node=system.nodes[item.name.toUpperCase()];
+var node=system.nodes[procNodeId];
 if(node){
 node.code=fullCode;
 
@@ -378,53 +409,125 @@ localCount++;
 }
 });
 
-}else {
+}else if(fullCode){
+
+var lines=fullCode.split(/\r?\n/);
+var headerFound=false;
 
 
-var procMatch=fullCode.match(/PROC\s+[A-Z0-9_$]+\s*:\s*\(([^)]*)\)/i);
-if(procMatch&&procMatch[1]){
-var rawParams=procMatch[1].split(',').map(s=>s.trim()).filter(s=>s);
+function stripComments(line){
+var inQuote=false;
+for(var i=0;i<line.length;i++){
+var ch=line[i];
+if(ch==='"'){
+inQuote=!inQuote;
+}else if(!inQuote){
+var remMatch=line.substring(i).match(/^REM(?:\s.*|$)/i);
+if(remMatch&&(i===0|| /\s|:/.test(line[i-1]))){
+return line.substring(0,i);
+}
+}
+}
+return line;
+}
+
+var varSyntax = /^[A-Z][A-Z0-9_]*[%$]?(?:\s*\([^)]*\))?$/i;
+
+for(var li=0;li<lines.length;li++){
+var rawLine=lines[li].trim();
+if(!rawLine)continue;
+
+var cleanLine=stripComments(rawLine).trim();
+if(!cleanLine)continue;
+
+
+if(!headerFound){
+headerFound=true;
+var hMatch=cleanLine.match(/^([A-Z0-9_$]+)\s*(?::\s*(?:\(([^)]*)\))?|\(([^)]*)\)\s*:)/i);
+var paramStr=hMatch?(hMatch[2]||hMatch[3]):null;
+if(paramStr){
+var rawParams=paramStr.split(',').map(s=>s.trim()).filter(s=>s);
 node.params=rawParams.map(p=>{
 var type='Float';
 if(p.endsWith('$'))type='String';
 else if(p.endsWith('%'))type='Integer';
 
-
 if(p.includes('(')){
-if(p.includes('$'))type='StringArray';
-else if(p.includes('%'))type='IntegerArray';
-else type='FloatArray';
-
-p=p.substring(0,p.indexOf('('));
+var dimContent=p.substring(p.indexOf('(')+1,p.indexOf(')'));
+if(p.includes('$')){
+type=(dimContent.includes(',')||dimContent==='')?'StringArray':'String';
+}else if(p.includes('%')){
+type='IntegerArray';
+}else {
+type='FloatArray';
+}
+p=p.substring(0,p.indexOf('(')).trim();
 }
 return {name:p,type:type};
 });
 }
+continue;
+}
 
 
+var statements=cleanLine.split(':');
+for(var si=0;si<statements.length;si++){
+var stmt=statements[si].trim();
+if(!stmt)continue;
 
-var localRegex = /LOCAL\s+([^:\r\n]+)/ig;
-var localMatch;
-while((localMatch=localRegex.exec(fullCode))!==null){
 
-var content=localMatch[1].replace(/REM\s+.*/i,"");
-var locals=content.split(',').map(s=>s.trim()).filter(s=>s);
-
-node.locals=node.locals.concat(locals);
+var localMatch=stmt.match(/^LOCAL\s+([A-Z0-9_$%\s(),]+)$/i);
+if(localMatch&&localMatch[1]){
+var items=localMatch[1].split(',').map(s=>s.trim()).filter(s=>s);
+items.forEach(function (v){
+if(varSyntax.test(v)&&node.locals.indexOf(v)===-1){
+node.locals.push(v);
+}
+});
 }
 }
 }
+}
+}
 
-if(item.instructions)instructions=item.instructions;
+if(item.instructions){
+instructions=item.instructions;
+}else if(instructions.length===0&&fullCode){
+
+var srcLines=fullCode.split(/\r?\n/);
+var headerSkipped=false;
+srcLines.forEach(function (sl){
+var inQuote=false;
+var clean=sl;
+for(var i=0;i<sl.length;i++){
+if(sl[i]==='"')inQuote=!inQuote;
+else if(!inQuote){
+var rm=sl.substring(i).match(/^REM(?:\s.*|$)/i);
+if(rm&&(i===0|| /\s|:/.test(sl[i-1]))){
+clean=sl.substring(0,i);
+break;
+}
+}
+}
+clean=clean.trim();
+if(clean){
+if(!headerSkipped){
+headerSkipped=true;
+return;
+}
+var stmts=clean.split(':');
+stmts.forEach(function (st){
+if(st.trim())instructions.push({text:st.trim()});
+});
+}
+});
+}
 
 instructions.forEach(function (inst){
-
-
-
 var callRegex = /([A-Z0-9_$]+)/gi;
 var match;
 while((match=callRegex.exec(inst.text))!==null){
-var target=match[1].toUpperCase();
+var targetName=match[1].toUpperCase();
 
 
 var idxAfter=match.index+match[0].length;
@@ -432,13 +535,24 @@ if(inst.text[idxAfter]===':'&&inst.text[idxAfter+1]===':'){
 continue;
 }
 
-if(system.nodes[target]&&system.nodes[target].type==='PROC'){
+
+var targetNodeId=packId+"::PROC_"+targetName;
+if(!system.nodes[targetNodeId]){
+
+for(var pi=0;pi<packs.length;pi++){
+var altId="P"+pi+"::PROC_"+targetName;
+if(system.nodes[altId]&&system.nodes[altId].type==='PROC'){
+targetNodeId=altId;
+break;
+}
+}
+}
+
+if(system.nodes[targetNodeId]&&system.nodes[targetNodeId].type==='PROC'){
 
 var args='';
 var afterColon=inst.text.substring(match.index+match[0].length).trim();
 if(afterColon.startsWith('(')){
-
-
 var closeParen=afterColon.indexOf(')');
 if(closeParen!==-1){
 args=afterColon.substring(1,closeParen);
@@ -446,89 +560,82 @@ args=afterColon.substring(1,closeParen);
 }
 
 var type='Float';
-if(target.endsWith('$'))type='String';
-else if(target.endsWith('%'))type='Integer';
+if(targetName.endsWith('$'))type='String';
+else if(targetName.endsWith('%'))type='Integer';
 
 
-var tooltip=item.name.toUpperCase()+" -> "+target;
-system.links.push({from:item.name.toUpperCase(),to:target,type:'CALL',label:args,dataType:type,tooltip:tooltip});
-if(system.nodes[item.name.toUpperCase()])system.nodes[item.name.toUpperCase()].degree++;
-system.nodes[target].degree++;
+var tooltip=item.name.toUpperCase()+" -> "+targetName;
+system.links.push({from:procNodeId,to:targetNodeId,type:'CALL',label:args,dataType:type,tooltip:tooltip});
+if(system.nodes[procNodeId])system.nodes[procNodeId].degree++;
+system.nodes[targetNodeId].degree++;
 }
 }
-
-
 });
 
 
 
-
-
 var headerUsage=null;
-if(typeof decompiler!=='undefined'&&typeof objCode!=='undefined'){
+if(typeof decompiler!=='undefined'&&typeof objCode!=='undefined'&&st.qCodeLen>0){
 headerUsage=decompiler.parseHeader(objCode,0);
 }
 
-
 if(headerUsage&&headerUsage.externals){
-
-
-
 headerUsage.externals.forEach(function (ext){
-var target=ext.name.toUpperCase();
+var targetName=ext.name.toUpperCase();
+var targetNodeId=packId+"::GLOBAL_"+targetName;
 var procName=item.name.toUpperCase();
 
 
-if(!system.nodes[target]){
-system.nodes[target]={
+if(!system.nodes[targetNodeId]){
+system.nodes[targetNodeId]={
 type:'GLOBAL',
+id:targetNodeId,
 packIndex:pIdx,
+packId:packId,
+packName:pack.filename||"Pack "+(pIdx+1),
 name:ext.name,
 label:ext.name,
 degree:0,
 isImplicit:true
 };
 
-if(system.packs[pIdx]&&system.packs[pIdx].globals.indexOf(ext.name)===-1){
-system.packs[pIdx].globals.push(ext.name);
+if(system.packs[pIdx]&&system.packs[pIdx].globals.indexOf(targetNodeId)===-1){
+system.packs[pIdx].globals.push(targetNodeId);
 }
 }
 
 
-var linkExists=system.links.some(l=>l.from===target&&l.to===procName&&l.type==='GLOBAL_USAGE');
+var linkExists=system.links.some(l=>l.from===targetNodeId&&l.to===procNodeId&&l.type==='GLOBAL_USAGE');
 
 if(!linkExists){
 var type='Float';
-if(target.endsWith('$'))type='String';
-else if(target.endsWith('%'))type='Integer';
-
-
+if(targetName.endsWith('$'))type='String';
+else if(targetName.endsWith('%'))type='Integer';
 
 system.links.push({
-from:target,
-to:procName,
+from:targetNodeId,
+to:procNodeId,
 type:'GLOBAL_USAGE',
 dataType:type,
-tooltip:"Global "+target+" used by "+procName,
+tooltip:"Global "+targetName+" used by "+procName,
 isImplicit:true
 });
 
 
-if(system.nodes[target])system.nodes[target].degree++;
-if(system.nodes[procName])system.nodes[procName].degree++;
+if(system.nodes[targetNodeId])system.nodes[targetNodeId].degree++;
+if(system.nodes[procNodeId])system.nodes[procNodeId].degree++;
 }
 });
 }
-
 
 
 if(headerUsage&&headerUsage.globals){
 headerUsage.globals.forEach(function (g){
 var gName=g.name.toUpperCase();
-var procName=item.name.toUpperCase();
+var gNodeId=packId+"::GLOBAL_"+gName;
 
 
-if(!system.nodes[gName]){
+if(!system.nodes[gNodeId]){
 var displayName=g.name;
 
 if(g.arrayLen){
@@ -538,36 +645,35 @@ else displayName+="("+g.arrayLen+")";
 displayName+="("+g.maxLen+")";
 }
 
-system.nodes[gName]={
+system.nodes[gNodeId]={
 type:'GLOBAL',
+id:gNodeId,
 packIndex:pIdx,
+packId:packId,
+packName:pack.filename||"Pack "+(pIdx+1),
 name:g.name,
 label:displayName,
 degree:0,
 addr:g.addr
 };
-if(system.packs[pIdx]&&system.packs[pIdx].globals.indexOf(g.name)===-1){
-system.packs[pIdx].globals.push(g.name);
+if(system.packs[pIdx]&&system.packs[pIdx].globals.indexOf(gNodeId)===-1){
+system.packs[pIdx].globals.push(gNodeId);
 }
 }
 
 
-var procNode=system.nodes[procName];
+var procNode=system.nodes[procNodeId];
 if(procNode){
 if(!procNode.globals)procNode.globals=[];
-if(procNode.globals.indexOf(g.name)===-1){
-procNode.globals.push(g.name);
+if(procNode.globals.indexOf(gNodeId)===-1){
+procNode.globals.push(gNodeId);
 }
 }
-
 });
 }
-
-
 }
 });
 });
-
 
 
 system.links.forEach(function (link){
@@ -585,27 +691,24 @@ procNode.globals.push(link.to);
 
 Object.values(system.nodes).forEach(function (node){
 if(node.type==='PROC'&&node.globals){
-node.globals.forEach(function (gName){
-var hasLink=system.links.some(l=>l.from===node.name.toUpperCase()&&l.to===gName&&l.type==='ACCESS');
+node.globals.forEach(function (gNodeId){
+var hasLink=system.links.some(l=>l.from===node.id&&l.to===gNodeId&&l.type==='ACCESS');
 if(!hasLink){
+var gNode=system.nodes[gNodeId];
+var gName=gNode?gNode.name:gNodeId;
 var type='Float';
 if(gName.endsWith('$'))type='String';
 else if(gName.endsWith('%'))type='Integer';
-var tooltip=node.name.toUpperCase()+" - "+gName;
-system.links.push({from:node.name.toUpperCase(),to:gName,type:'ACCESS',dataType:type,tooltip:tooltip});
-if(system.nodes[gName])system.nodes[gName].degree++;
+var tooltip=node.label.toUpperCase()+" - "+gName;
+system.links.push({from:node.id,to:gNodeId,type:'ACCESS',dataType:type,tooltip:tooltip});
+if(system.nodes[gNodeId])system.nodes[gNodeId].degree++;
 }
 });
 }
 });
-
 return system;
 }
-
-
-
 function calculateLayout(data,collapsedState,sectionState,containerState){
-
 var packMargin=50;
 var nodeWidth=187;
 var nodeHeightExpanded=160;
@@ -614,60 +717,45 @@ var rankGap=80;
 var nodeGap=20;
 var cardPadding=20;
 var innerCardPadding=30;
-
 var globalPoolHeight=80;
 var dataFileWidth=187;
 var dataRecordHeight=32;
-
 var currentY=packMargin;
 var layout={nodes:{},packs:[],innerCards:[],pools:[]};
-
 data.packs.forEach(function (pack){
-
+var packKey=pack.id||pack.name;
 var packNodes=[];
 var procMap={};
-pack.procedures.forEach(n=>{
-packNodes.push({name:n,type:'PROC'});
-procMap[n]={name:n,type:'PROC',rank:0,incoming:0};
+pack.procedures.forEach(id=>{
+var nodeData=data.nodes[id];
+var name=nodeData?nodeData.name:id;
+packNodes.push({id:id,name:name,type:'PROC'});
+procMap[id]={id:id,name:name,type:'PROC',rank:0,incoming:0};
 });
-
-
 var localLinks=data.links.filter(l=>procMap[l.from]&&procMap[l.to]);
-
-
 localLinks.forEach(l=>{procMap[l.to].incoming++;});
-
-
 var queue=Object.values(procMap).filter(n=>n.incoming===0);
-
-
 if(queue.length===0&&packNodes.length>0){
 var main=packNodes.find(n=>n.name.toUpperCase()==='MAIN')||packNodes[0];
-var mainNode=procMap[main.name];
+var mainNode=procMap[main.id];
 mainNode.incoming=0;
 queue.push(mainNode);
 }
-
 var visitedCount=0;
 var totalNodes=Object.keys(procMap).length;
-
 while(queue.length>0||visitedCount<totalNodes){
 if(queue.length===0){
-
 var unprocessed=Object.values(procMap).find(n=>n.incoming>0);
 if(!unprocessed)break;
 unprocessed.incoming=0;
 queue.push(unprocessed);
 }
-
 var curr=queue.shift();
 visitedCount++;
-
-var outgoing=localLinks.filter(l=>l.from===curr.name);
+var outgoing=localLinks.filter(l=>l.from===curr.id);
 outgoing.forEach(l=>{
 var target=procMap[l.to];
 if(target){
-
 target.rank=Math.max(target.rank,curr.rank+1);
 target.incoming--;
 if(target.incoming<=0){
@@ -677,35 +765,23 @@ queue.push(target);
 }
 });
 }
-
-
-
 var ranks=[];
 Object.values(procMap).forEach(n=>{
 if(!ranks[n.rank])ranks[n.rank]=[];
 ranks[n.rank].push(n);
 });
-
-
 var startX=packMargin+cardPadding;
 var startY=currentY+cardPadding+30;
-
 var innerX=startX;
 var innerY=startY;
-
 var maxRankHeight=0;
 var rankHeights=[];
-
-
-function getNodeHeight(nodeName,isCollapsed){
+function getNodeHeight(nodeId,isCollapsed){
 if(isCollapsed)return nodeHeightCollapsed;
-
 var h=32;
-var nodeData=data.nodes[nodeName.toUpperCase()];
-var sState=sectionState[nodeName.toUpperCase()]||{params:true,locals:false,globals:false};
-
+var nodeData=data.nodes[nodeId];
+var sState=sectionState[nodeId]||{params:true,locals:false,globals:false};
 if(nodeData){
-
 if(nodeData.params&&nodeData.params.length>0){
 h+=20;
 if(sState.params){
@@ -715,8 +791,6 @@ h+=25;
 h+=5;
 }
 }
-
-
 if(nodeData.locals&&nodeData.locals.length>0){
 h+=20;
 if(sState.locals){
@@ -726,8 +800,6 @@ h+=25;
 h+=5;
 }
 }
-
-
 if(nodeData.globals&&nodeData.globals.length>0){
 h+=20;
 if(sState.globals){
@@ -738,141 +810,134 @@ h+=5;
 }
 }
 }
-
 if(!isCollapsed&&h>32){
 h+=7;
 }
 return Math.max(h,32);
 }
-
-
 ranks.forEach((rankNodes,rIdx)=>{
 var h=0;
 rankNodes.forEach(node=>{
-var isCollapsed=collapsedState[node.name.toUpperCase()];
-h+=getNodeHeight(node.name,isCollapsed)+nodeGap;
+var isCollapsed=collapsedState[node.id];
+h+=getNodeHeight(node.id,isCollapsed)+nodeGap;
 });
 h-=nodeGap;
 rankHeights[rIdx]=h;
 if(h>maxRankHeight)maxRankHeight=h;
 });
-
 var innerW=innerCardPadding*2+(ranks.length*(nodeWidth+rankGap))-rankGap;
 if(innerW<250)innerW=250;
 var innerH=innerCardPadding*2+maxRankHeight+30;
 if(innerH<150)innerH=150;
-
-
-var logicCollapsed=containerState&&containerState[pack.name]&&containerState[pack.name].logic;
+var logicCollapsed=containerState&&(containerState[packKey]?containerState[packKey].logic:(containerState[pack.name]&&containerState[pack.name].logic));
 if(logicCollapsed){
 innerH=30;
 }
-
-layout.innerCards.push({x:innerX,y:innerY,w:innerW,h:innerH,label:"Hierarchy & Flow",packName:pack.name,type:'logic',collapsed:logicCollapsed});
-
+layout.innerCards.push({
+x:innerX,
+y:innerY,
+w:innerW,
+h:innerH,
+label:"Hierarchy & Flow",
+packId:pack.id,
+packName:pack.name,
+type:'logic',
+collapsed:logicCollapsed
+});
 if(!logicCollapsed){
 ranks.forEach((rankNodes,rIdx)=>{
 var rankX=innerX+innerCardPadding+rIdx*(nodeWidth+rankGap);
 var rankH=rankHeights[rIdx];
 var offsetY=(maxRankHeight-rankH)/2;
 var currentRankY=innerY+innerCardPadding+30+offsetY;
-
 rankNodes.forEach((node,nIdx)=>{
-var isCollapsed=collapsedState[node.name.toUpperCase()];
-var h=getNodeHeight(node.name,isCollapsed);
-
-var nodeData=data.nodes[node.name.toUpperCase()];
-layout.nodes[node.name.toUpperCase()]={
+var isCollapsed=collapsedState[node.id];
+var h=getNodeHeight(node.id,isCollapsed);
+var nodeData=data.nodes[node.id];
+layout.nodes[node.id]={
 x:rankX,
 y:currentRankY,
 w:nodeWidth,
 h:h,
 type:'PROC',
-id:node.name.toUpperCase(),
-label:node.name,
+id:node.id,
+name:node.name,
+label:nodeData?nodeData.label:node.name,
+packId:pack.id,
 packName:pack.name,
 code:nodeData?nodeData.code:null,
 params:nodeData?nodeData.params:[],
 locals:nodeData?nodeData.locals:[],
 globals:nodeData?nodeData.globals:[],
-
 collapsed:isCollapsed,
-rank:node.rank,
-packName:pack.name
+rank:node.rank
 };
-
 currentRankY+=h+nodeGap;
 });
 });
 }
-
 var poolY=innerY+innerH+20;
 var poolW=innerW;
-
-
 var globalsCols=Math.floor((poolW-20)/(nodeWidth+80));
 if(globalsCols<1)globalsCols=1;
 var globalsRows=Math.ceil(pack.globals.length/globalsCols);
-
 var globalNodeHeight=32;
 var poolH=globalsRows*(globalNodeHeight+20)+70;
-
-
-var globalsCollapsed=containerState&&containerState[pack.name]&&containerState[pack.name].globals;
+var globalsCollapsed=containerState&&(containerState[packKey]?containerState[packKey].globals:(containerState[pack.name]&&containerState[pack.name].globals));
 if(globalsCollapsed){
 poolH=30;
 }
-
-layout.pools.push({x:innerX,y:poolY,w:poolW,h:poolH,label:"Global Space",packName:pack.name,type:'globals',collapsed:globalsCollapsed});
-
+layout.pools.push({
+x:innerX,
+y:poolY,
+w:poolW,
+h:poolH,
+label:"Global Space",
+packId:pack.id,
+packName:pack.name,
+type:'globals',
+collapsed:globalsCollapsed
+});
 if(!globalsCollapsed){
-pack.globals.forEach((gName,gIdx)=>{
+pack.globals.forEach((gId,gIdx)=>{
 var gCol=gIdx%globalsCols;
 var gRow=Math.floor(gIdx/globalsCols);
-var nodeData=data.nodes[gName.toUpperCase()];
-var isCollapsed=collapsedState[gName.toUpperCase()];
+var nodeData=data.nodes[gId];
+var isCollapsed=collapsedState[gId];
 var h=isCollapsed?nodeHeightCollapsed:globalNodeHeight;
-
-layout.nodes[gName.toUpperCase()]={
+layout.nodes[gId]={
 x:innerX+30+gCol*(nodeWidth+80),
 y:poolY+60+gRow*(globalNodeHeight+20),
 w:nodeWidth,
 h:h,
 type:'GLOBAL',
-id:gName.toUpperCase(),
-label:(nodeData&&nodeData.label&&nodeData.label!=='undefined')?nodeData.label:gName,
+id:gId,
+label:(nodeData&&nodeData.label&&nodeData.label!=='undefined')?nodeData.label:(nodeData?nodeData.name:gId),
 code:null,
+packId:pack.id,
 packName:pack.name,
 collapsed:isCollapsed,
 rank:gCol
 };
 });
 }
-
 var packW=innerW+cardPadding*2;
 var packH=(poolY+poolH)-currentY+cardPadding;
-
-
 var dataY=poolY+poolH+20;
 var dataH=0;
 var dataFiles=pack.dataFiles||[];
-
 if(dataFiles.length>0){
-
 var maxDataH=0;
 var dataCols=Math.floor((innerW-20)/(dataFileWidth+80));
 if(dataCols<1)dataCols=1;
-
-dataFiles.forEach((dfName,i)=>{
-var fileNode=data.nodes[dfName.toUpperCase()];
-var records=fileNode.records||[];
-
-var isCollapsed=collapsedState[dfName.toUpperCase()];
+dataFiles.forEach((dfId,i)=>{
+var fileNode=data.nodes[dfId];
+var records=(fileNode&&fileNode.records)?fileNode.records:[];
+var isCollapsed=collapsedState[dfId];
 if(isCollapsed===undefined){
 isCollapsed=true;
-collapsedState[dfName.toUpperCase()]=true;
+collapsedState[dfId]=true;
 }
-
 var h=nodeHeightCollapsed;
 if(!isCollapsed){
 h+=10;
@@ -882,38 +947,28 @@ h+=records.length*(dataRecordHeight+10);
 h+=30;
 }
 }
-
-fileNode._calcHeight=h;
+if(fileNode)fileNode._calcHeight=h;
 });
-
 var rows=Math.ceil(dataFiles.length/dataCols);
-
-
-
-
 var rowHeights=[];
 for(var r=0;r<rows;r++){
 var maxH=0;
 for(var c=0;c<dataCols;c++){
 var idx=r*dataCols+c;
 if(idx<dataFiles.length){
-var dfName=dataFiles[idx];
-var h=data.nodes[dfName.toUpperCase()]._calcHeight;
+var dfId=dataFiles[idx];
+var h=data.nodes[dfId]?data.nodes[dfId]._calcHeight:nodeHeightCollapsed;
 if(h>maxH)maxH=h;
 }
 }
 rowHeights[r]=maxH;
 }
-
 dataH=rowHeights.reduce((a,b)=>a+b,0)+(rows*20)+50;
 }
-
-
-var dataCollapsed=containerState&&containerState[pack.name]&&containerState[pack.name].data;
+var dataCollapsed=containerState&&(containerState[packKey]?containerState[packKey].data:(containerState[pack.name]&&containerState[pack.name].data));
 if(dataCollapsed){
 dataH=30;
 }
-
 if(dataFiles.length>0){
 layout.pools.push({
 x:innerX,
@@ -921,6 +976,7 @@ y:dataY,
 w:innerW,
 h:dataH,
 label:"Data Space",
+packId:pack.id,
 packName:pack.name,
 type:'data',
 collapsed:dataCollapsed
@@ -930,39 +986,40 @@ var currentDataRowY=dataY+50;
 var dataCols=Math.floor((innerW-20)/(dataFileWidth+80));
 if(dataCols<1)dataCols=1;
 var rowH=0;
-var rowNodes=[];
-dataFiles.forEach((dfName,i)=>{
+dataFiles.forEach((dfId,i)=>{
 var col=i%dataCols;
 if(col===0&&i>0){
 currentDataRowY+=rowH+20;
 rowH=0;
 }
-var fileNode=data.nodes[dfName.toUpperCase()];
-var h=fileNode._calcHeight;
+var fileNode=data.nodes[dfId];
+var h=fileNode?fileNode._calcHeight:nodeHeightCollapsed;
 if(h>rowH)rowH=h;
 var x=innerX+30+col*(dataFileWidth+80);
 var y=currentDataRowY;
-layout.nodes[dfName.toUpperCase()]={
+layout.nodes[dfId]={
 x:x,y:y,w:dataFileWidth,h:h,
 type:'DATA_FILE',
-id:dfName.toUpperCase(),
-label:fileNode.label,
+id:dfId,
+label:fileNode?fileNode.label:dfId,
+packId:pack.id,
 packName:pack.name,
-collapsed:collapsedState[dfName.toUpperCase()],
+collapsed:collapsedState[dfId],
 rank:col
 };
-if(!collapsedState[dfName.toUpperCase()]){
-var records=fileNode.records||[];
-records.forEach((recName,rIdx)=>{
-layout.nodes[recName]={
+if(!collapsedState[dfId]&&fileNode&&fileNode.records){
+fileNode.records.forEach((recId,rIdx)=>{
+var recNode=data.nodes[recId];
+layout.nodes[recId]={
 x:x+20,
 y:y+40+rIdx*(dataRecordHeight+10),
 w:dataFileWidth-40,
 h:dataRecordHeight,
 type:'DATA_RECORD',
-id:recName,
-label:data.nodes[recName].label,
-parent:dfName.toUpperCase(),
+id:recId,
+label:recNode?recNode.label:recId,
+parent:dfId,
+packId:pack.id,
 packName:pack.name,
 rank:col
 };
@@ -976,13 +1033,11 @@ dataH=0;
 var packW=innerW+cardPadding*2;
 var packH=(dataY+(dataFiles.length>0?dataH:0))-currentY+cardPadding;
 if(packH<100)packH=100;
-var packCollapsed=containerState&&containerState[pack.name]&&containerState[pack.name].pack;
+var packCollapsed=containerState&&(containerState[packKey]?containerState[packKey].pack:(containerState[pack.name]&&containerState[pack.name].pack));
 if(packCollapsed){
 packH=30+cardPadding;
-if(packCollapsed){
 layout.innerCards.pop();
 layout.pools.pop();
-}
 }
 layout.packs.push({
 x:packMargin,
@@ -990,6 +1045,7 @@ y:currentY,
 w:packW,
 h:packH,
 label:pack.name,
+packId:pack.id,
 packName:pack.name,
 type:'pack',
 collapsed:packCollapsed
@@ -1699,36 +1755,32 @@ if(btn)btn.click();
 
 
 if(e.altKey){
-var key=e.key.toUpperCase();
+var code=e.code||'';
+var key=e.key?e.key.toUpperCase():'';
 
-if(key==='C'){
+if(code==='KeyC'||key==='C'){
 
 var btn=doc.getElementById('btn-toggle-code');
 if(btn)btn.click();
 e.preventDefault();
-}
-if(key==='K'){
+}else if(code==='KeyK'||key==='K'){
 
 var btn=doc.getElementById('btn-legend');
 if(btn)btn.click();
 e.preventDefault();
-}
-if(key==='P'){
+}else if(code==='KeyP'||key==='P'){
 var btn=doc.getElementById('btn-toggle-calls');
 if(btn)btn.click();
 e.preventDefault();
-}
-if(key==='A'){
+}else if(code==='KeyA'||key==='A'){
 var btn=doc.getElementById('btn-toggle-access');
 if(btn)btn.click();
 e.preventDefault();
-}
-if(key==='U'){
+}else if(code==='KeyU'||key==='U'){
 var btn=doc.getElementById('btn-toggle-links');
 if(btn)btn.click();
 e.preventDefault();
-}
-if(key==='G'){
+}else if(code==='KeyG'||key==='G'){
 
 var btnA=doc.getElementById('btn-toggle-access');
 var btnU=doc.getElementById('btn-toggle-links');
@@ -1759,16 +1811,24 @@ var containerState={};
 
 for(var name in data.nodes){
 var n=data.nodes[name];
+var key=n.id||name;
 if(n.type==='PROC'&&n.degree===0){
-collapsedState[name]=true;
+collapsedState[key]=true;
 }
 
-sectionState[name]={params:true,locals:false,globals:false};
+sectionState[key]={params:true,locals:false,globals:false};
+if(n.label&&n.label.toUpperCase()!==key){
+sectionState[n.label.toUpperCase()]=sectionState[key];
+}
 }
 
 
 data.packs.forEach(p=>{
-containerState[p.name]={pack:false,logic:false,globals:false};
+var pKey=p.id||p.name;
+containerState[pKey]={pack:false,logic:false,globals:false,data:false};
+if(p.name&&p.name!==pKey){
+containerState[p.name]=containerState[pKey];
+}
 });
 
 
@@ -1798,12 +1858,13 @@ return d;
 }
 
 
-function findHorizontalGap(layout,targetY,startVal,endVal,currentPackName,minY,isGeometric,allowedTypes){
+function findHorizontalGap(layout,targetY,startVal,endVal,currentPackKey,minY,isGeometric,allowedTypes){
 
 var obstacles=[];
 for(var key in layout.nodes){
 var n=layout.nodes[key];
-if(n.packName!==currentPackName)continue;
+var packMatch=(n.packId&&n.packId===currentPackKey)||(n.packName===currentPackKey);
+if(!packMatch)continue;
 if(allowedTypes&&!allowedTypes.includes(n.type))continue;
 
 var isHit=false;
@@ -1891,7 +1952,7 @@ return (minY!==undefined&&targetY<minY)?minY:targetY;
 
 
 
-function findMaxRightX(layout,startRank,endRank,currentPackName){
+function findMaxRightX(layout,startRank,endRank,currentPackKey){
 var maxX=0;
 
 var r1=Math.min(startRank,endRank);
@@ -1900,7 +1961,8 @@ var r2=Math.max(startRank,endRank);
 for(var key in layout.nodes){
 var n=layout.nodes[key];
 
-if(n.packName===currentPackName&&n.rank>=r1&&n.rank<=r2){
+var packMatch=(n.packId&&n.packId===currentPackKey)||(n.packName===currentPackKey);
+if(packMatch&&n.rank>=r1&&n.rank<=r2){
 var rightEdge=n.x+n.w;
 if(rightEdge>maxX)maxX=rightEdge;
 }
@@ -1921,10 +1983,10 @@ if(node.collapsed)return node.y+node.h/2;
 
 var currentY=node.y+35;
 
-var sState=sectionState[node.label.toUpperCase()];
+var sState=(node.id&&sectionState[node.id])||sectionState[node.label.toUpperCase()];
 if(!sState)sState={params:true,locals:false,globals:false};
 
-var nodeData=data.nodes[node.label.toUpperCase()];
+var nodeData=(node.id&&data.nodes[node.id])||data.nodes[node.label.toUpperCase()];
 if(!nodeData)return node.y+node.h/2;
 
 
@@ -1967,9 +2029,9 @@ return node.y+node.h/2;
 var layout=null;
 var selectedNodeName=null;
 
-function showCode(nodeName){
-selectedNodeName=nodeName;
-var node=data.nodes[nodeName];
+function showCode(nodeIdOrName){
+selectedNodeName=nodeIdOrName;
+var node=data.nodes[nodeIdOrName]||Object.values(data.nodes).find(n=>n.id===nodeIdOrName||n.name===nodeIdOrName||n.label===nodeIdOrName);
 var codePane=doc.getElementById('code-pane');
 var codeContent=doc.getElementById('code-content');
 var codeHeader=doc.getElementById('code-header');
@@ -1977,7 +2039,8 @@ var codeHeader=doc.getElementById('code-header');
 if(codePane&&codeContent&&node&&node.code){
 codePane.style.display='flex';
 isCodePaneVisible=true;
-codeHeader.textContent="Procedure: "+node.label;
+var pLabel=node.packName?" ("+node.packName+")":"";
+codeHeader.textContent="Procedure: "+(node.label||node.name)+pLabel;
 if(typeof SyntaxHighlighter!=='undefined'){
 codeContent.innerHTML=SyntaxHighlighter.highlight(node.code);
 }else {
@@ -2132,44 +2195,39 @@ iconText.setAttribute("fill","var(--text-color)");
 iconText.setAttribute("font-weight","bold");
 iconText.textContent=isCollapsed?"+":"-";
 iconG.appendChild(iconText);
-
 g.appendChild(iconG);
 return g;
 }
 
-function toggleContainer(packName,type){
-if(containerState[packName]){
-containerState[packName][type]=!containerState[packName][type];
+function toggleContainer(packKey,type){
+if(containerState[packKey]){
+containerState[packKey][type]=!containerState[packKey][type];
 draw();
 }
 }
 
 layout.packs.forEach(p=>{
-var g=drawContainer(p.x,p.y,p.w,p.h,p.label,"card-main",()=>toggleContainer(p.packName,'pack'),p.collapsed);
+var pKey=p.id||p.packId||p.packName||p.name;
+var g=drawContainer(p.x,p.y,p.w,p.h,p.label,"card-main",()=>toggleContainer(pKey,'pack'),p.collapsed);
 gMain.appendChild(g);
-
-
-
-
-
-
-
 });
 
 layout.innerCards.forEach(c=>{
 
-var packState=containerState[c.packName];
+var packState=(c.packId&&containerState[c.packId])||containerState[c.packName];
 if(packState&&packState.pack)return;
 
-gMain.appendChild(drawContainer(c.x,c.y,c.w,c.h,c.label,"card-inner",()=>toggleContainer(c.packName,'logic'),c.collapsed));
+var cKey=c.packId||c.packName;
+gMain.appendChild(drawContainer(c.x,c.y,c.w,c.h,c.label,"card-inner",()=>toggleContainer(cKey,'logic'),c.collapsed));
 });
 
 layout.pools.forEach(p=>{
-var packState=containerState[p.packName];
+var packState=(p.packId&&containerState[p.packId])||containerState[p.packName];
 if(packState&&packState.pack)return;
 
+var pKey=p.packId||p.packName;
 var type=p.type;
-gMain.appendChild(drawContainer(p.x,p.y,p.w,p.h,p.label,p.type==='data'?"data-pool":"global-pool",()=>toggleContainer(p.packName,type),p.collapsed));
+gMain.appendChild(drawContainer(p.x,p.y,p.w,p.h,p.label,p.type==='data'?"data-pool":"global-pool",()=>toggleContainer(pKey,type),p.collapsed));
 });
 
 
@@ -2192,8 +2250,10 @@ if(showDataTypes[link.type]&&!showDataTypes[link.type][dType])return;
 
 if(src&&dst&&!drawnLinks[linkId]){
 
-if(src.packName&&containerState[src.packName]&&containerState[src.packName].pack)return;
-if(dst.packName&&containerState[dst.packName]&&containerState[dst.packName].pack)return;
+var srcPackState=(src.packId&&containerState[src.packId])||(src.packName&&containerState[src.packName]);
+if(srcPackState&&srcPackState.pack)return;
+var dstPackState=(dst.packId&&containerState[dst.packId])||(dst.packName&&containerState[dst.packName]);
+if(dstPackState&&dstPackState.pack)return;
 
 drawnLinks[linkId]=true;
 var gLink=doc.createElementNS(svgNS,"g");
@@ -2202,7 +2262,7 @@ var path=doc.createElementNS(svgNS,"path");
 
 var title=doc.createElementNS(svgNS,"title");
 
-title.textContent=link.tooltip?link.tooltip:(link.from+" -> "+link.to+" ("+link.type+")");
+title.textContent=link.tooltip?link.tooltip:((src.label||src.name||link.from)+" -> "+(dst.label||dst.name||link.to)+" ("+link.type+")");
 path.appendChild(title);
 
 
@@ -2258,7 +2318,7 @@ points.push({x:gutterX,y:y1});
 
 
 
-var safeY=findHorizontalGap(layout,y1,gutterX,entryX,src.packName,y1+15,true,['PROC']);
+var safeY=findHorizontalGap(layout,y1,gutterX,entryX,src.packId||src.packName,y1+15,true,['PROC']);
 
 
 points.push({x:gutterX,y:safeY});
@@ -2267,8 +2327,8 @@ points.push({x:entryX,y:y2});
 }
 }else if(link.type==='ACCESS'){
 
-var logicCard=layout.innerCards.find(c=>c.packName===src.packName&&c.type==='logic');
-var globalPool=layout.pools.find(p=>p.packName===src.packName);
+var logicCard=layout.innerCards.find(c=>((c.packId&&c.packId===src.packId)||c.packName===src.packName)&&c.type==='logic');
+var globalPool=layout.pools.find(p=>((p.packId&&p.packId===src.packId)||p.packName===src.packName)&&p.type==='globals');
 
 
 var busY=y1+50;
@@ -2288,8 +2348,8 @@ points.push({x:x2,y:y2});
 
 
 
-var logicCard=layout.innerCards.find(c=>c.packName===src.packName&&c.type==='logic');
-var globalPool=layout.pools.find(p=>p.packName===src.packName);
+var logicCard=layout.innerCards.find(c=>((c.packId&&c.packId===src.packId)||c.packName===src.packName)&&c.type==='logic');
+var globalPool=layout.pools.find(p=>((p.packId&&p.packId===src.packId)||p.packName===src.packName)&&p.type==='globals');
 
 
 var busY=y1-40;
@@ -2349,7 +2409,7 @@ pathHit.setAttribute("stroke-width","10");
 pathHit.setAttribute("fill","none");
 pathHit.style.cursor="pointer";
 var title=doc.createElementNS(svgNS,"title");
-title.textContent=link.to+":("+(link.label||"")+")";
+title.textContent=(dst.label||dst.name||link.to)+":("+(link.label||"")+")";
 pathHit.appendChild(title);
 
 
@@ -2389,8 +2449,8 @@ return pA-pB;
 nodeKeys.forEach(function (key){
 var n=layout.nodes[key];
 
-if(n.packName){
-var packState=containerState[n.packName];
+if(n.packId||n.packName){
+var packState=(n.packId&&containerState[n.packId])||containerState[n.packName];
 if(packState&&packState.pack)return;
 }
 
@@ -2429,17 +2489,20 @@ var html=`<div class="node-header ${typeClass}">
                                 <span class="node-icon">${iconChar}</span>
                             </div>`;
 
+var nodeKey=n.id||n.label.toUpperCase();
+var sState=(n.id&&sectionState[n.id])||sectionState[n.label.toUpperCase()]||{params:true,locals:false,globals:false};
+
 if(n.type==='PROC'&&!n.collapsed&&!isEmpty){
 html+=`<div class="node-body">`;
 
 
 if(n.params&&n.params.length>0){
-var isExpanded=sectionState[n.label.toUpperCase()].params;
+var isExpanded=sState.params;
 var displayStyle=isExpanded?'flex':'none';
 var icon=isExpanded?'&#9660;':'&#9654;';
 
 html+=`<div class="inner-container">
-                                    <div class="section-title section-toggle" data-node="${n.label.toUpperCase()}" data-section="params">
+                                    <div class="section-title section-toggle" data-node="${nodeKey}" data-section="params">
                                         ${icon} Params
                                     </div>
                                     <div class="section-list" style="display: ${displayStyle};">
@@ -2450,17 +2513,17 @@ html+=`<div class="inner-container">
 
 
 if(n.globals&&n.globals.length>0){
-var isExpanded=sectionState[n.label.toUpperCase()].globals;
+var isExpanded=sState.globals;
 var displayStyle=isExpanded?'flex':'none';
 var icon=isExpanded?'&#9660;':'&#9654;';
 
 html+=`<div class="inner-container">
-                                    <div class="section-title section-toggle" data-node="${n.label.toUpperCase()}" data-section="globals">
+                                    <div class="section-title section-toggle" data-node="${nodeKey}" data-section="globals">
                                         ${icon} Globals (${n.globals.length})
                                     </div>
                                     <div class="section-list" style="display: ${displayStyle};">
                                         ${n.globals.map(g => {
-                                var gNode = layout.nodes[g.toUpperCase()];
+                                var gNode = layout.nodes[g] || layout.nodes[g.toUpperCase()];
                                 var lbl = gNode ? gNode.label : g;
                                 return `<div class="item">${lbl}</div>`;
                             }).join('')}
@@ -2470,12 +2533,12 @@ html+=`<div class="inner-container">
 
 
 if(n.locals&&n.locals.length>0){
-var isExpanded=sectionState[n.label.toUpperCase()].locals;
+var isExpanded=sState.locals;
 var displayStyle=isExpanded?'flex':'none';
 var icon=isExpanded?'&#9660;':'&#9654;';
 
 html+=`<div class="inner-container">
-                                    <div class="section-title section-toggle" data-node="${n.label.toUpperCase()}" data-section="locals">
+                                    <div class="section-title section-toggle" data-node="${nodeKey}" data-section="locals">
                                         ${icon} Locals (${n.locals.length})
                                     </div>
                                     <div class="section-list" style="display: ${displayStyle};">
@@ -2504,7 +2567,7 @@ collapsedState[id]=!collapsedState[id];
 draw();
 }else {
 
-showCode(nodeData.label.toUpperCase());
+showCode(nodeData.id||nodeData.label.toUpperCase());
 
 var allNodes=doc.querySelectorAll('.node-card');
 allNodes.forEach(el=>el.classList.remove('active'));
@@ -2546,6 +2609,9 @@ t.onclick=function (e){
 e.stopPropagation();
 var nodeName=this.getAttribute('data-node');
 var section=this.getAttribute('data-section');
+if(!sectionState[nodeName]){
+sectionState[nodeName]={params:true,locals:false,globals:false};
+}
 sectionState[nodeName][section]=!sectionState[nodeName][section];
 draw();
 };
@@ -2568,7 +2634,7 @@ startY=e.clientY-ty;
 });
 
 svg.addEventListener('wheel',function (e){
-if(e.ctrlKey){
+if(e.ctrlKey||e.metaKey){
 e.preventDefault();
 var s=Math.exp(-e.deltaY*0.001);
 scale*=s;

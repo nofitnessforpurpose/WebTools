@@ -579,7 +579,7 @@ leftTools.style.marginRight='10px';
 
 function createHeaderBtn(iconClass,title,clickHandler){
 var b=document.createElement('button');
-b.innerHTML='<i class="'+iconClass+'"></i>';
+b.innerHTML='<i data-lucide="'+iconClass+'"></i>';
 b.className='icon-btn';
 b.title=title;
 b.addEventListener('click',function (e){
@@ -591,7 +591,7 @@ return b;
 }
 
 
-var applyBtn=createHeaderBtn('fas fa-circle-check','Apply Changes',function (){
+var applyBtn=createHeaderBtn('check-circle','Apply Changes',function (){
 if(self.item.deleted)return;
 if(self.applyChanges()){
 
@@ -612,7 +612,7 @@ leftTools.appendChild(applyBtn);
 this.applyBtn=applyBtn;
 
 
-var discardBtn=createHeaderBtn('fas fa-undo','Discard Changes',function (){
+var discardBtn=createHeaderBtn('recycle','Discard Changes',function (){
 if(self.item.deleted)return;
 
 var suppress=(typeof OptionsManager!=='undefined')?OptionsManager.getOption('suppressConfirmations'):false;
@@ -640,7 +640,7 @@ div1.style.opacity='0.5';
 leftTools.appendChild(div1);
 
 
-leftTools.appendChild(createHeaderBtn('fas fa-mouse-pointer','Select All',function (){
+leftTools.appendChild(createHeaderBtn('mouse-pointer','Select All',function (){
 if(self.codeEditorInstance){
 self.codeEditorInstance.selectAll();
 }else {
@@ -650,12 +650,12 @@ if(ta)ta.select();
 }));
 
 
-leftTools.appendChild(createHeaderBtn('far fa-copy','Copy the selected text to clipboard',function (){
+leftTools.appendChild(createHeaderBtn('clipboard-list','Copy the selected text to clipboard',function (){
 document.execCommand('copy');
 }));
 
 
-leftTools.appendChild(createHeaderBtn('fas fa-file-export','Copy the entire note to clipboard',function (){
+leftTools.appendChild(createHeaderBtn('clipboard-copy','Copy the entire note to clipboard',function (){
 if(self.codeEditorInstance){
 var text=self.codeEditorInstance.getValue();
 navigator.clipboard.writeText(text);
@@ -666,7 +666,7 @@ if(ta)navigator.clipboard.writeText(ta.value);
 }));
 
 
-var pasteBtn=createHeaderBtn('fas fa-paste','Paste text from clipboard at cursor position',function (){
+var pasteBtn=createHeaderBtn('clipboard-paste','Paste text from clipboard at cursor position',function (){
 if(self.item.deleted)return;
 navigator.clipboard.readText().then(function (text){
 if(!text)return;
@@ -690,6 +690,7 @@ if(this.item.deleted)pasteBtn.disabled=true;
 leftTools.appendChild(pasteBtn);
 
 header.insertBefore(leftTools,header.firstChild);
+if(typeof lucide!=='undefined')lucide.createIcons({root:header});
 
 
 this.updateToolbarButtons();

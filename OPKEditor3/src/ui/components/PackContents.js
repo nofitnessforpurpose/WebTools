@@ -53,71 +53,23 @@ var sidebarHeader=document.getElementById('sidebar-header');
 if(sidebarHeader){
 
 if(!sidebarHeader.querySelector('.recycle-btn')){
-var btnRecycle=document.createElement('i');
-btnRecycle.className='fas fa-recycle recycle-btn';
-btnRecycle.title="Toggle Deleted Status";
+var btnRecycle=document.createElement('button');
+btnRecycle.type='button';
+btnRecycle.className='icon-btn recycle-btn';
+btnRecycle.id='btn-recycle';
+btnRecycle.title="Toggle Deleted Status (Select a record first)";
+btnRecycle.innerHTML='<i data-lucide="recycle"></i>';
 
+var self=this;
 btnRecycle.onclick=function (e){
 e.preventDefault();
 e.stopPropagation();
-
-var targets=[];
-
-if(typeof selectedItems!=='undefined'&&selectedItems.length>0){
-
-if(currentItem&&selectedItems.indexOf(currentItem)!==-1){
-targets=selectedItems;
-}else {
-
-
-targets=selectedItems;
-}
-}else if(typeof currentItem!=='undefined'&&currentItem){
-targets=[currentItem];
-}
-
-if(targets.length===0){
-alert("No item selected.");
-return;
-}
-
-var changed=false;
-
-targets.forEach(function (item){
-
-item.deleted=!item.deleted;
-
-
-if(item.data&&item.data.length>1){
-if(item.deleted){
-item.data[1]&=0x7F;
-}else {
-item.data[1]|=0x80;
-}
-}
-
-
-if(item.setDescription)item.setDescription();
-changed=true;
-});
-
-if(changed){
-
-
-if(typeof packs!=='undefined'&&typeof currentPackIndex!=='undefined'&&packs[currentPackIndex]){
-packs[currentPackIndex].unsaved=true;
-}
-
-
-if(typeof saveSession!=='undefined'){
-saveSession();
-}
-
-updateInventory();
-}
+self.toggleRecycle();
 };
 sidebarHeader.appendChild(btnRecycle);
+if(typeof lucide!=='undefined')lucide.createIcons({root:sidebarHeader});
 }
+this.updateRecycleButtonState();
 }
 
 if(packs.length>0){
@@ -151,9 +103,7 @@ var packWrapper=this.createPackElement(pack,pIdx);
 fragment.appendChild(packWrapper);
 }
 container.appendChild(fragment);
-
-
-
+if(typeof lucide!=='undefined')lucide.createIcons({root:container});
 }else {
 if(typeof fileinfoelement!=='undefined'&&fileinfoelement)fileinfoelement.innerText="No Packs";
 }
@@ -189,16 +139,8 @@ packHeader.classList.add('selected');
 }
 
 var icon=document.createElement('i');
-icon.classList.add('pack-icon','fa-fw');
-
-var style=OptionsManager.getOption('iconStyle')||'solid';
-var prefix=(style==='solid')?'fas':'far';
-
-if(pack.collapsed){
-icon.classList.add(prefix,'fa-folder');
-}else {
-icon.classList.add(prefix,'fa-folder-open');
-}
+icon.className='pack-icon';
+icon.setAttribute('data-lucide',pack.collapsed?'folder':'folder-open');
 
 
 icon.addEventListener('mouseenter',function (e){
@@ -250,10 +192,8 @@ TooltipManager.hide();
 
 
 var toggle=document.createElement('i');
-toggle.className='fas fa-chevron-down pack-toggle';
-if(pack.collapsed){
-toggle.className='fas fa-chevron-right pack-toggle';
-}
+toggle.className='pack-toggle';
+toggle.setAttribute('data-lucide',pack.collapsed?'chevron-right':'chevron-down');
 
 packHeader.appendChild(icon);
 packHeader.appendChild(title);
@@ -588,14 +528,27 @@ row.classList.add('deleted-item');
 
 var itemIcon=document.createElement('span');
 itemIcon.className='item-icon';
+var typeClass='type-unknown';
+if(item.type===-1)typeClass='type-header';
+else if(item.type===1)typeClass='type-datafile';
+else if(item.type===2)typeClass='type-diary';
+else if(item.type===3)typeClass='type-procedure';
+else if(item.type===4)typeClass='type-comms';
+else if(item.type===5)typeClass='type-sheet';
+else if(item.type===6)typeClass='type-pager';
+else if(item.type===7)typeClass='type-notepad';
+else if(item.type>=16&&item.type<=126)typeClass='type-record';
+else if(item.type===255)typeClass='type-eop';
+itemIcon.classList.add(typeClass);
+
 if(indent){
 row.classList.add('subordinate-item');
 if(item.isLastChild){
 row.classList.add('subordinate-last');
 }
 }
-var iconClass=getItemIcon(item);
-itemIcon.innerHTML=`<i class="${iconClass}"></i>`;
+var iconName=getItemIcon(item);
+itemIcon.innerHTML=`<i data-lucide="${iconName}"></i>`;
 
 
 if(item.type===1&&showGrouping&&childCount>0){
@@ -725,6 +678,13 @@ e.preventDefault();
 var next=row.nextElementSibling;
 if(next){
 next.focus();
+if(e.shiftKey){
+var nextPackIdx=parseInt(next.getAttribute('data-pack-idx'));
+var nextItemIdx=parseInt(next.getAttribute('data-item-idx'));
+if(!isNaN(nextPackIdx)&&!isNaN(nextItemIdx)&&typeof itemSelected==='function'){
+itemSelected(nextPackIdx,nextItemIdx,e);
+}
+}
 }else {
 
 var packWrapper=row.closest('.pack-wrapper');
@@ -739,6 +699,13 @@ e.preventDefault();
 var prev=row.previousElementSibling;
 if(prev){
 prev.focus();
+if(e.shiftKey){
+var prevPackIdx=parseInt(prev.getAttribute('data-pack-idx'));
+var prevItemIdx=parseInt(prev.getAttribute('data-item-idx'));
+if(!isNaN(prevPackIdx)&&!isNaN(prevItemIdx)&&typeof itemSelected==='function'){
+itemSelected(prevPackIdx,prevItemIdx,e);
+}
+}
 }else {
 
 var packWrapper=row.closest('.pack-wrapper');
@@ -941,7 +908,8 @@ e.currentTarget.classList.add('dragElem');
 
 handleDragOver(e){
 if(e.preventDefault)e.preventDefault();
-e.dataTransfer.dropEffect=e.ctrlKey?'copy':'move';
+var isCopy=e.ctrlKey||e.altKey||e.metaKey;
+e.dataTransfer.dropEffect=isCopy?'copy':'move';
 e.currentTarget.classList.add('over');
 return false;
 }
@@ -974,7 +942,7 @@ if(!this.dragSrcInfo)return;
 
 var srcPackIdx=this.dragSrcInfo.packIndex;
 var srcItemIdx=this.dragSrcInfo.itemIndex;
-var isCopy=e.ctrlKey;
+var isCopy=e.ctrlKey||e.altKey||e.metaKey;
 
 
 
@@ -1030,6 +998,8 @@ if(target){
 target.focus({preventScroll:true});
 target.scrollIntoView({behavior:'auto',block:'nearest',inline:'nearest'});
 }
+
+this.updateRecycleButtonState();
 }
 
 selectPack(packIndex){
@@ -1043,6 +1013,107 @@ var target=this.container.querySelector('.pack-header[data-pack-idx="'+packIndex
 if(target){
 target.classList.add('selected');
 target.focus();
+}
+
+this.updateRecycleButtonState(false,false);
+}
+
+toggleRecycle(){
+var targets=[];
+
+if(typeof selectedItems!=='undefined'&&selectedItems.length>0){
+targets=selectedItems.slice();
+}else if(typeof currentItem!=='undefined'&&currentItem){
+targets=[currentItem];
+}
+
+
+targets=targets.filter(function (it){
+return it&&it.type>=0&&it.type!==255&&it.name!=="MAIN";
+});
+
+if(targets.length===0){
+return;
+}
+
+var changed=false;
+targets.forEach(function (item){
+
+item.deleted=!item.deleted;
+
+
+if(item.data&&item.data.length>1){
+if(item.deleted){
+item.data[1]&=0x7F;
+}else {
+item.data[1]|=0x80;
+}
+}
+
+
+if(typeof item.setDescription==='function'){
+item.setDescription();
+}
+changed=true;
+});
+
+if(changed){
+
+if(typeof packs!=='undefined'&&typeof currentPackIndex!=='undefined'&&packs[currentPackIndex]){
+packs[currentPackIndex].unsaved=true;
+}
+
+
+if(typeof saveSession==='function'){
+saveSession();
+}
+
+
+if(typeof updateInventory==='function'){
+updateInventory();
+}
+
+
+if(typeof currentEditor!=='undefined'&&currentEditor&&typeof currentItem!=='undefined'&&currentItem&&targets.indexOf(currentItem)!==-1){
+if(typeof currentEditor.initialise==='function'){
+currentEditor.initialise(currentItem);
+}
+}
+
+if(typeof updateItemButtons==='function'){
+updateItemButtons(false);
+}
+
+this.updateRecycleButtonState();
+}
+}
+
+updateRecycleButtonState(canRecycle,isDeleted){
+var btnRecycle=document.getElementById('btn-recycle')||
+(document.getElementById('sidebar-header')?document.getElementById('sidebar-header').querySelector('.recycle-btn'):null);
+if(!btnRecycle)return;
+
+if(typeof canRecycle==='undefined'){
+var targets=[];
+if(typeof selectedItems!=='undefined'&&selectedItems.length>0){
+targets=selectedItems;
+}else if(typeof currentItem!=='undefined'&&currentItem){
+targets=[currentItem];
+}
+var validTargets=targets.filter(function (it){
+return it&&it.type>=0&&it.type!==255&&it.name!=="MAIN";
+});
+canRecycle=validTargets.length>0;
+isDeleted=validTargets.some(function (it){return it.deleted;});
+}
+
+btnRecycle.disabled=!canRecycle;
+if(canRecycle){
+btnRecycle.classList.remove('disabled');
+btnRecycle.title=isDeleted?"Undelete Record (Recycle)":"Mark as Deleted (Recycle)";
+}else {
+btnRecycle.classList.add('disabled');
+btnRecycle.title="Toggle Deleted Status (Select a record first)";
 }
 }
 }

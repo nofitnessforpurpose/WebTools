@@ -67,9 +67,9 @@ content.innerHTML=`
                 <div class="section-title">Creating a New Pack from Scratch</div>
                 <p>You don't need a physical Psion Organiser II or existing files to start coding! If you are building a new application from the ground up, the Editor can completely synthesize a blank Datapak for you.</p>
                 <ul>
-                    <li>Click the <strong><i class="fas fa-box"></i> New Pack</strong> button on the top Toolbar.</li>
+                    <li>Click the <strong><i data-lucide="package-plus"></i> New Pack</strong> button on the top Toolbar.</li>
                     <li>The system will generate a mathematically perfect, blank binary Datapak footprint and pin it to your <strong>Pack Contents</strong> sidebar.</li>
-                    <li>From there, you can use the <strong><i class="fas fa-file-code"></i> New OPL Procedure</strong> or <strong><i class="fas fa-database"></i> New Data File</strong> buttons to start injecting records directly into your newly minted pack.</li>
+                    <li>From there, you can use the <strong><i data-lucide="file-code"></i> New OPL Procedure</strong> or <strong><i data-lucide="database"></i> New Data File</strong> buttons to start injecting records directly into your newly minted pack.</li>
                     <li>When you are finished, click <strong>Save Pack (.opk)</strong> to download your compiled image for distribution!</li>
                 </ul>
                 <details class="tech-note" style="margin-top:15px;">
@@ -82,15 +82,10 @@ content.innerHTML=`
             
             <div class="section">
                 <div class="section-title">Importing & Transfer Tools</div>
-                <p>To pull a physical Datapack off the Psion Organiser II so you can edit it here, you need a hardware COMMS Link and an intermediary transfer software tool.</p>
+                <p>Getting files off or onto an actual Psion Organiser II requires communicating over the physical Comms Link hardware protocol.</p>
                 
-                <h3>The Modern Route: LinkTool</h3>
-                <p>We highly recommend the novel web-based <strong><a href="https://nofitnessforpurpose.github.io/WebTools/LinkTool/" target="_blank">LinkTool Beta</a></strong> for retrieving OPK images. It runs directly natively in web browsers supporting Web Serial API, connecting straight to your serial port or USB-to-Serial adapter without installing external drivers or 3rd party apps.</p>
-                <ul>
-                    <li>Supports immediate direct downloads of Pack B & Pack C.</li>
-                    <li>Outputs the raw proprietary <span class="code-mono">.OPK</span> file formats natively.</li>
-                    <li>Outputs standard raw Intel Hex (<span class="code-mono">.HEX</span>) formats compatible with this editor.</li>
-                </ul>
+                <h3>Modern Web Transfer (Recommended)</h3>
+                <p>We recommend using our dedicated <a href="https://starship.org.uk/psi/webcomms/" target="_blank">PsiWebComms Serial Tool</a>. It talks directly to your USB-to-Serial Comms Link adapter right inside Chrome/Edge via the Web Serial API—no local drivers, DOS, or external installers needed!</p>
 
                 <h3>Legacy Application Routes</h3>
                 <p>If you prefer installing stand-alone programs, or you are running an older operating system, these legacy PC applications are highly regarded:</p>
@@ -110,6 +105,7 @@ content.innerHTML=`
             </div>
         `;
 doc.body.appendChild(content);
+if(typeof lucide!=='undefined')lucide.createIcons({root:content});
 }
 return {openWindow:openWindow};
 })();

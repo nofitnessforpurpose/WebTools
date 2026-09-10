@@ -204,7 +204,7 @@ container.innerHTML=
 "     <div class='sidebar-caption'>Psion Organiser II Datapak Layout</div>" +
 "  </div>" +
 "  <div class='wizard-form'>" +
-"     <h3><i class='fa-solid fa-splotch'></i> Bootable Pack Wizard</h3>" +
+"     <h3><i data-lucide='sparkles'></i> Bootable Pack Wizard</h3>" +
 "     " +
 "     <div class='wizard-form-group'>" +
 "        <label>Boot Mechanism</label>" +
@@ -430,6 +430,7 @@ null,
 "Cancel"
 );
 this.dialog.start();
+if(typeof lucide!=='undefined')lucide.createIcons({root:container});
 };
 BootableWizard.prototype.executeCompilation=function (element){
 var self=this;

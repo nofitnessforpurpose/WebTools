@@ -63,7 +63,7 @@ var controls=document.createElement('div');
 var copyBtn=document.createElement('button');
 copyBtn.className='icon-btn';
 copyBtn.title='Copy to Clipboard';
-copyBtn.innerHTML='<i class="fas fa-copy"></i>';
+copyBtn.innerHTML='<i data-lucide="copy"></i>';
 copyBtn.style.marginRight='10px';
 copyBtn.onclick=copyToClipboard;
 
@@ -71,7 +71,7 @@ copyBtn.onclick=copyToClipboard;
 var closeBtn=document.createElement('button');
 closeBtn.className='icon-btn';
 closeBtn.title='Close';
-closeBtn.innerHTML='<i class="fas fa-times"></i>';
+closeBtn.innerHTML='<i data-lucide="x"></i>';
 closeBtn.onclick=hide;
 
 controls.appendChild(copyBtn);
@@ -79,6 +79,7 @@ controls.appendChild(closeBtn);
 header.appendChild(titleArea);
 header.appendChild(controls);
 container.appendChild(header);
+if(typeof lucide!=='undefined')lucide.createIcons({root:header});
 
 
 var gridHeader=document.createElement('div');

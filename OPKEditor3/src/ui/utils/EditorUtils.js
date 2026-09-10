@@ -45,12 +45,9 @@ elmnt.appendChild(opt);
 
 
 function getItemIcon(item){
-var style=OptionsManager.getOption('iconStyle')||'solid';
-var prefix=(style==='solid')?'fas':'far';
-
 var type=item.type;
-if(type===1)return prefix+" fa-table";
-if(type>=16&&type<=126)return prefix+" fa-file-lines";
+if(type===1)return "table";
+if(type>=16&&type<=126)return "file-text";
 if(type===3){
 
 
@@ -58,19 +55,20 @@ if(item.child&&item.child.child&&item.child.child.data){
 var data=item.child.child.data;
 if(data.length>=4){
 var obLen=(data[0]<<8)|data[1];
-if(obLen>0)return prefix+" fa-microchip";
+if(obLen>0)return "cpu";
 }
 }
 
-return "fa-regular fa-file-code";
+return "file-code";
 }
-if(type===2)return prefix+" fa-book";
-if(type===5)return prefix+" fa-table-cells";
-if(type===6)return prefix+" fa-phone";
-if(type===7)return prefix+" fa-note-sticky";
-if(type===-1)return prefix+" fa-receipt";
-if(type===255)return prefix+" fa-rectangle-xmark";
-return prefix+" fa-circle-question";
+if(type===2)return "book-text";
+if(type===4)return "plug";
+if(type===5)return "grid";
+if(type===6)return "phone";
+if(type===7)return "sticky-note";
+if(type===-1)return "receipt-text";
+if(type===255)return "x-square";
+return "help-circle";
 }
 
 

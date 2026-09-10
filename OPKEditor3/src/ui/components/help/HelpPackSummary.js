@@ -43,7 +43,7 @@ style.textContent=`
             details.tech-note[open] summary { margin-bottom: 8px; }
         `;
 doc.head.appendChild(style);
-doc.body.innerHTML='<div class="header-bar"><h1>Pack Summary Report</h1></div>';
+doc.body.innerHTML='<div class="header-bar"><h1><i data-lucide="scroll-text" style="vertical-align: middle; margin-right: 8px;"></i>Pack Summary Report</h1></div>';
 var content=doc.createElement('div');
 content.className='content-area';
 content.innerHTML=`
@@ -71,6 +71,9 @@ content.innerHTML=`
             </div>
         `;
 doc.body.appendChild(content);
+if(typeof lucide!=='undefined'){
+lucide.createIcons();
+}
 }
 return {openWindow:openWindow};
 })();
