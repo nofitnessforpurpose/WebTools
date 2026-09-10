@@ -1,21 +1,22 @@
 ## NFfP Tools
 
-This repository contains a number of web browser tools, comprising classic device emulations of printers and plotters supporting web serial (RS232) and targetted tools suitable for the PSION Organiser II series of PDA's. 
+This repository contains a number of web browser tools, comprising classic device emulations of printers and plotters supporting web serial (RS232) and targetted tools suitable for the PSION Organiser II series of PDA's. The targetted tools include a comprehensive PSION Organiser II data pack management, printer graphics preparation tools and command configuration assistant tools (e.g. COMMS Link LSET).
 
 ### Tool Summary 
 Serial Tools  
 | Tool             | Sources | RS232 | WebSocket |
 |------------------|---------|-------|-----------|
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTEREMU/">PrinterEmu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTEREMU">Emulates a dot matric printer with support for RS232 communication<a/> | &#x2714; | &#x2714; |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTERTOOL/">PrinterTool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTERTOOL">Allows prepraration of graphics intended for ESC/P & EFX-80s Printers</a> | N/A | N/A |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTERTOOL/">PrinterTool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTERTOOL">Allows preparation of graphics intended for ESC/P & EFX-80s Printers</a> | N/A | N/A |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2EMU/">Printer2Emu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2EMU">Emulates the PSION Printer II with support for RS232 communication<a/> |  &#x2714;  | T.B.C |
-| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">Printer2Tool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2TOOL">Allows prepraration of graphics intended for the PSION Printer II</a> | N/A | N/A |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">Printer2Tool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2TOOL">Allows preparation of graphics intended for the PSION Printer II</a> | N/A | N/A |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PLOTTEREMU/">PlotterEmu</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PLOTTEREMU">Emulates a Pen Plotter with support for RS232 communication</a> | &#x2714; | T.B.C |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/CIRCULARCHARTRECORDER/">Chart Recorder </a>  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/CIRCULARCHARTRECORDER">Emulates a Circular Chart Recorder with support for RS232 communication</a>| &#x2714; | T.B.C |
 | - | - |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/OPKEditor3/">OPK Editor 3</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor3">Latest Organiser II series data pack preparation tool<a/> | T.B.C  | T.B.C |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/LinkTool/">LinkTool    </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/LinkTool">Beta - Some technical inconsistencies have been identified. - A Web serial RS232 data pack pack download tool for Organiser II devices</a> | &#x2714; | N/A |   
-| OPK Editor 2  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor2">The first enahancement created from JAAP's classic OPK Editor tool</a> | &#x2714; | N/A |
+| OPK Editor 2  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor2">The first enhancement created from JAAP's classic data pack OPK Editor tool</a> | &#x2714; | N/A |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/COMMSPARAMS/">COMMSPARAMS</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/COMMSPARAMS"> COMMS Link LSET Command Utility<a/> | T.B.C  | N/A |
 
 <BR>
 
