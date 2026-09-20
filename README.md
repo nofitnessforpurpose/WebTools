@@ -1,6 +1,6 @@
 ## NFfP Tools
 
-This repository contains a number of web browser tools, comprising classic device emulations of printers and plotters supporting web serial (RS232) and targetted tools suitable for the PSION Organiser II series of PDA's. The targetted tools include a comprehensive PSION Organiser II data pack management, printer graphics preparation tools and command configuration assistant tools (e.g. COMMS Link LSET).
+This repository contains a number of web browser tools, comprising classic device emulations of printers and plotters supporting web serial (RS232) and targeted tools suitable for the PSION Organiser II series of PDA's. The targeted tools include a comprehensive PSION Organiser II data pack management, printer graphics preparation tools and command configuration assistant tools (e.g. COMMS Link LSET).
 
 ### Tool Summary 
 Serial Tools  
