@@ -6,7 +6,7 @@ This repository contains a number of web browser tools, comprising classic devic
 Serial Tools  
 | Tool             | Sources | RS232 | WebSocket |
 |------------------|---------|-------|-----------|
-| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTEREMU/">PrinterEmu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTEREMU">Emulates a dot matric printer with support for RS232 communication<a/> | &#x2714; | &#x2714; |
+| <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTEREMU/">PrinterEmu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTEREMU">Emulates a Dot Matrix printer with support for RS232 communication<a/> | &#x2714; | &#x2714; |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTERTOOL/">PrinterTool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTERTOOL">Allows preparation of graphics intended for ESC/P & EFX-80s Printers</a> | N/A | N/A |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2EMU/">Printer2Emu </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2EMU">Emulates the PSION Printer II with support for RS232 communication<a/> |  &#x2714;  | T.B.C |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/PRINTER2TOOL/">Printer2Tool</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/PRINTER2TOOL">Allows preparation of graphics intended for the PSION Printer II</a> | N/A | N/A |
