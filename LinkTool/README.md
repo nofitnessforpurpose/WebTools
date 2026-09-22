@@ -25,7 +25,7 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 *   **Web Serial API**: Direct serial communication with Psion Organiser II hardware via browser
 *   **Boot Injection**: Automated bootstrap code download to device RAM
 *   **Pack Reading**: Download data packs from Packs B and C (Read Mode)
-*   **Pack Writing**: Flash .OPK files to Datapacks (Write Mode) - *TBC*
+*   **Pack Writing**: Flash .OPK files to Datapacks (Write Mode - Beta)
 *   **Protocol Implementation**: Full implementation of the Psion Link Protocol with:
     *   CRC checksums for data integrity
     *   Phase-based state machine (HEADER/BODY phases)
@@ -50,9 +50,9 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 
 ## Technical Details  
 
-*   **Architecture**: Client-side JavaScript application
+*   **Architecture**: Client-side JavaScript application, no external dependencies
 *   **Protocol**: Psion Link Protocol (Boot Injection + Data Dump phases)
-*   **Serial Parameters**: 9600 baud, 8N1, no flow control (Default)
+*   **Serial Parameters**: 9600 baud, 8N1, XON (Default)
 *   **CRC Algorithm**: Check sum verification to ensure data integrity
 *   **Output Format**: OPK files with magic header, length field, and terminator
 
@@ -63,9 +63,10 @@ This repository is intended to be accessed at [https://nofitnessforpurpose.githu
 This tool requires a browser with Web Serial API support:
 *   **Google Chrome** (version 89+)
 *   **Microsoft Edge** (version 89+)
+*   **Mozilla Firefox** (version 151+)
 *   **Opera** (version 75+)
 
-**Note**: Firefox and Safari do not currently natively support the Web Serial API.
+**Note**: Safari does not currently natively support the Web Serial API.
 
 <BR>
 
