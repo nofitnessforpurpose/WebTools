@@ -2,6 +2,8 @@
 
 A web-based tool for downloading data packs from the Psion Organiser II via the Comms Link interface. This tool implements the Psion Link Protocol to perform boot injection and data pack transfer operations directly in your browser using the Web Serial API.
 
+This repository is intended to be accessed at <a href="https://nofitnessforpurpose.github.io/WebTools/LinkTool/">https://nofitnessforpurpose.github.io/WebTools/LinkTool/</a>
+
 ## Features
 
 *   **Web Serial API**: Direct serial communication with Psion Organiser II hardware via browser
