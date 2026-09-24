@@ -37,13 +37,13 @@ This repository is intended to be accessed at <a href="https://nofitnessforpurpo
 See the Help file bundled with the App for full details.  
 <BR>
 Summary
-### Reading a Pack (Pack Dump to PC)
+### Reading a Pack (Upload A Data Pack to PC)
 1. **Connect Hardware**: Plug the COMMS Link into the Top Slot, and insert your source Data pack into Slot B: or Slot C:
 2. **Link**: Connect the RS-232 cable / USB-to-serial adapter to your computer and the COMMS Link.
 3. **Select Mode & Slot**: Ensure the mode toggle is set to **Read**. Select **Slot B:** or **Slot C:** (default: Slot B:).
 4. **Prepare the Psion**: On the Organiser II, navigate to **COMMS -> BOOT -> NAME:** (leave the name blank). Do not press EXE yet.
 5. **Connect**: In the browser, click **Connect**, choose your serial port, and wait for "Searching for Device...".
-6. **Start Transfer**: Press **EXE** on the Organiser II. The tool automatically injects the secondary bootloader, reads the pack page by page, and displays real-time progress.
+6. **Start Transfer**: Press **EXE** on the Organiser II. The tool automatically injects the secondary bootloader, reads the pack and displays real-time progress.
 7. **Save Pack**: Once complete, click **Save Pack** to download the resulting `.OPK` file.
 
 ### Writing a Pack (Pack Download / from PC to Data pack)
@@ -58,8 +58,8 @@ Summary
    - When the **"Insert Blank Pack"** dialog appears, ensure your blank Data pack is firmly seated in the chosen slot.
    - Click **"Continue to Download Phase"** (or press **Enter** / **Space**).
    - *Note*: While the dialog is open, the host automatically maintains bidirectional keep-alive pings with the Organiser to prevent timeout.
-9. **Formatting Phase**: The host fires dual format triggers (`[01, 4F]` and `[FF, 01]`). The Psion begins its hardware EPROM erase/wipe cycle (~1.7s to 60s depending on pack type).
-10. **Data Pumping**: Upon format completion (`00 04` signal), the tool executes pre-flight handshaking and streams OPK data in verified 128-byte chunks with real-time percentage progress.
+9. **Formatting Phase**: The host fires dual format triggers (`[01, 4F]` and `[FF, 01]`). The Psion begins its Sizing cycle (~1.7s to 60s depending on pack type).
+10. **Data Pumping**: Upon completion of Sizing (`00 04` signal), the tool executes pre-flight handshaking and streams OPK data in verified 128-byte chunks with real-time percentage progress.
 11. **Pack Finalization (EOF Drain)**: After the final chunk, the host and Organiser execute a 10-step EOF drain sequence to finalise directory structures and headers. The host transmits 3x link release polls and cleanly releases the serial port.
 
 ## Technical Details
