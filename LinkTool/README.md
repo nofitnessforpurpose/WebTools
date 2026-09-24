@@ -67,8 +67,8 @@ Summary
 *   **Architecture**: Client-side JavaScript application using the Web Serial API, no external dependencies
 *   **Protocol Modes**:
     *   **Pack Reading (Dump)**: Boot injection + 6303 machine-code driver execution + page-by-page streaming to PC
-    *   **Pack Writing (Download)**: Boot injection + keep-alive dialog maintenance + dual format triggers (`[01, 4F]`, `[FF, 01]`) + EPROM hardware wipe + pre-flight handshake + 128-byte chunk streaming + 10-step EOF sector drain
-*   **Serial Parameters**: 9600 baud, 8 data bits, no parity, 1 stop bit (8N1)
+    *   **Pack Writing (Download)**: Boot injection + keep-alive dialog maintenance + dual format triggers (`[01, 4F]`, `[FF, 01]`) + Data Pack Sizing + pre-flight handshake + 128-byte chunk streaming + 10-step EOF sector drain
+*   **Serial Parameters**: 9600 baud, 8 data bits, no parity, 1 stop bit (8N1), XON
 *   **Timing Invariants**: 15ms turnaround delay between serial operations to respect HD6303 CPU interrupt handling
 *   **Echo Safety**: Hardware UART loopback suppression with explicit exemption for legitimate device Short Packet ACKs (`0x00..0x07`) in `PACK_DOWNLOAD` state
 *   **CRC Algorithm**: CRC-16/ARC checksum verification across all link packets
