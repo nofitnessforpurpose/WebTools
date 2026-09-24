@@ -7,7 +7,7 @@ This repository is intended to be accessed at <a href="https://nofitnessforpurpo
 <BR>
 <div align="center">
   <div style="display: flex; align-items: flex-start;">
-  <img src="https://github.com/nofitnessforpurpose/WebTools/blob/main/LinkTool/images/serial_adapter_diagram.png" width="200px" alt="PSION Organiser II COMMS Link with Adapters. Image copyright (c) 18 June 2026 nofitnessforpurpose All Rights Reserved">
+  <img src="https://github.com/nofitnessforpurpose/WebTools/blob/main/LinkTool/images/serial_adapter_diagram.png" width="400px" alt="PSION Organiser II COMMS Link with Adapters. Image copyright (c) 18 June 2026 nofitnessforpurpose All Rights Reserved">
   </div>
 </div>
 <BR>
