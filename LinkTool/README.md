@@ -22,7 +22,7 @@ This repository is intended to be accessed at <a href="https://nofitnessforpurpo
 
 *   **Web Serial API**: Direct serial communication with Psion Organiser II hardware via browser
 *   **Boot Injection**: Automated bootstrap code download to device RAM
-*   **Pack Reading**: Upload data packs from Packs B and C (Read Mode) to .OPK files
+*   **Pack Reading**: Upload data packs from Slot B: and Slot C: (Read Mode) to .OPK files
 *   **Pack Writing**: Download .OPK files to Data Packs (Write Mode) - *New!*
 *   **Protocol Implementation**: Full implementation of the Psion Link Protocol with:
     *   CRC checksums for data integrity
