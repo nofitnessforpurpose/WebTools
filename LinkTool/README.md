@@ -7,7 +7,7 @@ A web-based tool for downloading data packs from the Psion Organiser II via the 
 *   **Web Serial API**: Direct serial communication with Psion Organiser II hardware via browser
 *   **Boot Injection**: Automated bootstrap code download to device RAM
 *   **Pack Reading**: Download data packs from Packs B and C (Read Mode)
-*   **Pack Writing**: Flash .OPK files to Datapacks (Write Mode) - *New!*
+*   **Pack Writing**: Flash .OPK files to Data Packs (Write Mode) - Drag & Drop Capability *New!*
 *   **Protocol Implementation**: Full implementation of the Psion Link Protocol with:
     *   CRC checksums for data integrity
     *   Phase-based state machine (HEADER/BODY phases)
