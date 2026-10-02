@@ -22,6 +22,8 @@ A cross platform web-based tool for downloading data packs from the Psion Organi
 *   **OPK Export**: Save downloaded packs as .OPK files for use with OPK Editor tools
 *   **Debug Mode**: Detailed logging for protocol analysis (append `?debug=true` to URL)
 
+<BR>
+
 ## Usage
 
 ### Reading a Pack (Pack Dump to PC)
@@ -58,7 +60,7 @@ NOTE:Read the detailed HELP file if using RAM Packs.
 
 ## Technical Details
 
-*   **Architecture**: Client-side JavaScript application using the Web Serial API
+*   **Architecture**: Client-side JavaScript application using the Web Serial API, 'local only' model
 *   **Protocol Modes**:
     *   **Pack Reading (Dump)**: Boot injection + 6303 machine-code driver execution + page-by-page streaming to PC
     *   **Pack Writing (Download)**: Boot injection + keep-alive dialog maintenance + dual format triggers (`[01, 4F]`, `[FF, 01]`) + EPROM hardware wipe + pre-flight handshake + 128-byte chunk streaming + 10-step EOF sector drain
@@ -67,6 +69,8 @@ NOTE:Read the detailed HELP file if using RAM Packs.
 *   **Echo Safety**: Hardware UART loopback suppression with explicit exemption for legitimate device Short Packet ACKs (`0x00..0x07`) in `PACK_DOWNLOAD` state
 *   **CRC Algorithm**: CRC-16/ARC checksum verification across all link packets
 *   **File Format**: `.OPK` (Organiser PacK) format with magic signature (`OPK`), 3-byte big-endian length header, and `0xFF 0xFF` terminator
+
+<BR>
 
 ## Browser Support
 
@@ -78,6 +82,7 @@ This tool requires a browser with Web Serial API support:
 
 **Note**: Safari does not currently natively support the Web Serial API.
 
+<BR>
 
 ## Credits
 
@@ -85,15 +90,21 @@ This tool requires a browser with Web Serial API support:
 *   Implemented by **Antigravity**
 *   Re-imagined by **NFfP**
 
+<BR>
+
 ## License
 
 MIT
 
 Check Attribution [source www](https://www.jaapsch.net/psion/) for elements covered under a Non Commercial basis use.
 
+<BR>
+
 ## Questions / Discussion
 
 See [Organiser 2](https://www.organiser2.com/) forum.
+
+<BR>
 
 ## Please note:
 
