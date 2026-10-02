@@ -80,7 +80,7 @@ This tool requires a browser with Web Serial API support:
 
 ## Credits
 
-*   Protocol documentation by **Jaap Scherphuis** ([www.jaapsch.net/psion/](https://www.jaapsch.net/psion/))
+*   Link protocol documentation by **Jaap Scherphuis** ([www.jaapsch.net/psion/](https://www.jaapsch.net/psion/))
 *   Implemented by **Antigravity**
 *   Re-imagined by **NFfP**
 
