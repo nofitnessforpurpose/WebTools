@@ -74,8 +74,9 @@ This tool requires a browser with Web Serial API support:
 *   **Google Chrome** (version 89+)
 *   **Microsoft Edge** (version 89+)
 *   **Opera** (version 75+)
+*   **Firefox** (version 151+)
 
-**Note**: Firefox and Safari do not currently natively support the Web Serial API.
+**Note**: Safari does not currently natively support the Web Serial API.
 
 
 ## Credits
