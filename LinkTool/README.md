@@ -1,6 +1,6 @@
 # LinkTool
 
-A web-based tool for downloading data packs from the Psion Organiser II via the Comms Link interface. This tool implements the Psion Link Protocol to perform boot injection and data pack transfer operations directly in your browser using the Web Serial API.
+A cross platform web-based tool for downloading data packs from the Psion Organiser II via the Comms Link interface. This tool implements the Psion Link Protocol to perform boot injection and data pack transfer operations directly in your browser using the Web Serial API.
 
 [![Organiser](https://img.shields.io/badge/gadget-Organiser_II-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Psion_Organiser)
 [![Static Badge](https://img.shields.io/badge/license-CC_BY_NC_SA_4.0-brightgreen/nofitnessforpurpose/WebTools/LinkTool?style=flat-square)](https://github.com/vitorsr/cc/blob/master/CC-BY-NC-4.0.md)
@@ -10,6 +10,7 @@ A web-based tool for downloading data packs from the Psion Organiser II via the 
 ## Features
 
 *   **Web Serial API**: Direct serial communication with Psion Organiser II hardware via browser
+*   **Cross Platform**: Use your preferred platform - consistent interface
 *   **Boot Injection**: Automated bootstrap code download to device RAM
 *   **Pack Reading**: Download data packs from Packs B and C (Read Mode)
 *   **Pack Writing**: Flash .OPK files to Data Packs (Write Mode) - Drag & Drop Capability *New!*
@@ -24,28 +25,36 @@ A web-based tool for downloading data packs from the Psion Organiser II via the 
 ## Usage
 
 ### Reading a Pack (Pack Dump to PC)
-1. **Connect Hardware**: Plug the Comms Link into Slot D, and insert your source Datapak into Slot B or Slot C. Connect the RS-232 cable / USB-to-serial adapter to your computer.
+1. **Connect Hardware**: Plug the Comms Link into the Top Slot (D:), and insert your source Data pack into Slot B: or Slot C:. Connect the RS-232 cable / USB-to-serial adapter to your computer.
 2. **Select Mode & Slot**: Ensure the mode toggle is set to **Read**. Select **Slot B:** or **Slot C:** (default: Slot B:).
 3. **Prepare the Psion**: On the Organiser II, navigate to **COMMS -> BOOT -> NAME:** (leave the name blank). Do not press EXE yet.
 4. **Connect**: In the browser, click **Connect**, choose your serial port, and wait for "Searching for Device...".
 5. **Start Transfer**: Press **EXE** on the Organiser II. The tool automatically injects the secondary bootloader, reads the pack page by page, and displays real-time progress.
 6. **Save Pack**: Once complete, click **Save Pack** to download the resulting `.OPK` file.
+   
+NOTE:Read the detailed HELP file if using RAM Packs.  
+<BR>
+
 
 ### Writing a Pack (Pack Download / Flash from PC to Datapak)
-1. **Connect Hardware**: Ensure the Comms Link is plugged into Slot D. You may insert your blank Datapak / Flashpak / RamPack into Slot B or Slot C now, or wait until prompted by the on-screen dialog.
+1. **Connect Hardware**: Ensure the Comms Link is plugged into the Top Slot (D:). **Do NOT** insert your blank Datapak / Flashpak / RamPack into Slot B: or Slot C: now - **WAIT** until prompted by the on-screen dialog!
 2. **Switch to Write Mode**: Click the mode toggle to switch from **Read** to **Write**.
 3. **Select OPK File**: Click **Select File** and choose the `.OPK` image you wish to flash.
-4. **Select Target Slot**: Choose **Slot B:** or **Slot C:** depending on which external slot contains your writable pack.
+4. **Select Target Slot**: Choose **Slot B:** or **Slot C:** depending on which external slot you will insert your writeable pack when prompted.
 5. **Prepare the Psion**: On the Organiser II, navigate to **COMMS -> BOOT -> NAME:** (leave the name blank).
 6. **Connect**: Click **Connect**, select the COM port in your browser prompt, and wait for "Searching for Device...".
-7. **Initiate Transfer**: Press **EXE** on the Organiser II. The tool injects the write bootloader via 19 synchronized packet pairs across 3 stages, with execution branching directly into the format and burn routine upon Pair 19.
+7. **Initiate Transfer**: Press **EXE** on the Organiser II. The tool injects the write bootloader via 19 synchronised packet pairs across 3 stages, with execution branching directly into the format and burn routine upon Pair 19.
 8. **Insert Pack & Confirm**:
    - When the **"Insert Blank Pack"** dialog appears, ensure your blank Datapak is firmly seated in the chosen slot.
    - Click **"Continue to Download Phase"** (or press **Enter** / **Space**).
    - *Note*: While the dialog is open, the host automatically maintains bidirectional keep-alive pings with the Organiser to prevent timeout.
-9. **Formatting Phase**: The host fires dual format triggers (`[01, 4F]` and `[FF, 01]`). The Psion begins its hardware EPROM erase/wipe cycle (~1.7s to 60s depending on pack type).
-10. **Data Pumping**: Upon format completion (`00 04` signal), the tool executes pre-flight handshaking and streams OPK data in verified 128-byte chunks with real-time percentage progress.
-11. **Pack Finalization (EOF Drain)**: After the final chunk, the host and Organiser execute a 10-step EOF drain sequence to finalize directory structures and headers. The host transmits 3x link release POLLs and cleanly releases the serial port.
+9. **Formatting Phase**: The host fires dual sizing, the Psion begins its hardware size cycle (~1.7s to 60s depending on pack type).
+10. **Data Pumping**: Upon sizing completion, the LinkTool executes pre-flight handshaking and streams OPK data in verified 128-byte chunks with real-time percentage progress.
+11. **Pack Finalisation**: After the final chunk, the host and Organiser finalise directory structures and headers. The host transmits 3x link release POLLs and cleanly releases the serial port.
+
+NOTE:Read the detailed HELP file if using RAM Packs.  
+<BR>
+
 
 ## Technical Details
 
