@@ -12,7 +12,7 @@ A cross platform web-based tool for downloading data packs from the Psion Organi
 *   **Web Serial API**: Direct serial communication with Psion Organiser II hardware via browser
 *   **Cross Platform**: Use your preferred platform - consistent interface
 *   **Boot Injection**: Automated bootstrap code download to device RAM
-*   **Pack Reading**: Download data packs from Packs B: and C: (Read Mode)
+*   **Pack Reading**: Download data packs from Slots B: and C: (Read Mode)
 *   **Pack Writing**: Flash .OPK files to Data Packs (Write Mode) - Drag & Drop Capability *New!*
 *   **Protocol Implementation**: Full implementation of the Psion Link Protocol with:
     *   CRC checksums for data integrity
@@ -36,8 +36,8 @@ NOTE:Read the detailed HELP file if using RAM Packs.
 <BR>
 
 
-### Writing a Pack (Pack Download / Flash from PC to Datapak)
-1. **Connect Hardware**: Ensure the Comms Link is plugged into the Top Slot (D:). **Do NOT** insert your blank Datapak / Flashpak / RamPack into Slot B: or Slot C: now - **WAIT** until prompted by the on-screen dialog!
+### Writing a Pack (Pack download from PC to Datapak)
+1. **Connect Hardware**: Ensure the Comms Link is plugged into the Top Slot (D:). **Do NOT** insert your blank Datapak / Flashpak / Rampack into Slot B: or Slot C: now - **WAIT** until prompted by the on-screen dialog!
 2. **Switch to Write Mode**: Click the mode toggle to switch from **Read** to **Write**.
 3. **Select OPK File**: Click **Select File** and choose the `.OPK` image you wish to flash.
 4. **Select Target Slot**: Choose **Slot B:** or **Slot C:** depending on which external slot you will insert your writeable pack when prompted.
