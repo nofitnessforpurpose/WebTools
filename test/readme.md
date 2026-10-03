@@ -19,7 +19,10 @@ To eliminate any ambiguity, here is an explicit list of actions you should activ
 <BR>
 
 🛠️ Absolute Lack of Support (You Are Completely On Your Own)  
-Do not open an issue. Do not submit a pull request. Do not try to contact anyone associated with this project asking for help, guidance, or bug fixes. There is absolutely zero support for this codebase. If you ignore all the warnings above, break your environment, lose your data, or corrupt your system, no one is coming to save you. There are no maintainers looking at this, no updates planned, and absolutely no fixes on the horizon. It is a dead zone. If it breaks, you keep both pieces.  
+• Do not open an issue.  
+• Do not submit a pull request.  
+• Do not try to contact anyone associated with this project asking for help, guidance, or bug fixes.  
+There is absolutely zero support for this codebase. If you ignore all the warnings above, break your environment, lose your data, or corrupt your system, no one is coming to save you. There are no maintainers looking at this, no updates planned, and absolutely no fixes on the horizon. It is a dead zone. If it breaks, you keep both pieces.  
 <BR>
 
 ⚠️ Zero Reliance, Zero Assumptions  
