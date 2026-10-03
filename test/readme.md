@@ -10,11 +10,11 @@ We are going the extra mile here to make sure there is absolutely zero room for 
 <BR>  
 
 🙅‍♂️ What Exactly Should Not Be Done?  
-To eliminate any ambiguity, here is an explicit list of actions you should actively avoid:
-• Do not execute any scripts, binaries, or commands found within this directory and its directories.
-• Do not import any modules, packages, or libraries hosted here into your own projects.
-• Do not rely on any documentation, READMEs, setup guides, or comments as accurate, safe, or functional.
-• Do not assume this code compiles, deploys, or even handles basic logic safely.
+To eliminate any ambiguity, here is an explicit list of actions you should actively avoid:  
+• Do not execute any scripts, binaries, or commands found within this directory and its directories.  
+• Do not import any modules, packages, or libraries hosted here into your own projects.  
+• Do not rely on any documentation, READMEs, setup guides, or comments as accurate, safe, or functional.  
+• Do not assume this code compiles, deploys, or even handles basic logic safely.  
 • Do not test this in a sandbox, a development environment, a staging server, and especially not in production.  
 <BR>
 
