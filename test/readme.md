@@ -3,8 +3,8 @@ A place where anything could happen.
 🛑 WARNING: DO NOT USE THIS REPOSITORY. AT ALL. FOR ANYTHING. 🛑  
 Look, let’s be incredibly clear right from the jump:  
 • Do not use this part of the repository.  
-• Do not clone it. 
-• Do not fork it.  
+• Do not clone it.  
+• Do not fork it.   
 • Do not look at the code and think, "Hey, maybe I can just copy-paste this one little snippet." Do not do that.  
 We are going the extra mile here to make sure there is absolutely zero room for misinterpretation. When we say "do not use it," we mean do not touch it with a ten-foot barge pole.  
 <BR>  
