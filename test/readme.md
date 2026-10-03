@@ -23,9 +23,14 @@ Do not open an issue. Do not submit a pull request. Do not try to contact anyone
 <BR>
 
 ⚠️ Zero Reliance, Zero Assumptions  
-If you are looking at this repository right now thinking, "Well, surely it works under X, Y, or Z conditions," stop right there. Do not make any assumptions about the state of this project. Do not assume it is secure. Do not assume it is stable. Do not assume it was built with best practices—or any practices at all. If you assume anything about this codebase, you are assuming wrong. No reliance should be made on this repository whatsoever. Treat this entire project as if it is completely broken, highly volatile, and entirely radioactive to your workflow.  
+If you are looking at this repository right now thinking, "Well, surely it works under X, Y, or Z conditions," stop right there.  
+• Do not make any assumptions about the state of this project.  
+• Do not assume it is secure. Do not assume it is stable.  
+• Do not assume it was built with best practices—or any practices at all.  
+If you assume anything about this codebase, you are assuming wrong. No reliance should be made on this repository whatsoever. Treat this entire project as if it is completely broken, highly volatile, and entirely radioactive to your workflow.  
 <BR>
 <BR>
-(c) Copyright 2024,2025,2026 NFfP All rights reserved
+(c) Copyright 2024,2025,2026 NFfP All rights reserved  
+
 🛑 The Bottom Line Just... don't.   
 Close the tab. Back away slowly. Find another solution. You have been thoroughly, explicitly, and comprehensively warned.
