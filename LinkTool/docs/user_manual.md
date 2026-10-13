@@ -235,7 +235,7 @@ Once the initial connection is made, a confirmation window dialog will appear on
 
 The web application will now handle the entire write process automatically:
 
-1. **Sizing:** The tool will first Size the pack to confirm it's blank and determine its memory size. This takes only 2 to 3 seconds for RAM & Flash packs, or up to 60 seconds for larger EPROM packs.
+1. **Sizing:** The tool will first Size the pack to confirm it's blank and determine its memory size. This takes only 2 to 3 seconds for small RAM & Flash packs, or up to 60 to 120 seconds for larger EPROM packs and multi-segment packs up to 2 MB (128 segments of 16 KB). Active keep-alive handshaking ensures the serial connection remains held throughout the traversal.
 2. **Writing:** The tool will then stream your OPK file data onto the pack. Each block is automatically checked and verified as it is written.
 3. **Progress Tracking:** You can watch the live progress bar and percentage display as data is written.
 
