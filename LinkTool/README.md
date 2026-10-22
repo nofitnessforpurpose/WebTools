@@ -5,6 +5,13 @@ A cross platform web-based tool for upload and downloading data packs from the P
 This repository is intended to be accessed at <a href="https://nofitnessforpurpose.github.io/WebTools/LinkTool/">https://nofitnessforpurpose.github.io/WebTools/LinkTool/</a>
 
 <BR>
+<div align="center">
+  <div style="display: flex; align-items: flex-start;">
+  <img src="https://github.com/nofitnessforpurpose/WebTools/blob/main/LinkTool/images/serial_adapter_diagram_organiser.png" width="400px" alt="LinkTool - Image copyright (c) 09 October 2026 nofitnessforpurpose All Rights Reserved">
+  </div>
+</div>
+<BR>
+<BR>
 
 [![Organiser](https://img.shields.io/badge/gadget-Organiser_II-blueviolet.svg?%3D&style=flat-square)](https://en.wikipedia.org/wiki/Psion_Organiser)
 [![Static Badge](https://img.shields.io/badge/license-CC_BY_NC_SA_4.0-brightgreen/nofitnessforpurpose/WebTools/LinkTool?style=flat-square)](https://github.com/vitorsr/cc/blob/master/CC-BY-NC-4.0.md)
