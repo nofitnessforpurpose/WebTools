@@ -251,11 +251,14 @@ When the writing is finished:
 3. The web application will automatically release the connection, and your Psion Organiser II will return to `WAITING FOR LINK` or its main menu.
 4. Click the **"Disconnect"** button if it is still enabled.
 
-> [!TIP]
-> You can now test your new pack! Turn your Organiser II on, navigate to your main menu, and look at your newly written pack.
+### 8. Writing Bootable Packs (Deferred Activation & Crash Prevention)
 
-> [!IMPORTANT]
-> It is strongly recommended to power off your Organiser II before removing a data pack!
+If you are programming a **bootable pack** (an image containing auto-executing utilities or operating system extensions):
+
+- **Automatic Crash Protection**: In previous systems, programming a bootable pack could cause the Psion Organiser II to trigger a fatal hardware `TRAP` error while erasing the pack. This happened because the Organiser's background timer would see the bootable flag on empty silicon and attempt to execute unwritten memory.
+- **LinkTool Safe Deferred Programming**: LinkTool automatically suppresses bootable flags during formatting and sector erasing (`NOBOOT = 1`). Your Organiser II remains completely stable and cannot crash during the write cycle.
+- **Header Commit & Silicon Adaptation**: The true bootable status is safely committed at the very end of writing once all data chunks are 100% written and verified. 
+- **Silicon Adaptation for Flashpacks**: Images with bootable flags (such as `0x2C`) are automatically adapted to the canonical hardware flag (`0x26`) required by Flash silicon, ensuring the Organiser II OS boots the pack without requiring manual editing of the OPK file.
 
 [Return to Contents](#contents)
 
