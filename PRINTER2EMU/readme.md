@@ -2,7 +2,7 @@
 
 A modern, web-based thermal printer simulator.  
 <BR>
-This web application simulates the Epson M1221 thermal printer mechanism used in many devices and for the **Psion Organiser II Printer II**. It connects to a physical device (such as a Psion Organiser device) via a serial cable using the browser's Web Serial API. Printing ASCII text or graphics onto an emulated scrolling paper roll in real-time.
+This web application simulates the Epson M1221 thermal printer mechanism used in many devices and for the **Psion Organiser II Printer II**. It connects to a physical device (such as a Psion Organiser device) via a serial cable using the browser's Web Serial API. Printing ASCII text or graphics onto a simulated scrolling paper roll in real-time.
 
  
 This repository is intended to be accessed at https://nofitnessforpurpose.github.io/WebTools/PRINTER2EMU/  
