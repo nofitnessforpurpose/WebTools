@@ -107,6 +107,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSerialConnect = document.getElementById('btnSerialConnect');
     const serialAlert = document.getElementById('serialAlert');
     const ledStatus = document.getElementById('ledStatus');
+    const ledStatusLabel = document.getElementById('ledStatusLabel');
+    const serialPortDetails = document.getElementById('serialPortDetails');
+    const serialPortBadge = document.getElementById('serialPortBadge');
     const ledRx = document.getElementById('ledRx');
     const ledBuffer = document.getElementById('ledBuffer');
     
@@ -135,6 +138,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const toastContainer = document.getElementById('toastContainer');
     const chkFilterHandshake = document.getElementById('chkFilterHandshake');
     const chkFocusMode = document.getElementById('chkFocusMode');
+
+    // Theme Mode elements
+    const btnThemeDark = document.getElementById('btnThemeDark');
+    const btnThemeLight = document.getElementById('btnThemeLight');
 
     // Thermal Simulation elements
     const selectPaperPreset = document.getElementById('selectPaperPreset');
@@ -173,6 +180,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const operationsPanel = document.getElementById('operations-panel');
     const btnCloseOperations = document.getElementById('btn-close-operations');
 
+    // Mobile Navigation Elements & Drawer Backdrop
+    const mobileGuideBtn = document.getElementById('mobile-guide-btn');
+    const mobileControlsBtn = document.getElementById('mobile-controls-btn');
+    const mobilePrintModesBtn = document.getElementById('mobile-print-modes-btn');
+    const mobileOperationsBtn = document.getElementById('mobile-operations-btn');
+    const mobileHelpBtn = document.getElementById('mobile-help-btn');
+    const sidebarBackdrop = document.getElementById('sidebarBackdrop');
+
     // Serial parameters DOM mapping
     const selectBaudRate = document.getElementById('selectBaudRate');
     const selectParity = document.getElementById('selectParity');
@@ -199,6 +214,41 @@ document.addEventListener('DOMContentLoaded', () => {
     let keepReading = false;
     let isPrinterEmulationActive = false;
     let wasEmulationActiveBeforeTransfer = false;
+    const BLUETOOTH_SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
+    let currentPortType = 'serial'; // 'usb' | 'bluetooth' | 'serial'
+
+    function detectPortType(p) {
+        if (!p || typeof p.getInfo !== 'function') return 'serial';
+        try {
+            const info = p.getInfo();
+            if (info && info.bluetoothServiceClassId) {
+                return 'bluetooth';
+            }
+            if (info && (info.usbVendorId !== undefined || info.usbProductId !== undefined)) {
+                return 'usb';
+            }
+        } catch (e) {
+            console.warn('Error reading port info:', e);
+        }
+        return 'serial';
+    }
+
+    async function requestSerialPort(customOptions = {}) {
+        const btOptions = {
+            allowedBluetoothServiceClassIds: [BLUETOOTH_SPP_UUID],
+            ...customOptions
+        };
+        try {
+            return await navigator.serial.requestPort(btOptions);
+        } catch (err) {
+            // If the browser threw a TypeError because allowedBluetoothServiceClassIds is not supported, retry without it
+            if (err && (err.name === 'TypeError' || (err.message && err.message.includes('allowedBluetoothServiceClassIds')))) {
+                console.warn('allowedBluetoothServiceClassIds not supported by this browser; falling back to standard requestPort:', err);
+                return await navigator.serial.requestPort(customOptions);
+            }
+            throw err;
+        }
+    }
     let currentPaperBg = '#ffffff';
     let currentInkColor = '#000000';
     let mechanicalJitterAmount = 0; // Max right-shift in pixels
@@ -226,10 +276,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // 4. Utility Functions
 
     // Toast Alert
-    function showToast(message, icon = 'fa-check') {
+    function showToast(message, icon = 'check') {
         const toast = document.createElement('div');
         toast.className = 'toast-feedback';
-        toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+        const iconSvg = typeof getIconSvg === 'function' ? getIconSvg(icon) : `<i data-lucide="${icon}"></i>`;
+        toast.innerHTML = `${iconSvg} <span>${message}</span>`;
         toastContainer.appendChild(toast);
         
         setTimeout(() => toast.classList.add('show'), 50);
@@ -240,36 +291,95 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 2500);
     }
 
-    // Copy to Clipboard
+    // Copy to Clipboard (with mobile-friendly fallback)
     function setupCopyBtn(btn, textarea, label) {
+        if (!btn || !textarea) return;
         btn.addEventListener('click', () => {
-            navigator.clipboard.writeText(textarea.value)
-                .then(() => showToast(`${label} stub copied!`, 'fa-copy'))
-                .catch(err => {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textarea.value)
+                    .then(() => showToast(`${label} stub copied!`, 'fa-copy'))
+                    .catch(() => fallbackCopy());
+            } else {
+                fallbackCopy();
+            }
+
+            function fallbackCopy() {
+                try {
+                    textarea.focus();
+                    textarea.select();
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        showToast(`${label} stub copied!`, 'fa-copy');
+                    } else {
+                        showToast('Copy failed!', 'fa-circle-xmark');
+                    }
+                } catch (err) {
                     showToast('Copy failed!', 'fa-circle-xmark');
-                    console.error(err);
-                });
+                }
+            }
         });
     }
     setupCopyBtn(btnCopyGprint, gprintCode, 'GPRINT');
 
-    // LED States
-    function updateConnectionStatus(isConnected) {
+    // LED States & Connection Display
+    function updateConnectionStatus(isConnected, suppressToast = false) {
         const statusDot = document.getElementById('controls-status-dot');
+        const mobileStatusDot = document.getElementById('mobile-controls-status-dot');
         if (isConnected) {
-            btnSerialConnect.innerHTML = '<i class="fa-solid fa-unlink"></i> Disconnect';
-            ledStatus.className = 'led led-status connected';
+            currentPortType = detectPortType(port);
+            let portInfo = {};
+            try {
+                if (port && port.getInfo) portInfo = port.getInfo();
+            } catch (e) {}
+
+            const disconnectIcon = (typeof getIconSvg === 'function') ? getIconSvg('unlink') : '<i class="fa-solid fa-unlink"></i>';
+
+            if (currentPortType === 'bluetooth') {
+                btnSerialConnect.innerHTML = `${disconnectIcon} Disconnect Bluetooth`;
+                ledStatus.className = 'led led-status connected bluetooth';
+                if (ledStatusLabel) ledStatusLabel.textContent = 'Bluetooth SPP';
+                if (serialPortDetails && serialPortBadge) {
+                    const btIcon = (typeof getIconSvg === 'function') ? getIconSvg('bluetooth') : '<i class="fa-brands fa-bluetooth"></i>';
+                    serialPortBadge.className = 'serial-port-badge badge-bluetooth';
+                    serialPortBadge.innerHTML = `${btIcon} Bluetooth SPP (RFCOMM)`;
+                    serialPortDetails.style.display = 'flex';
+                }
+                if (!suppressToast) showToast('Bluetooth SPP Connected!', 'bluetooth');
+            } else {
+                btnSerialConnect.innerHTML = `${disconnectIcon} Disconnect Serial`;
+                ledStatus.className = 'led led-status connected';
+                if (ledStatusLabel) ledStatusLabel.textContent = 'USB Serial';
+                if (serialPortDetails && serialPortBadge) {
+                    const usbIcon = (typeof getIconSvg === 'function') ? getIconSvg('plug') : '<i class="fa-solid fa-plug"></i>';
+                    serialPortBadge.className = 'serial-port-badge badge-usb';
+                    let vidPid = '';
+                    if (portInfo && portInfo.usbVendorId !== undefined) {
+                        vidPid = ` (VID: 0x${portInfo.usbVendorId.toString(16).padStart(4, '0').toUpperCase()})`;
+                    }
+                    serialPortBadge.innerHTML = `${usbIcon} USB Serial${vidPid}`;
+                    serialPortDetails.style.display = 'flex';
+                }
+                if (!suppressToast) showToast('Serial Port Connected!', 'plug-circle-check');
+            }
+
             printStats.textContent = 'Idle';
             printStats.classList.remove('offline');
             if (statusDot) statusDot.classList.add('online');
-            showToast('Serial Port Connected!', 'fa-plug-circle-check');
+            if (mobileStatusDot) mobileStatusDot.classList.add('online');
         } else {
-            btnSerialConnect.innerHTML = '<i class="fa-solid fa-plug"></i> Connect Serial';
+            currentPortType = 'serial';
+            const connectIcon = (typeof getIconSvg === 'function') ? getIconSvg('plug') : '<i class="fa-solid fa-plug"></i>';
+            btnSerialConnect.innerHTML = `${connectIcon} Connect Serial`;
             ledStatus.className = 'led led-status disconnected';
+            if (ledStatusLabel) ledStatusLabel.textContent = 'Serial Connected';
+            if (serialPortDetails) {
+                serialPortDetails.style.display = 'none';
+            }
             printStats.textContent = 'Offline';
             printStats.classList.add('offline');
             if (statusDot) statusDot.classList.remove('online');
-            showToast('Serial Port Disconnected', 'fa-plug-circle-xmark');
+            if (mobileStatusDot) mobileStatusDot.classList.remove('online');
+            if (!suppressToast) showToast('Serial Port Disconnected', 'unlink');
         }
     }
 
@@ -301,14 +411,17 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 selectColumns.value = '40';
             }
+            sessionStorage.setItem('emu_columns', selectColumns.value);
         }
         
         if (selectStyle) {
             selectStyle.value = activeStyles.doubleHeight ? 'double-height' : 'normal';
+            sessionStorage.setItem('emu_style', selectStyle.value);
         }
         
         if (selectUnderline) {
             selectUnderline.value = activeStyles.underline ? 'enabled' : 'disabled';
+            sessionStorage.setItem('emu_underline', selectUnderline.value);
         }
     }
 
@@ -329,7 +442,6 @@ document.addEventListener('DOMContentLoaded', () => {
             activeStyles.narrowMode = 'very-narrow';
         }
         updateActiveStyleUI();
-        localStorage.setItem('emu_columns', val);
         showToast(`Text columns changed manually to ${val}`, 'fa-sliders');
     });
 
@@ -337,7 +449,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const val = e.target.value;
         activeStyles.doubleHeight = (val === 'double-height');
         updateActiveStyleUI();
-        localStorage.setItem('emu_style', val);
         showToast(`Font style changed manually to ${val === 'double-height' ? 'Double Height' : 'Normal'}`, 'fa-sliders');
     });
 
@@ -345,7 +456,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const val = e.target.value;
         activeStyles.underline = (val === 'enabled');
         updateActiveStyleUI();
-        localStorage.setItem('emu_underline', val);
         showToast(`Underline changed manually to ${activeStyles.underline ? 'Enabled' : 'Disabled'}`, 'fa-sliders');
     });
 
@@ -360,6 +470,9 @@ document.addEventListener('DOMContentLoaded', () => {
         updateActiveStyleUI();
 
         // Clear persisted active style configurations
+        sessionStorage.removeItem('emu_columns');
+        sessionStorage.removeItem('emu_style');
+        sessionStorage.removeItem('emu_underline');
         localStorage.removeItem('emu_columns');
         localStorage.removeItem('emu_style');
         localStorage.removeItem('emu_underline');
@@ -533,6 +646,11 @@ document.addEventListener('DOMContentLoaded', () => {
         chkFocusMode.checked = isFocusMode;
         if (isFocusMode) {
             document.body.classList.add('focus-mode');
+            toggleGuideSidebar(false);
+            toggleControlsSidebar(false);
+            toggleHelpSidebar(false);
+            togglePrintModesSidebar(false);
+            toggleOperationsSidebar(false);
         }
         
         chkFocusMode.addEventListener('change', (e) => {
@@ -554,6 +672,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Focus Mode Disabled', 'fa-compress');
             }
         });
+    }
+
+    // Display Theme Management (Light and Dark Mode)
+    function applyTheme(theme, showNotice = false) {
+        const selectedTheme = (theme === 'light') ? 'light' : 'dark';
+        document.body.setAttribute('data-theme', selectedTheme);
+        localStorage.setItem('psion_printer_theme', selectedTheme);
+
+        // Update mobile browser address bar theme-color
+        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        if (metaThemeColor) {
+            metaThemeColor.setAttribute('content', selectedTheme === 'light' ? '#f1f5f9' : '#0b0f19');
+        }
+
+        if (btnThemeDark) btnThemeDark.classList.toggle('active', selectedTheme === 'dark');
+        if (btnThemeLight) btnThemeLight.classList.toggle('active', selectedTheme === 'light');
+
+        if (showNotice) {
+            const label = selectedTheme === 'light' ? 'Light Theme Enabled' : 'Dark Theme Enabled';
+            const icon = selectedTheme === 'light' ? 'fa-sun' : 'fa-moon';
+            showToast(label, icon);
+        }
+    }
+
+    const savedTheme = localStorage.getItem('psion_printer_theme') || 'dark';
+    applyTheme(savedTheme, false);
+
+    if (btnThemeDark) {
+        btnThemeDark.addEventListener('click', () => applyTheme('dark', true));
+    }
+    if (btnThemeLight) {
+        btnThemeLight.addEventListener('click', () => applyTheme('light', true));
     }
 
     // 3-second Timeout Timer
@@ -594,7 +744,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const flowControlOpt = (flowControlSetting === 'hardware') ? 'hardware' : 'none';
 
-                port = await navigator.serial.requestPort();
+                port = await requestSerialPort();
                 await port.open({ 
                     baudRate: baudRateSetting,
                     dataBits: dataBitsSetting,
@@ -616,7 +766,20 @@ document.addEventListener('DOMContentLoaded', () => {
             updateConnectionStatus(false);
             port = null;
             isPrinterEmulationActive = false;
+            if (err && err.name !== 'NotFoundError') {
+                showToast(`Connection failed: ${err.message || 'Port unavailable'}`, 'alert-triangle');
+            }
         }
+    }
+
+    // Hardware disconnect event listener (USB unplug / Bluetooth out of range)
+    if ('serial' in navigator) {
+        navigator.serial.addEventListener('disconnect', (event) => {
+            if (port && event.target === port) {
+                console.log('Serial port hardware disconnected by host/OS');
+                disconnectSerial();
+            }
+        });
     }
 
     async function readLoop() {
@@ -1053,13 +1216,7 @@ document.addEventListener('DOMContentLoaded', () => {
         canvases.forEach(c => c.remove());
         currentLineText = [];
         printedLinesText = []; // Reset text buffer
-        Object.assign(activeStyles, {
-            doubleWidth: false,
-            doubleHeight: false,
-            underline: false,
-            narrowMode: 'normal'
-        });
-        updateActiveStyleUI();
+        // Retain activeStyles during the session (do not reset on paper clear)
         updateBufferLed();
         
         // Reset scroll position and auto-scroll lock
@@ -1075,7 +1232,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         paperRollContainer.scrollTop = 0;
         
-        showToast('Paper roll cleared & styles reset', 'fa-trash-can');
+        showToast('Paper roll cleared', 'fa-trash-can');
     }
     btnClearRoll.addEventListener('click', clearPaperRoll);
 
@@ -1456,8 +1613,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Dynamic paper padding to keep active print line positioned at the cover
     function updatePaperPadding() {
         const clientHeight = paperRollContainer.clientHeight;
-        const coverHeight = 120; // height of the smoky cover (5 lines of 24px)
-        const printHeadOffset = 72; // 3 lines under print head (bottom spacer height)
+        const coverElement = document.querySelector('.printer-smoky-cover');
+        const coverHeight = coverElement ? coverElement.offsetHeight : 120;
+        const printHeadOffset = Math.round(coverHeight * 0.6); // Proportional offset under tear bar
         
         // padding-top ensures that on a new page, the top of the paper starts at the print head
         const paddingTop = Math.max(0, clientHeight - printHeadOffset);
@@ -1473,17 +1631,75 @@ document.addEventListener('DOMContentLoaded', () => {
         paperRoll.style.paddingBottom = '0px';
     }
     window.addEventListener('resize', updatePaperPadding);
+    window.addEventListener('orientationchange', () => {
+        setTimeout(updatePaperPadding, 150);
+    });
 
-    // Sidebar Panel Toggle logic
+    function updateMobileNavButtons() {
+        if (mobileGuideBtn && guidePanel) mobileGuideBtn.classList.toggle('active', guidePanel.classList.contains('open'));
+        if (mobileControlsBtn && controlsPanel) mobileControlsBtn.classList.toggle('active', controlsPanel.classList.contains('open'));
+        if (mobilePrintModesBtn && printModesPanel) mobilePrintModesBtn.classList.toggle('active', printModesPanel.classList.contains('open'));
+        if (mobileOperationsBtn && operationsPanel) mobileOperationsBtn.classList.toggle('active', operationsPanel.classList.contains('open'));
+        if (mobileHelpBtn && helpPanel) mobileHelpBtn.classList.toggle('active', helpPanel.classList.contains('open'));
+    }
+
+    function updateBackdrop() {
+        const anyOpen = (guidePanel && guidePanel.classList.contains('open')) ||
+                        (controlsPanel && controlsPanel.classList.contains('open')) ||
+                        (helpPanel && helpPanel.classList.contains('open')) ||
+                        (printModesPanel && printModesPanel.classList.contains('open')) ||
+                        (operationsPanel && operationsPanel.classList.contains('open'));
+        if (sidebarBackdrop) {
+            sidebarBackdrop.classList.toggle('active', anyOpen);
+        }
+        document.body.classList.toggle('drawer-open', anyOpen);
+    }
+
+    // Mutual exclusivity: ensure opening any panel cleanly closes all others
+    function closeAllSidebarsExcept(targetPanel) {
+        const sidebars = [
+            { panel: guidePanel, trigger: guideTrigger, icon: guideTriggerIcon, openIcon: 'chevron-left', closedIcon: 'chevron-right' },
+            { panel: controlsPanel, trigger: controlsTrigger, icon: controlsTriggerIcon, openIcon: 'chevron-right', closedIcon: 'chevron-left' },
+            { panel: helpPanel, trigger: helpTrigger, icon: helpTriggerIcon, openIcon: 'chevron-right', closedIcon: 'chevron-left' },
+            { panel: printModesPanel, trigger: printModesTrigger, icon: printModesTriggerIcon, openIcon: 'chevron-right', closedIcon: 'chevron-left' },
+            { panel: operationsPanel, trigger: operationsTrigger, icon: operationsTriggerIcon, openIcon: 'chevron-right', closedIcon: 'chevron-left' }
+        ];
+
+        sidebars.forEach(({ panel, trigger, icon, closedIcon }) => {
+            if (panel && panel !== targetPanel) {
+                panel.classList.remove('open');
+                panel.classList.remove('peek');
+                if (trigger) {
+                    trigger.classList.remove('panel-open');
+                    trigger.classList.remove('peek');
+                }
+                if (icon && typeof setIcon === 'function') setIcon(icon, closedIcon);
+            }
+        });
+
+        updateMobileNavButtons();
+        updateBackdrop();
+    }
+
+    // Sidebar Panel Toggle logic with mutual exclusivity
     function toggleGuideSidebar(forceState) {
         const isOpen = forceState !== undefined ? forceState : !guidePanel.classList.contains('open');
-        guidePanel.classList.toggle('open', isOpen);
-        if (guideTrigger) {
-            guideTrigger.classList.toggle('panel-open', isOpen);
-            if (guideTriggerIcon) {
-                guideTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-left' : 'fa-solid fa-chevron-right';
+        if (isOpen) {
+            closeAllSidebarsExcept(guidePanel);
+            guidePanel.classList.add('open');
+            if (guideTrigger) {
+                guideTrigger.classList.add('panel-open');
+                if (guideTriggerIcon && typeof setIcon === 'function') setIcon(guideTriggerIcon, 'chevron-left');
+            }
+        } else {
+            guidePanel.classList.remove('open');
+            if (guideTrigger) {
+                guideTrigger.classList.remove('panel-open');
+                if (guideTriggerIcon && typeof setIcon === 'function') setIcon(guideTriggerIcon, 'chevron-right');
             }
         }
+        updateMobileNavButtons();
+        updateBackdrop();
     }
 
     function toggleControlsSidebar(forceState) {
@@ -1491,66 +1707,82 @@ document.addEventListener('DOMContentLoaded', () => {
         if (controlsTrigger) controlsTrigger.classList.remove('peek');
 
         const isOpen = forceState !== undefined ? forceState : !controlsPanel.classList.contains('open');
-        controlsPanel.classList.toggle('open', isOpen);
-        if (controlsTrigger) {
-            controlsTrigger.classList.toggle('panel-open', isOpen);
-            if (controlsTriggerIcon) {
-                controlsTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+        if (isOpen) {
+            closeAllSidebarsExcept(controlsPanel);
+            controlsPanel.classList.add('open');
+            if (controlsTrigger) {
+                controlsTrigger.classList.add('panel-open');
+                if (controlsTriggerIcon && typeof setIcon === 'function') setIcon(controlsTriggerIcon, 'chevron-right');
+            }
+        } else {
+            controlsPanel.classList.remove('open');
+            if (controlsTrigger) {
+                controlsTrigger.classList.remove('panel-open');
+                if (controlsTriggerIcon && typeof setIcon === 'function') setIcon(controlsTriggerIcon, 'chevron-left');
             }
         }
-        if (isOpen) {
-            toggleHelpSidebar(false);
-            togglePrintModesSidebar(false);
-            toggleOperationsSidebar(false);
-        }
+        updateMobileNavButtons();
+        updateBackdrop();
     }
 
     function toggleHelpSidebar(forceState) {
         const isOpen = forceState !== undefined ? forceState : !helpPanel.classList.contains('open');
-        helpPanel.classList.toggle('open', isOpen);
-        if (helpTrigger) {
-            helpTrigger.classList.toggle('panel-open', isOpen);
-            if (helpTriggerIcon) {
-                helpTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+        if (isOpen) {
+            closeAllSidebarsExcept(helpPanel);
+            helpPanel.classList.add('open');
+            if (helpTrigger) {
+                helpTrigger.classList.add('panel-open');
+                if (helpTriggerIcon && typeof setIcon === 'function') setIcon(helpTriggerIcon, 'chevron-right');
+            }
+        } else {
+            helpPanel.classList.remove('open');
+            if (helpTrigger) {
+                helpTrigger.classList.remove('panel-open');
+                if (helpTriggerIcon && typeof setIcon === 'function') setIcon(helpTriggerIcon, 'chevron-left');
             }
         }
-        if (isOpen) {
-            toggleControlsSidebar(false);
-            togglePrintModesSidebar(false);
-            toggleOperationsSidebar(false);
-        }
+        updateMobileNavButtons();
+        updateBackdrop();
     }
 
     function togglePrintModesSidebar(forceState) {
         const isOpen = forceState !== undefined ? forceState : !printModesPanel.classList.contains('open');
-        printModesPanel.classList.toggle('open', isOpen);
-        if (printModesTrigger) {
-            printModesTrigger.classList.toggle('panel-open', isOpen);
-            if (printModesTriggerIcon) {
-                printModesTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+        if (isOpen) {
+            closeAllSidebarsExcept(printModesPanel);
+            printModesPanel.classList.add('open');
+            if (printModesTrigger) {
+                printModesTrigger.classList.add('panel-open');
+                if (printModesTriggerIcon && typeof setIcon === 'function') setIcon(printModesTriggerIcon, 'chevron-right');
+            }
+        } else {
+            printModesPanel.classList.remove('open');
+            if (printModesTrigger) {
+                printModesTrigger.classList.remove('panel-open');
+                if (printModesTriggerIcon && typeof setIcon === 'function') setIcon(printModesTriggerIcon, 'chevron-left');
             }
         }
-        if (isOpen) {
-            toggleHelpSidebar(false);
-            toggleControlsSidebar(false);
-            toggleOperationsSidebar(false);
-        }
+        updateMobileNavButtons();
+        updateBackdrop();
     }
 
     function toggleOperationsSidebar(forceState) {
         const isOpen = forceState !== undefined ? forceState : !operationsPanel.classList.contains('open');
-        operationsPanel.classList.toggle('open', isOpen);
-        if (operationsTrigger) {
-            operationsTrigger.classList.toggle('panel-open', isOpen);
-            if (operationsTriggerIcon) {
-                operationsTriggerIcon.className = isOpen ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-left';
+        if (isOpen) {
+            closeAllSidebarsExcept(operationsPanel);
+            operationsPanel.classList.add('open');
+            if (operationsTrigger) {
+                operationsTrigger.classList.add('panel-open');
+                if (operationsTriggerIcon && typeof setIcon === 'function') setIcon(operationsTriggerIcon, 'chevron-right');
+            }
+        } else {
+            operationsPanel.classList.remove('open');
+            if (operationsTrigger) {
+                operationsTrigger.classList.remove('panel-open');
+                if (operationsTriggerIcon && typeof setIcon === 'function') setIcon(operationsTriggerIcon, 'chevron-left');
             }
         }
-        if (isOpen) {
-            toggleHelpSidebar(false);
-            toggleControlsSidebar(false);
-            togglePrintModesSidebar(false);
-        }
+        updateMobileNavButtons();
+        updateBackdrop();
     }
 
     // Set up click listeners for triggers and close buttons
@@ -1579,6 +1811,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (operationsTrigger) operationsTrigger.addEventListener('click', () => toggleOperationsSidebar());
     if (btnCloseOperations) btnCloseOperations.addEventListener('click', () => toggleOperationsSidebar(false));
+
+    // Backdrop click to close open drawers
+    if (sidebarBackdrop) {
+        sidebarBackdrop.addEventListener('click', () => {
+            closeAllSidebarsExcept(null);
+        });
+    }
+
+    // Tap outside fallback to close drawers on mobile screens
+    document.addEventListener('pointerdown', (e) => {
+        if (window.innerWidth > 860) return;
+        if (e.target.closest('.sidebar-panel') || 
+            e.target.closest('.sidebar-panel-left') || 
+            e.target.closest('.mobile-nav-btn') || 
+            e.target.closest('.sidebar-tab-trigger') || 
+            e.target.closest('.sidebar-tab-trigger-left') ||
+            e.target.closest('.modal-card')) {
+            return;
+        }
+        closeAllSidebarsExcept(null);
+    });
+
+    // Mobile Navigation Toolbar button listeners
+    if (mobileGuideBtn) mobileGuideBtn.addEventListener('click', () => toggleGuideSidebar());
+    if (mobileControlsBtn) mobileControlsBtn.addEventListener('click', () => toggleControlsSidebar());
+    if (mobilePrintModesBtn) mobilePrintModesBtn.addEventListener('click', () => togglePrintModesSidebar());
+    if (mobileOperationsBtn) mobileOperationsBtn.addEventListener('click', () => toggleOperationsSidebar());
+    if (mobileHelpBtn) mobileHelpBtn.addEventListener('click', () => toggleHelpSidebar());
+
+    // Keyboard navigation (Escape key closes open sidebars or modal dialog)
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (gprintModal && gprintModal.style.display !== 'none') {
+                finishOrCancelTransfer();
+                return;
+            }
+            closeAllSidebarsExcept(null);
+        }
+    });
 
     // GPRINT Transfer Modal wizard logic
     if (btnTransferGprint) {
@@ -1625,6 +1896,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnCloseGprintModal) btnCloseGprintModal.addEventListener('click', finishOrCancelTransfer);
     if (btnCancelGprintTransfer) btnCancelGprintTransfer.addEventListener('click', finishOrCancelTransfer);
     if (btnDoneGprintTransfer) btnDoneGprintTransfer.addEventListener('click', finishOrCancelTransfer);
+    if (gprintModal) {
+        gprintModal.addEventListener('click', (e) => {
+            if (e.target === gprintModal) {
+                finishOrCancelTransfer();
+            }
+        });
+    }
 
     if (btnStartGprintTransfer) {
         btnStartGprintTransfer.addEventListener('click', async () => {
@@ -1642,7 +1920,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     gprintTransferStatus.textContent = 'Awaiting Serial Port Selection...';
                     transferProgressSection.style.display = 'block';
                     
-                    port = await navigator.serial.requestPort();
+                    port = await requestSerialPort();
                     await port.open({ 
                         baudRate: 9600,
                         dataBits: 8,
@@ -1748,67 +2026,127 @@ document.addEventListener('DOMContentLoaded', () => {
     // Global Keyboard Shortcut Bindings
     window.addEventListener('keydown', (e) => {
         // Ignore keybindings if focusing on input fields to allow normal typing
-        const tag = document.activeElement.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || document.activeElement.isContentEditable) {
+        const tag = document.activeElement ? document.activeElement.tagName : '';
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (document.activeElement && document.activeElement.isContentEditable)) {
             return;
         }
 
+        const isAlt = e.altKey;
+        const isCtrl = e.ctrlKey || e.metaKey;
+        const key = e.key.toLowerCase();
+
+        // --- Panel Navigation ---
         // Alt + G: Toggle Guide Panel
-        if (e.altKey && e.key.toLowerCase() === 'g') {
+        if (isAlt && key === 'g') {
             e.preventDefault();
             toggleGuideSidebar();
         }
         // Alt + C: Toggle Controls Panel
-        else if (e.altKey && e.key.toLowerCase() === 'c') {
+        else if (isAlt && key === 'c') {
             e.preventDefault();
             toggleControlsSidebar();
         }
         // Alt + H: Toggle Help Panel
-        else if (e.altKey && e.key.toLowerCase() === 'h') {
+        else if (isAlt && key === 'h') {
             e.preventDefault();
             toggleHelpSidebar();
         }
         // Alt + M: Toggle Print Modes Panel
-        else if (e.altKey && e.key.toLowerCase() === 'm') {
+        else if (isAlt && key === 'm') {
             e.preventDefault();
             togglePrintModesSidebar();
         }
-        // Alt + O: Toggle Operations Panel
-        else if (e.altKey && e.key.toLowerCase() === 'o') {
+        // Alt + O: Toggle Options & Operations Panel
+        else if (isAlt && key === 'o') {
             e.preventDefault();
             toggleOperationsSidebar();
         }
-        // Alt + S: Connect Serial
-        else if (e.altKey && e.key.toLowerCase() === 's') {
+
+        // --- Theme & Comms ---
+        // Alt + L: Toggle Light / Dark Theme Mode
+        else if (isAlt && key === 'l') {
+            e.preventDefault();
+            const currentTheme = document.body.getAttribute('data-theme') || 'dark';
+            applyTheme(currentTheme === 'light' ? 'dark' : 'light', true);
+        }
+        // Alt + S: Toggle Serial Connection
+        else if (isAlt && key === 's') {
             e.preventDefault();
             if (btnSerialConnect && !btnSerialConnect.disabled) {
                 btnSerialConnect.click();
             }
         }
-        // Alt + T: Print Test Page
-        else if (e.altKey && e.key.toLowerCase() === 't') {
-            e.preventDefault();
-            if (btnPrintTest && !btnPrintTest.disabled) {
-                btnPrintTest.click();
-            }
-        }
-        // Alt + F: Feed Paper
-        else if (e.altKey && e.key.toLowerCase() === 'f') {
+
+        // --- Emulator Operations ---
+        // Alt + F: Feed Paper (3 Lines)
+        else if (isAlt && key === 'f') {
             e.preventDefault();
             if (btnFeedPaper && !btnFeedPaper.disabled) {
                 btnFeedPaper.click();
             }
         }
+        // Alt + T: Print Test Page
+        else if (isAlt && key === 't') {
+            e.preventDefault();
+            if (btnPrintTest && !btnPrintTest.disabled) {
+                btnPrintTest.click();
+            }
+        }
+        // Alt + P: Save Printout as PNG Image
+        else if (isAlt && key === 'p') {
+            e.preventDefault();
+            if (btnDownloadPrint && !btnDownloadPrint.disabled) {
+                btnDownloadPrint.click();
+            }
+        }
+        // Alt + I: Copy Printout Image to Clipboard
+        else if (isAlt && key === 'i') {
+            e.preventDefault();
+            if (btnCopyPrint && !btnCopyPrint.disabled) {
+                btnCopyPrint.click();
+            }
+        }
+        // Ctrl/Cmd + P: Print Paper via System Print
+        else if (isCtrl && key === 'p') {
+            e.preventDefault();
+            if (btnPrintPaper && !btnPrintPaper.disabled) {
+                btnPrintPaper.click();
+            }
+        }
+        // Alt + X: Save Text (TXT)
+        else if (isAlt && key === 'x') {
+            e.preventDefault();
+            if (btnDownloadText && !btnDownloadText.disabled) {
+                btnDownloadText.click();
+            }
+        }
+        // Alt + K: Copy Text to Clipboard
+        else if (isAlt && key === 'k') {
+            e.preventDefault();
+            if (btnCopyText && !btnCopyText.disabled) {
+                btnCopyText.click();
+            }
+        }
         // Delete: Clear Paper Roll
         else if (e.key === 'Delete') {
             e.preventDefault();
-            clearPaperRoll();
+            if (btnClearRoll && !btnClearRoll.disabled) {
+                btnClearRoll.click();
+            } else {
+                clearPaperRoll();
+            }
         }
     });
 
     // Start visual cues (Pulse & Peek) for Controls tab after a short delay
     setTimeout(() => {
-        if (controlsTrigger) {
+        if (window.innerWidth <= 860) {
+            const mobControls = document.getElementById('mobile-controls-btn');
+            if (mobControls) {
+                mobControls.classList.add('pulse-glow');
+                setTimeout(() => mobControls.classList.remove('pulse-glow'), 4000);
+            }
+        } else if (controlsTrigger) {
             // Apply pulse glow animation class
             controlsTrigger.classList.add('pulse-glow');
             
@@ -1939,11 +2277,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Load persisted Active Printer Settings
+    // Load session Active Printer Settings (or default to 40-col normal)
     function loadActivePrinterSettings() {
-        const cols = localStorage.getItem('emu_columns') || '40';
-        const style = localStorage.getItem('emu_style') || 'normal';
-        const underline = localStorage.getItem('emu_underline') || 'disabled';
+        // Clear any legacy localStorage keys so settings do not persist between browser sessions
+        localStorage.removeItem('emu_columns');
+        localStorage.removeItem('emu_style');
+        localStorage.removeItem('emu_underline');
+
+        const cols = sessionStorage.getItem('emu_columns') || '40';
+        const style = sessionStorage.getItem('emu_style') || 'normal';
+        const underline = sessionStorage.getItem('emu_underline') || 'disabled';
 
         if (cols === '20') {
             activeStyles.doubleWidth = true;
@@ -1969,6 +2312,9 @@ document.addEventListener('DOMContentLoaded', () => {
     loadActivePrinterSettings();
     loadThermalSimulationSettings();
     loadSerialSettings();
-    updateConnectionStatus(false);
+    updateConnectionStatus(false, true); // Suppress toast notification on initial boot
     updatePaperPadding();
+    if (typeof renderIcons === 'function') {
+        renderIcons();
+    }
 });
