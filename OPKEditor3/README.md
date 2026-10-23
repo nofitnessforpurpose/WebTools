@@ -16,17 +16,17 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 *   **Custom Code Editor**: A built-in code editor for OPL procedures with:
     *   Syntax Highlighting (OPL keywords, strings, comments)
     *   Code Folding (collapse IF, DO, WHILE blocks)
-    *   Line Numbers
+    *   Line Numbers for referencing
 *   **Bootable Pack Wizard**: Guided bootable pack creation and management. 
-*   **Pack Map**: Visual pack layout tool.
-*   **Visualiser**: Procedure & Global Visualisation.
+*   **Data Pack Map**: Visual pack layout tool.
+*   **Visualiser**: Procedure & Globals Visualisation.
 *   **Theme Support**: Switch between themes via the Options menu, also with custom themes support.
-*   **Drag and drop**: Supports dropping of pack files directly into the Pack Contents view.
 *   **Pack Management**: Create new packs, open existing ones (.opk, .hex, .bin), and save changes.
-*   **Item Management**: Add, delete, and import items (procedures, data files, notepad entries).
-*   **Multiple Pack Support**: View multiple packs simultaneously.
-*   **Extensive Help**: OPL command and tool use help.
-*   **Intel HEX Export**: Export packs to Intel HEX format for burning to EPROMs.
+*   *   **Drag and drop**: Supports dropping of pack files directly into the Pack Contents view.
+*   *   **Item Management**: Add, delete, and import items (procedures, data files, notepad entries).
+*   *   **Multiple Pack Support**: View multiple packs simultaneously.
+*   *   **Intel HEX Export**: Export packs to Intel HEX format for burning to EPROMs.
+*   *   **Extensive Help**: OPL command and tool use help.
 *   **Chrome, Firefox & IE**: Supports multiple browsers.
     
 ## Usage
@@ -53,7 +53,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
 ## Credits
 
 *   Original OPK Editor by **Jaap Scherphuis**
-*   Icons by **Font Awesome**
+*   Icons by **Lucide**
 *   Implemented by **Antigravity**
 *   Re-imagined by NFfP
 
