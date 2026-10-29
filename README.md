@@ -24,6 +24,7 @@ Serial Tools
 | - | - |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/OPKEditor3/">OPK Editor 3</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor3">Latest Organiser II series data pack preparation tool<a/> | T.B.C  | T.B.C |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/LinkTool/">LinkTool    </a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/LinkTool">Beta: Powered by aspiration, coffee, and wishful thinking. - A Web serial RS232 data pack pack download tool for Organiser II devices</a> | &#x2714; | N/A |   
+| <a href="https://nofitnessforpurpose.github.io/WebTools/OPKAnalyser/">OPK Analyser</a>  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKAnalyser">Beta: Browser based OPK Data Pack structure verification tool for Organiser II OPK Data Pack files</a> | &#x2714; | N/A |
 | OPK Editor 2  | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/OPKEditor2">The first enhancement created from JAAP's classic data pack OPK Editor tool</a> | &#x2714; | N/A |
 | <a href="https://nofitnessforpurpose.github.io/WebTools/COMMSPARAMS/">COMMSPARAMS</a> | <a href="https://github.com/nofitnessforpurpose/WebTools/tree/main/COMMSPARAMS"> COMMS Link LSET Command Utility<a/> | T.B.C  | N/A |
 
