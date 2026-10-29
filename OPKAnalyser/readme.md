@@ -2,7 +2,7 @@
 
 A cross platform web-based tool for verifying OPK files (aka Data Pack files) prior to upload and following downloading data packs. Either created by third party tools such as OPK Editor or en-route to & from the Psion Organiser II via the COMMS Link interface. This tool implements full spectrum verification of data pack and record structure with Pass or Fail status indication and issue explanation.
 
-This repository is intended to be accessed at <a href="https://nofitnessforpurpose.github.io/WebTools/OPKAnalyser/">https://nofitnessforpurpose.github.io/WebTools/LinkTool/OPKAnalyser/</a>
+This repository is intended to be accessed at <a href="https://nofitnessforpurpose.github.io/WebTools/OPKAnalyser/">https://nofitnessforpurpose.github.io/WebTools/OPKAnalyser/</a>
 
 <BR>
 <div align="center">
@@ -22,8 +22,9 @@ This repository is intended to be accessed at <a href="https://nofitnessforpurpo
 
 *   **Look Inside Any Pack**: See every program, address book, notepad, diary, and spreadsheet stored on the pack directly on your PC or Mac.
 *   **Instant Health Check**: Checks if the pack is healthy, has minor quirks, or has corrupted data that would crash your Organiser.
-*   **Identify "Mystery" Packs**: Have an old file named pack1.opk or backup.bin? The tool checks its unique digital fingerprint against a built-in library of 142 known packs and tells you exactly what it is (e.g. "This is the official Psion Finance Pack").
-*   **Personal Pack Registry**: Maintain your own Data Pack registry to help manage your library
+*   **Identify "Mystery" Packs**: Have an old file named pack1.opk or backup.bin? T
+*   **Personal Pack Registry**: Maintain your own Data Pack registry to help manage your library of data packs via unique digital fingerprints
+*   **Avoid Duplicates**:The tool checks its unique digital fingerprint against a built-in library of 142 known packs and tells you exactly what it is (e.g. "This is the official Psion Finance Pack").
 
 <BR>
 
