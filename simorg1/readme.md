@@ -4,12 +4,12 @@ A modern, web-based simulator for the Psion Organiser I devices
 This web application simulates the device. It is a stand-alone, CDN less (no dependencies) and requires no internet connection to operate where hosted locally. With Drag and Drop support for .OP1 format data packs and serial port support (using the browser's Web Serial API).
 
 
-This repository is intended to be accessed at https://nofitnessforpurpose.github.io/WebTools/simorg1/index.html  
+This repository is intended to be accessed at https://nofitnessforpurpose.github.io/WebTools/simorg1/
 
 <BR>
 <div align="center">
   <div style="display: flex; align-items: flex-start;">
-  <img src="https://github.com/nofitnessforpurpose/WebTools/blob/main/simorg1/images/org1_device.png" width="200px" alt="PSION Organiser I. Image copyright (c) 26 November June 2026 nofitnessforpurpose All Rights Reserved">
+  <a href="https://nofitnessforpurpose.github.io/WebTools/simorg1/"><img src="https://github.com/nofitnessforpurpose/WebTools/blob/main/simorg1/images/org1_device.png" width="200px" alt="PSION Organiser I. Image copyright (c) 26 November June 2026 nofitnessforpurpose All Rights Reserved"></a>
   </div>
 </div>
 <BR>
