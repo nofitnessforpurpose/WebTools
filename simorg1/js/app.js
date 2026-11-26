@@ -368,7 +368,17 @@ showToast("Connector Pack ($02) fitted — Web Serial not supported in this brow
 }
 function loadBundledPack(slot,packPath){
 if(!packPath)return;
-var file=new BinaryFile(packPath,false,function (){
+var failed=false;
+var file=new BinaryFile(packPath,false,function (err){
+if(err){
+failed=true;
+psion.setPack(null,slot);
+var sel=document.getElementById("select-pack-"+(slot+1));
+if(sel)sel.value="";
+updatePackUI();
+showToast("Pack not available: "+packPath);
+return;
+}
 updatePackUI();
 var bus=psion.getBus();
 var p=bus?bus.getPacks()[slot]:null;
@@ -380,7 +390,9 @@ if(syncClockOnPowerOn)psion.setClock();
 updatePackUI();
 }
 });
+if(failed)return;
 var pack=new Pack(file,function (){
+if(failed)return;
 updatePackUI();
 if(pack.getRawData()&&pack.getRawData()[0]===0x03){
 psion.reset();
@@ -392,7 +404,9 @@ updatePackUI();
 });
 psion.setPack(pack,slot);
 updatePackUI();
+if(!failed){
 showToast("Datapak loaded in Slot "+(slot+1));
+}
 }
 function formatBlank(slot,sizeBytes){
 var name=(sizeBytes/1024)+"K BLANK";
