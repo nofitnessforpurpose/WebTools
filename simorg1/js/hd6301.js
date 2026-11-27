@@ -74,22 +74,21 @@ function peekw(addr){
 return ((peekb(addr)<<8)|peekb(addr+1))&0xffff;
 }
 function pushw(w){
+pokew(SP()-1,w);
 setSP(SP()-2);
-pokew(SP(),w);
 }
 function popw(){
-var t=peekw(SP());
+var t=peekw(SP()+1);
 setSP(SP()+2);
 return t;
 }
 function pushb(b){
-setSP(SP()-1);
 pokeb(SP(),b);
+setSP(SP()-1);
 }
 function popb(){
-var t=peekb(SP());
 setSP(SP()+1);
-return t;
+return peekb(SP());
 }
 function nxtpcb(){
 var t=peekb(PC());
@@ -261,7 +260,7 @@ case 47:
 var d=nxtpcb();if(Nset()!==Vset()||Zset()){if(d>=0x80)d-=0x100;setPC(PC()+d);}
 ticks+=2;break;
 case 48:
-setX(SP());break;
+setX(SP()+1);break;
 case 49:
 setSP(SP()+1);break;
 case 50:
@@ -271,7 +270,7 @@ setB(popb());ticks+=2;break;
 case 52:
 setSP(SP()-1);break;
 case 53:
-setSP(X());break;
+setSP(X()-1);break;
 case 54:
 pushb(A());ticks+=3;break;
 case 55:
