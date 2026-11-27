@@ -29,7 +29,7 @@ This repository is intended to be accessed at https://nofitnessforpurpose.github
   - Format blank **8K**, **16K**, or **32K** EPROM Data packs in-browser.  
   - Drag-and-drop or upload `.op1` or `.bin` Data pack images, and download modified packs back to disk.  
   - Bundled **Link-Up Hardware Adapter Simulator (`packs/connector-pack.op1`, ID `$02`)** for RS-232 / Web Serial support.  
-- **RS-232 Comms Link (Web Serial)**: Connect a physical serial port via the browser Web Serial API when a `$02` Connector Pack is inserted.  
+- **RS-232 Comms Link (Web Serial)**: Connect a physical serial port via the browser Web Serial API when the custom `Connector Pack` is inserted.  
 - **Machine State Snapshots**: Save and restore full state.  
 - **Piezo Buzzer & Tactile Audio**: Web Audio API synthesiser for authentic Organiser I buzzer tones and key-click feedback.  
 - **Photorealistic Interactive Chassis**: 7-layer responsive device frame with a draggable sliding protective cover and floating bottom-right controls drawer.  
