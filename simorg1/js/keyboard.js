@@ -7,17 +7,26 @@ var _linesGrid=[0xff,0xff,0xff,0xff,0xff,0xff,0xff];
 var _linesKeyb=[0xff,0xff,0xff,0xff,0xff,0xff,0xff];
 var _onPressedGrid=false;
 var _onPressedKeyb=false;
-var _pressedKeys={};
+var _directKeys={};
+var _getRomShiftState=null;
+var _macroQueue=[];
+var _activeStep=null;
+var _autoShiftActive=false;
+var _idleUnshiftTicks=0;
+var KEY_HOLD_CYCLES=50000;
+var KEY_GAP_CYCLES=50000;
+var IDLE_UNSHIFT_CYCLES=250000;
 var pcKeyMap={
-"Escape":[0,0,false],
-"Esc":[0,0,false],
-"F1":[0,1,false],
-"F2":[0,2,false],
-"F3":[0,3,false],
-"ArrowLeft":[0,4,false],
-"Left":[0,4,false],
-"ArrowRight":[0,5,false],
-"Right":[0,5,false],
+"Escape":[0,0,null],
+"Esc":[0,0,null],
+"F1":[0,1,null],
+"F2":[0,2,null],
+"F3":[0,3,null],
+"F4":[5,0,null],
+"ArrowLeft":[0,4,null],
+"Left":[0,4,null],
+"ArrowRight":[0,5,null],
+"Right":[0,5,null],
 "ArrowUp":[0,2,true],
 "Up":[0,2,true],
 "ArrowDown":[0,3,true],
@@ -46,14 +55,11 @@ var pcKeyMap={
 "v":[4,3,false],"V":[4,3,false],".":[4,3,true],
 "w":[4,4,false],"W":[4,4,false],
 "x":[4,5,false],"X":[4,5,false],"+":[4,5,true],
-"Shift":[5,0,false],
-"ShiftLeft":[5,0,false],
-"ShiftRight":[5,0,false],
 "y":[5,1,false],"Y":[5,1,false],"(":[5,1,true],
 "z":[5,2,false],"Z":[5,2,false],")":[5,2,true],
 " ":[5,3,false],"Spacebar":[5,3,false],
-"Backspace":[5,4,false],"Delete":[5,4,false],"Del":[5,4,false],
-"Enter":[5,5,false]
+"Backspace":[5,4,null],"Delete":[5,4,null],"Del":[5,4,null],
+"Enter":[5,5,null]
 };
 var matrixMap=[
 [
@@ -176,59 +182,189 @@ _linesGrid[mapping.line]|=mapping.mask;
 }
 }
 };
-this.handleKeyDown=function (event){
-var code=event.code;
-if(code==="ShiftLeft"||code==="ShiftRight")code="Shift";
-if(!_pressedKeys[code]){
-_pressedKeys[code]={key:event.key,code:code,shift:event.shiftKey};
-updateKeyboardState();
+function isRomShifted(){
+return _getRomShiftState?!!_getRomShiftState():false;
 }
-if(!_disabled&&pcKeyMap[event.key]){
+function getTailShiftState(){
+for(var i=_macroQueue.length-1;i>=0;i--){
+if(_macroQueue[i].kind==="tap"){
+return _macroQueue[i].targetShift;
+}
+}
+if(_activeStep&&_activeStep.kind==="tap"){
+return _activeStep.targetShift;
+}
+return isRomShifted();
+}
+function hasQueuedOrActiveCode(code){
+if(_activeStep&&_activeStep.code===code)return true;
+for(var i=0;i<_macroQueue.length;i++){
+if(_macroQueue[i].code===code)return true;
+}
+return false;
+}
+this.setRomShiftReader=function (fn){
+_getRomShiftState=fn;
+};
+this.handleKeyDown=function (event){
+var code=event.code||event.key;
+var mapping=pcKeyMap[event.key]||pcKeyMap[code];
+if(!mapping)return;
+if(!_disabled){
 event.preventDefault();
+}
+if(_directKeys[code]||hasQueuedOrActiveCode(code)){
+return;
+}
+var row=mapping[0];
+var col=mapping[1];
+var isShifted=mapping[2];
+if(row===0&&col===0){
+_directKeys[code]={row:0,col:0};
+updateKeyboardState();
+return;
+}
+_idleUnshiftTicks=0;
+if(!_activeStep&&_macroQueue.length===0&&isShifted!==true){
+var romShifted=isRomShifted();
+if(isShifted===null||isShifted===romShifted){
+_directKeys[code]={row:row,col:col};
+updateKeyboardState();
+return;
+}
+}
+var tailShift=getTailShiftState();
+if(isShifted!==null&&isShifted!==tailShift){
+_macroQueue.push({
+kind:"tap",
+row:5,
+col:0,
+targetShift:isShifted,
+hold:KEY_HOLD_CYCLES,
+gap:KEY_GAP_CYCLES,
+phase:"hold",
+elapsed:0
+});
+_autoShiftActive=isShifted;
+}else if(isShifted===true){
+_autoShiftActive=true;
+}
+_macroQueue.push({
+kind:"key",
+row:row,
+col:col,
+code:code,
+hold:KEY_HOLD_CYCLES,
+gap:KEY_GAP_CYCLES,
+phase:"hold",
+elapsed:0,
+released:false
+});
+if(!_activeStep&&_macroQueue.length>0){
+_activeStep=_macroQueue.shift();
+updateKeyboardState();
 }
 };
 this.handleKeyUp=function (event){
-var code=event.code;
-if(code==="ShiftLeft"||code==="ShiftRight")code="Shift";
-if(_pressedKeys[code]){
-delete _pressedKeys[code];
+var code=event.code||event.key;
+var changed=false;
+if(_directKeys[code]){
+delete _directKeys[code];
+changed=true;
+}
+if(_activeStep&&_activeStep.code===code){
+_activeStep.released=true;
+}
+for(var i=0;i<_macroQueue.length;i++){
+if(_macroQueue[i].code===code){
+_macroQueue[i].released=true;
+}
+}
+if(changed){
 updateKeyboardState();
 }
-if(!_disabled&&pcKeyMap[event.key]){
+if(!_disabled&&(pcKeyMap[event.key]||pcKeyMap[code])){
 event.preventDefault();
+}
+};
+this.tick=function (cycles){
+if(cycles<=0)return;
+if(!_activeStep&&_macroQueue.length>0){
+_activeStep=_macroQueue.shift();
+updateKeyboardState();
+}
+if(_activeStep){
+_activeStep.elapsed+=cycles;
+if(_activeStep.phase==="hold"){
+var readyToRelease=(_activeStep.elapsed>=_activeStep.hold)&&
+(_activeStep.kind==="tap"||_activeStep.released);
+if(readyToRelease){
+_activeStep.phase="gap";
+_activeStep.elapsed=0;
+updateKeyboardState();
+}
+}else if(_activeStep.phase==="gap"){
+if(_activeStep.elapsed>=_activeStep.gap){
+var finishedKind=_activeStep.kind;
+_activeStep=_macroQueue.length>0?_macroQueue.shift():null;
+if(!_activeStep&&finishedKind==="key"&&_autoShiftActive&&isRomShifted()){
+_idleUnshiftTicks=IDLE_UNSHIFT_CYCLES;
+}
+updateKeyboardState();
+}
+}
+return;
+}
+if(_idleUnshiftTicks>0){
+_idleUnshiftTicks-=cycles;
+if(_idleUnshiftTicks<=0){
+_idleUnshiftTicks=0;
+if(_autoShiftActive&&isRomShifted()){
+_autoShiftActive=false;
+_activeStep={
+kind:"tap",
+row:5,
+col:0,
+targetShift:false,
+hold:KEY_HOLD_CYCLES,
+gap:KEY_GAP_CYCLES,
+phase:"hold",
+elapsed:0
+};
+updateKeyboardState();
+}else {
+_autoShiftActive=false;
+}
+}
 }
 };
 function updateKeyboardState(){
 for(var l=0;l<7;l++)_linesKeyb[l]=0xff;
 _onPressedKeyb=false;
-var shiftRequired=false;
-for(var k in _pressedKeys){
-var item=_pressedKeys[k];
-var key=item.key;
-var mapping=pcKeyMap[key]||pcKeyMap[item.code];
-if(mapping){
-var row=mapping[0];
-var col=mapping[1];
-var isShifted=mapping[2];
-if(row===0&&col===0){
+for(var k in _directKeys){
+var dk=_directKeys[k];
+if(dk.row===0&&dk.col===0){
 _onPressedKeyb=true;
 }else {
-var m=getLineAndMask(row,col);
-if(m.line>=0&&m.line<7){
-_linesKeyb[m.line]&=~m.mask;
-}
-}
-if(isShifted||item.shift){
-shiftRequired=true;
+var dm=getLineAndMask(dk.row,dk.col);
+if(dm.line>=0&&dm.line<7){
+_linesKeyb[dm.line]&=~dm.mask;
 }
 }
 }
-if(shiftRequired){
-_linesKeyb[5]&=~0x40;
+if(_activeStep&&_activeStep.phase==="hold"){
+var am=getLineAndMask(_activeStep.row,_activeStep.col);
+if(am.line>=0&&am.line<7){
+_linesKeyb[am.line]&=~am.mask;
+}
 }
 }
 this.clear=function (){
-_pressedKeys={};
+_directKeys={};
+_macroQueue=[];
+_activeStep=null;
+_autoShiftActive=false;
+_idleUnshiftTicks=0;
 for(var i=0;i<7;i++){
 _linesGrid[i]=0xff;
 _linesKeyb[i]=0xff;

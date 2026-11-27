@@ -3,6 +3,11 @@ function Bus(mem,dsp,kb){
 var _memory=mem;
 var _display=dsp;
 var _keyboard=kb;
+if(_keyboard&&typeof _keyboard.setRomShiftReader==="function"&&_memory){
+_keyboard.setRomShiftReader(function (){
+return (_memory.read(0x005e)&0x01)!==0;
+});
+}
 var _switched_off=true;
 var _isNmiCounterWakeup=false;
 var _packs=[new Pack(),new Pack()];
@@ -386,6 +391,7 @@ this.onSwitchOnOff(true,_isNmiCounterWakeup);
 };
 this.incStandbyTicks=function (n){
 _ticksSinceNMI+=n;
+if(_keyboard&&_keyboard.tick)_keyboard.tick(n);
 if(_sci_rx_cooldown>0){
 _sci_rx_cooldown-=n;
 if(_sci_rx_cooldown<=0){
@@ -459,6 +465,7 @@ if(((_timer1_ocr-prev_frc-1)&0xffff)<n){
 _OCIdue=true;
 }
 _ticksSinceNMI+=n;
+if(_keyboard&&_keyboard.tick)_keyboard.tick(n);
 if(_sci_rx_cooldown>0){
 _sci_rx_cooldown-=n;
 if(_sci_rx_cooldown<=0){

@@ -394,6 +394,7 @@ if(failed)return;
 var pack=new Pack(file,function (){
 if(failed)return;
 updatePackUI();
+showToast("Datapak loaded in Slot "+(slot+1));
 if(pack.getRawData()&&pack.getRawData()[0]===0x03){
 psion.reset();
 psion.autoSyncClock=syncClockOnPowerOn;
@@ -404,9 +405,111 @@ updatePackUI();
 });
 psion.setPack(pack,slot);
 updatePackUI();
-if(!failed){
-showToast("Datapak loaded in Slot "+(slot+1));
 }
+function probePackOverHttp(packPath){
+if(typeof window!=="undefined"&&window.location&&window.location.protocol==="file:"){
+return Promise.resolve(false);
+}
+if(typeof fetch==="function"){
+return fetch(packPath,{method:"HEAD",cache:"no-store"}).then(function (res){
+if(res.ok)return true;
+if(res.status===405){
+return fetch(packPath,{method:"GET",cache:"no-store"}).then(function (getRes){
+return!!getRes.ok;
+});
+}
+return false;
+}).catch(function (){
+return false;
+});
+}
+return new Promise(function (resolve){
+try{
+var req=new XMLHttpRequest();
+req.open("HEAD",packPath,true);
+req.onload=function (){
+resolve(req.status>=200&&req.status<300);
+};
+req.onerror=function (){resolve(false);};
+req.send(null);
+}catch(e){
+resolve(false);
+}
+});
+}
+function isPackAvailable(packPath){
+if(!packPath)return Promise.resolve(false);
+if(typeof EmbeddedAssets!=="undefined"&&EmbeddedAssets[packPath]){
+return Promise.resolve(true);
+}
+if(typeof AssetStore!=="undefined"&&AssetStore.isSupported()){
+return AssetStore.has(packPath).then(function (found){
+if(found)return true;
+return probePackOverHttp(packPath);
+}).catch(function (){
+return probePackOverHttp(packPath);
+});
+}
+return probePackOverHttp(packPath);
+}
+function filterAvailableBundledPacks(){
+var selects=[
+document.getElementById("select-pack-1"),
+document.getElementById("select-pack-2")
+];
+var uniquePaths={};
+var i,j,sel,opts;
+for(i=0;i<selects.length;i++){
+sel=selects[i];
+if(!sel)continue;
+opts=sel.options;
+for(j=0;j<opts.length;j++){
+if(opts[j].value){
+uniquePaths[opts[j].value]=true;
+}
+}
+}
+var paths=Object.keys(uniquePaths);
+if(paths.length===0)return Promise.resolve();
+var checks=paths.map(function (p){
+return isPackAvailable(p).then(function (available){
+return {path:p,available:available};
+});
+});
+return Promise.all(checks).then(function (results){
+var availableMap={};
+for(i=0;i<results.length;i++){
+availableMap[results[i].path]=results[i].available;
+}
+for(i=0;i<selects.length;i++){
+sel=selects[i];
+if(!sel)continue;
+var toRemove=[];
+var remainingCount=0;
+var placeholder=null;
+for(j=0;j<sel.options.length;j++){
+var opt=sel.options[j];
+if(!opt.value){
+placeholder=opt;
+continue;
+}
+if(!availableMap[opt.value]){
+toRemove.push(opt);
+}else {
+remainingCount++;
+}
+}
+for(j=0;j<toRemove.length;j++){
+sel.removeChild(toRemove[j]);
+}
+if(remainingCount===0){
+if(placeholder){
+placeholder.textContent="-- No Bundled Packs --";
+}
+sel.disabled=true;
+}
+}
+});
 }
 function formatBlank(slot,sizeBytes){
 var name=(sizeBytes/1024)+"K BLANK";
@@ -537,6 +640,7 @@ handleFileUpload(1,e.target.files[0]);
 }
 e.target.value='';
 });
+filterAvailableBundledPacks();
 var windowDragCounter=0;
 function isFilesDrag(e){
 if(!e.dataTransfer||!e.dataTransfer.types)return false;
