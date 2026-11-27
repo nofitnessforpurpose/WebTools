@@ -74,7 +74,7 @@ To load software or data packs:
 
 Downloading developed packs to the classic device was not supported. This tool allows testing prior to committing to a data pack
 
-As the project uses Web Serial, you can connect a huge range of devices such as RP2040, RP2350's, Raspberyy PI's, Arduino, PC, ESP32 etc. as these all have serial support. Where your hardware does not, it's trivial to implement bit banged support.  
+As the project uses Web Serial, you can connect a huge range of devices such as RP2040, RP2350's, Raspbery PI's, Arduino, PC, ESP32 etc. as these all have serial support. Where your hardware does not, it's trivial to implement bit banged support.  
 
 <BR>
 
